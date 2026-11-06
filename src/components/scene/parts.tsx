@@ -2,8 +2,8 @@ import { For, Show } from 'solid-js';
 import type { TypeProfile } from '../../model/fonts';
 import { markerMarkup } from '../../model/legend';
 import type { Rect } from '../../model/types';
-import { fileScene } from '../../state/file-session';
 import { SceneGlyph } from '../Icon';
+import { useSceneHost } from './host';
 
 /** Multi-line, vertically centered text in one of the diagram's type profiles. */
 export function SceneText(props: {
@@ -68,14 +68,6 @@ export function pinSpot(shape: string, w: number, h: number) {
   return { x: 5, y: 5 };
 }
 
-/** The line that places `id` in the open file (`pin`, `near`, `stay` or `nudge`), if any. */
-function placingLine(id: string) {
-  const h = fileScene()?.model.hints.find(
-    h => 'id' in h && h.id === id && ['pin', 'near', 'stay', 'nudge'].includes(h.type),
-  );
-  return h && { type: h.type, line: h.line };
-}
-
 /**
  * A small pin with its top left at `x`, `y`, inside the object: filled when pinned, outlined when
  * a softer line placed it. Hovering names the line. Editor chrome, not diagram content, so it
@@ -90,8 +82,9 @@ export function PositionBadge(props: {
   /** The object's ink, so the pin reads on its fill. */
   color: string;
 }) {
+  const host = useSceneHost();
   const tip = () => {
-    const placed = placingLine(props.id);
+    const placed = host.placingLine(props.id);
     if (placed) return `Placed by line ${placed.line} (${placed.type})`;
     return props.pinned ? 'Pinned' : 'Moved by hand';
   };
