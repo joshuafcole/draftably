@@ -51,6 +51,9 @@ export { CrossingView, EdgeView, type EdgeViewProps } from './components/scene/E
 export { Lifelines, SequenceBackdrop } from './components/scene/Lifelines';
 export { SceneHostContext, type PlacingLine, type SceneHost } from './components/scene/host';
 
+// A document's resolved look: its palette, canvas colour and type.
+export { resolveAppearance, type ResolvedAppearance } from './model/appearance';
+
 // A static SVG of a projected document, for thumbnails and exports.
 export { renderSvg, type SvgOptions } from './cli/svg';
 
