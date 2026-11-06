@@ -1,12 +1,14 @@
 import { afterAll, expect, it, vi } from 'vitest';
-import type { DiagramSession } from '../src/state/session';
+// Imported with the file, not inside a test: loading the session's modules can take seconds
+// while the whole suite transforms at once, and a test's timeout should not pay for it.
+// Only creating a session reads the page globals that the first test stubs.
+import { createDiagramSession, type DiagramSession } from '../src/state/session';
 
 afterAll(() => vi.unstubAllGlobals());
 
 // One session for the file: the tests run in order and later ones start from earlier state.
 let shared: DiagramSession | undefined;
-const session = async () =>
-  (shared ??= (await import('../src/state/session')).createDiagramSession());
+const session = () => (shared ??= createDiagramSession());
 
 it('keeps the first title edit on a new file-mode shape and selects its source id', async () => {
   vi.stubGlobal('matchMedia', () => ({ matches: false, addEventListener() {} }));
@@ -34,7 +36,7 @@ it('keeps the first title edit on a new file-mode shape and selects its source i
     }),
   });
 
-  const s = await session();
+  const s = session();
   await s.openExampleSession(
     'title-race',
     'Title race',
@@ -57,7 +59,7 @@ it('keeps the first title edit on a new file-mode shape and selects its source i
 });
 
 it('keeps a title finished while the new shape is still compiling', async () => {
-  const s = await session();
+  const s = session();
   s.quickExtend();
   // Finish before the add's compile ends: the edit waits for it instead of being refused.
   expect(s.fileCompiling()).toBe(true);
@@ -85,7 +87,7 @@ it('releases cached-page streams and catches up when the file page returns', asy
   vi.stubGlobal('fetch', async () =>
     Response.json({ name: 'file.draft', path: '/file.draft', source, revision: source }),
   );
-  const s = await session();
+  const s = session();
   await s.openFileSession('one.draft');
   await s.openFileSession('two.draft');
   expect(streams[0].close).toHaveBeenCalledOnce();
@@ -110,7 +112,7 @@ it('releases cached-page streams and catches up when the file page returns', asy
 });
 
 it('keeps framing through a theme change, in a document and in a file', async () => {
-  const s = await session();
+  const s = session();
   const framing = {
     heading: { title: 'T', subtitle: 'Why' },
     notes: [{ text: 'Scope' }],
@@ -147,7 +149,7 @@ it('keeps framing through a theme change, in a document and in a file', async ()
 });
 
 it('draws typed source, keeps the last valid drawing for a broken line, and undoes one step', async () => {
-  const s = await session();
+  const s = session();
   const source = 'diagram "Typed" version=1\nnode a "Start"\nnode b "End"\nedge ab a -> b\n';
   await s.openExampleSession('typed', 'Typed', source);
   const title = (id: string) => s.doc.graph.nodes.find(n => n.id === id)?.title;
