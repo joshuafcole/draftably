@@ -1250,12 +1250,13 @@ same file compiled without its refinement lines.
 `check --metrics` measures the drawing as `vary` does and prints one line: size and aspect,
 crossings, bends, total line length and warnings. It also warns on how the drawing reads:
 
-| Rule       | Meaning                                                                                                                                                     |
-| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `crossing` | Two edges that share no end cross. (The metrics line counts every crossing the router sees.)                                                                |
-| `detour`   | A route is over 2.5 times, and 300px more than, the distance between its ends.                                                                              |
-| `stranded` | A node is over 480px from every node it connects to.                                                                                                        |
-| `aspect`   | Wider than 2:1 and wider than 960px, so it shrinks in a page column; taller than 3:1; or with `--fit <shape>`, more than 1.5 times off that shape's aspect. |
+| Rule            | Meaning                                                                                                                                                                        |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `crossing`      | Two edges that share no end cross. (The metrics line counts every crossing the router sees.)                                                                                   |
+| `detour`        | A route is over 2.5 times, and 300px more than, the distance between its ends.                                                                                                 |
+| `stranded`      | A node is over 480px from every node it connects to.                                                                                                                           |
+| `aspect`        | Wider than 2:1 and wider than 960px, so it shrinks in a page column; taller than 3:1; or with `--fit <shape>`, more than 1.5 times off that shape's aspect.                    |
+| `route-blocked` | The router found no clear way for a line, so it is drawn as a plain elbow over what is in its way. The editor draws it red and dashed; an export draws it like any other line. |
 
 `inspect --json --metrics` adds the same numbers as a `metrics` object, so a script can compare
 two versions of a file without drawing an image, and a `findings` list: every diagnostic
