@@ -62,6 +62,18 @@ export {
   type ThemeId,
 } from './model/appearance';
 
+// Text measurement from the bundled faces' width tables: how the compiler wraps and sizes, so a
+// host that draws text in a node can size it the same way, with no DOM.
+export {
+  measureText,
+  typeProfile,
+  widestPiece,
+  wordPieces,
+  wrapLines,
+  type FontRole,
+  type TypeProfile,
+} from './model/fonts';
+
 // A static SVG of a projected document, for thumbnails and exports.
 export { renderSvg, type SvgOptions } from './cli/svg';
 
