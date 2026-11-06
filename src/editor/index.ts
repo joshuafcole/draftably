@@ -16,5 +16,6 @@ export {
   useSessionIfAny,
 } from '../components/session-context';
 export type { CanvasProps } from '../components/canvas/Canvas';
+export type { AppearanceLayer } from '../model/appearance';
 export { Editor } from './Editor';
 export { mountEditor, type MountedEditor, type MountOptions } from './mount';
