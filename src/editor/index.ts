@@ -7,6 +7,8 @@ export {
   type ConfirmRequest,
   type DiagramSession,
   type SessionOptions,
+  type ViewItem,
+  type ViewItemKind,
 } from '../state/session';
 export {
   DiagramSessionProvider,

@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Host-driven view state</title>
+    <style>
+      body {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+        height: 100vh;
+        margin: 0;
+        padding: 12px;
+        box-sizing: border-box;
+      }
+      .host {
+        display: flex;
+        min-height: 0;
+        border: 1px solid #ccc;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="host" id="left"></div>
+    <div class="host" id="right"></div>
+    <script type="module" src="./view-state.tsx"></script>
+  </body>
+</html>

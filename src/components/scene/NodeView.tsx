@@ -22,6 +22,9 @@ export interface NodeViewProps {
   id: string;
   rect: NodeLayout;
   selected?: boolean;
+  /** Drawn as if the pointer were over it, such as when a host points at it from elsewhere. */
+  hovered?: boolean;
+
   /** Editor canvas: ports, resize handles and position badges. */
   interactive?: boolean;
   zoom?: number;
@@ -78,7 +81,12 @@ export function NodeView(props: NodeViewProps) {
   return (
     <g
       class="node"
-      classList={{ selected: props.selected, focused: props.focused, editing: props.editing }}
+      classList={{
+        selected: props.selected,
+        hovered: props.hovered,
+        focused: props.focused,
+        editing: props.editing,
+      }}
       data-kind="node"
       data-id={props.id}
       data-href={node().href}

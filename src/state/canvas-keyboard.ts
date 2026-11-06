@@ -60,6 +60,7 @@ function focusedObject(target: Element) {
  * selection; it returns true when it closed one.
  */
 export function handleCanvasKey(e: KeyboardEvent, closeMenu?: () => boolean): boolean {
+  if (activeSession().readOnly()) return handleViewKey(e, closeMenu);
   if (e.isComposing || activeSession().sculptKey(e)) return true;
   const mod = e.ctrlKey || e.metaKey,
     key = shortcutKey(e),
@@ -235,6 +236,54 @@ export function handleCanvasKey(e: KeyboardEvent, closeMenu?: () => boolean): bo
   return false;
 }
 
+/** Commands a read-only canvas keeps: they move the view, never the drawing. */
+const VIEW_COMMANDS = new Set<CanvasCommandId>(['fit', 'reset-camera', 'zoom-in', 'zoom-out']);
+
+/**
+ * The keys of a read-only canvas: Enter activates the focused or selected object, Escape clears
+ * the selection, Space pans, arrows pan, [ and ] step the emphasis state, and the zoom keys zoom.
+ */
+function handleViewKey(e: KeyboardEvent, closeMenu?: () => boolean): boolean {
+  const s = activeSession(),
+    target = e.target as Element,
+    key = shortcutKey(e);
+  if (e.isComposing || isEditable(target)) return true;
+  if (e.key === 'Escape') {
+    if (closeMenu?.()) return (e.preventDefault(), true);
+    e.preventDefault();
+    s.cancelGesture();
+    s.clearSelection();
+    return true;
+  }
+  if (e.code === 'Space' && keepsSpace(target)) return true;
+  if (e.code === 'Space' && !e.repeat) return (e.preventDefault(), s.setSpaceHeld(true), true);
+  if (e.ctrlKey || e.metaKey || e.altKey) return false;
+  if (e.key === 'Enter') {
+    if (target.tagName === 'BUTTON') return true;
+    e.preventDefault();
+    s.activate(focusedObject(target) ?? s.singleSelection());
+    return true;
+  }
+  const onCanvas = target === document.querySelector('.canvas') || !!target.closest?.('[data-id]');
+  if (ARROW_SIDES[e.key] && onCanvas) {
+    e.preventDefault();
+    const amount = e.shiftKey ? 10 : 1,
+      dx = e.key === 'ArrowLeft' ? -amount : e.key === 'ArrowRight' ? amount : 0,
+      dy = e.key === 'ArrowUp' ? -amount : e.key === 'ArrowDown' ? amount : 0;
+    s.panBy(-dx * 30, -dy * 30);
+    return true;
+  }
+  if ((key === '[' || key === ']') && s.stepState(key === ']' ? 1 : -1))
+    return (e.preventDefault(), true);
+  const command = KEY_COMMANDS[key];
+  if (command && VIEW_COMMANDS.has(command)) {
+    e.preventDefault();
+    runCanvasCommand(command);
+    return true;
+  }
+  return false;
+}
+
 export function handleKeyUp(e: KeyboardEvent) {
   if (e.code === 'Space') activeSession().setSpaceHeld(false);
 }
@@ -248,7 +297,7 @@ export function copyShapes(e: ClipboardEvent) {
 
 /** Paste copied shapes: from the clipboard text, or the session's own copy when it is empty. */
 export function pasteShapes(e: ClipboardEvent) {
-  if (isEditable(e.target) || !e.clipboardData) return;
+  if (isEditable(e.target) || !e.clipboardData || activeSession().readOnly()) return;
   const text = e.clipboardData.getData('text/plain').trim();
   try {
     if (text.startsWith('{')) {

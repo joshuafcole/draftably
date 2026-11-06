@@ -68,7 +68,8 @@
 }
 
 /* Anything a drag would move shows it on hover: shapes lift, containers and lines take the accent. */
-.stage[data-tool='select']:not(.is-dragging) .node:hover .selection-ring {
+.stage[data-tool='select']:not(.is-dragging) .node:hover .selection-ring,
+.node.hovered:not(.selected) .selection-ring {
   opacity: 0.6;
 }
 
@@ -140,7 +141,8 @@
   cursor: grab;
 }
 
-.stage[data-tool='select']:not(.is-dragging) .group:not(.selected):hover .group-bg {
+.stage[data-tool='select']:not(.is-dragging) .group:not(.selected):hover .group-bg,
+.group.hovered:not(.selected) .group-bg {
   stroke-opacity: 1;
   stroke: color-mix(in srgb, var(--accent) 85%, transparent);
   stroke-width: 2;
@@ -208,7 +210,8 @@
   pointer-events: stroke;
 }
 
-.stage[data-tool='select']:not(.is-dragging) .edge:not(.selected):hover .edge-line {
+.stage[data-tool='select']:not(.is-dragging) .edge:not(.selected):hover .edge-line,
+.edge.hovered:not(.selected) .edge-line {
   stroke: color-mix(in srgb, var(--accent) 70%, transparent);
   stroke-width: 2.2;
 }
@@ -838,4 +841,16 @@
 
 .text-anchor {
   stroke-dasharray: 2 3;
+}
+
+/* --- Read-only ------------------------------------------------------------------------------- */
+
+/* A read-only canvas selects and pans; the handles that would edit the drawing are not offered. */
+.stage.read-only
+  :is(.port, .waypoint, .quick-add, .group-collapse, .position-badge, [data-resize]) {
+  display: none;
+}
+
+.stage.read-only :is(.node, .group-bg, .edge-hit) {
+  cursor: pointer;
 }
