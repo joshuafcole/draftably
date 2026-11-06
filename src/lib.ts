@@ -46,6 +46,7 @@ export { sceneConflicts } from './dsl/conflicts';
 // Everything `check` reports for a compiled scene, and with `metrics` how its drawing reads.
 export { checkScene, drawingNotes, type CheckOptions, type CheckResult } from './dsl/check';
 export type { Drawing } from './dsl/metrics';
+export { drawingScore, WEIGHTS, type DrawingScore } from './dsl/score';
 
 // A routed document ready to draw, and the components that draw it.
 export { buildStaticScene, type StaticScene as StaticDrawing } from './model/static-scene';

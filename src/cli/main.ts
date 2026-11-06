@@ -8,6 +8,7 @@ import { isMainThread, workerData } from 'node:worker_threads';
 import { compile, type Diagnostic } from '../dsl/compile';
 import { compareDetailed } from '../dsl/compare';
 import { checkScene } from '../dsl/check';
+import type { DrawingScore } from '../dsl/score';
 import { hintMoves, sceneConflicts } from '../dsl/conflicts';
 import { statusLabel, usedStatuses, withState } from '../model/status';
 import type { Diagram } from '../model/types';
@@ -40,8 +41,12 @@ Commands:
        [--hints]            (a line through a box, overlapping boxes or labels). Exits 1 on
        [--quiet]            errors. Several files or a folder check each .draft in turn.
        [--metrics]          --metrics also measures the drawing as vary does (size, aspect,
-       [--fit <shape>]      crossings, bends, line length) and warns on crossings, detours,
-                            stranded nodes and an extreme aspect, or one far from --fit.
+       [--fit <shape>]      crossings, bends, line length) and warns on how it reads:
+       [--score]            crossings, detours, stranded nodes, an aspect far from --fit,
+                            labels off or too long for their line, ports facing away,
+                            blocked routes and sprawl (docs conflicts lists them). --score
+                            weighs every warning into one number and ranks the files by it;
+                            it ranks, it does not judge.
                             --hints adds how far each refinement moved its target; --quiet
                             leaves out info notes.
   format <file> [--write]   Print the formatted source, or rewrite the file in place.
@@ -51,7 +56,8 @@ Commands:
        [--hints]            line; with --hints it adds the unrefined position (raw) of every
        [--metrics]          node a refinement moved. --metrics adds a metrics object with
                             what vary measures: size, crossings, bends, length, warnings, and
-                            a findings list of what check --metrics reports.
+                            a findings list of what check --metrics reports; --score adds
+                            the score.
   inspect <file> --svg      Print a plain SVG drawing of the compiled diagram.
        [--state <id>]       Draw it in one emphasis state (also with --png).
        [--states]           Draw every emphasis state as its own aligned panel.
@@ -265,7 +271,13 @@ async function maybePng(svg: () => string | Promise<string>, args: string[], sou
 /** `check --metrics`: what to measure, and the image shape to hold it to. */
 interface MetricsOption {
   fit?: Fit;
+  /** Weigh the findings into one number, and collect it here for the ranking. */
+  scores?: { file: string; score: DrawingScore }[];
 }
+
+/** One line for `--score`: the number, and what it is made of. */
+const scoreLine = (s: DrawingScore) =>
+  `Score: ${s.score.toFixed(2)} (${+s.raw.toFixed(1)} points over ${s.size} objects and connections; ${counted(s.issues, 'issue')}, ${s.lost} losing a word or part of the drawing).`;
 
 async function checkFile(
   file: string,
@@ -277,9 +289,14 @@ async function checkFile(
   const source = await read(file),
     scene = await compile(source);
   // The drawing is measured only for a file that compiles cleanly; errors come first.
-  const { diagnostics, metrics: measured } = checkScene(scene, {
+  const {
+    diagnostics,
+    metrics: measured,
+    score,
+  } = checkScene(scene, {
     metrics: !!metrics,
     fit: metrics?.fit,
+    score: !!metrics?.scores,
     notes: linkNotes(scene, file),
   });
   const errors = diagnostics.filter(d => d.level === 'error'),
@@ -287,6 +304,10 @@ async function checkFile(
   for (const d of diagnostics) if (!quiet || d.level !== 'info') console.log(tag + describe(d));
   if (hints) console.log(hintTable(await hintMoves(source, scene)));
   if (measured) console.log(tag + metricsLine(measured));
+  if (score) {
+    console.log(tag + scoreLine(score));
+    metrics!.scores!.push({ file, score });
+  }
   const nodes = scene.objects.filter(o => o.type === 'node').length;
   console.log(
     `${tag}${errors.length ? 'Problems' : warnings.length ? 'Warnings' : 'OK'}: ${counted(nodes, 'node')}, ${counted(scene.objects.length - nodes, 'group')}, ${counted(scene.edges.length, 'connection')}.`,
@@ -372,6 +393,7 @@ export async function main(argv: string[]): Promise<number> {
             all.splice(i, 1, ...(await pdfSources(all[i])).map(s => `${all[i]}#${s.name}`));
         if (!all.length) throw new UsageError(`No .draft files in ${files.join(', ')}.`);
         let failed = 0;
+        const scores: NonNullable<MetricsOption['scores']> = [];
         for (const f of all) {
           // With several files each line names its file, so a loop can't mistake one for all.
           const tag = all.length > 1 || files[0] !== all[0] ? `${f}: ` : '';
@@ -381,7 +403,9 @@ export async function main(argv: string[]): Promise<number> {
               tag,
               flag('--hints'),
               flag('--quiet'),
-              flag('--metrics') ? { fit: fitOption(rest) } : undefined,
+              flag('--metrics') || flag('--score')
+                ? { fit: fitOption(rest), ...(flag('--score') ? { scores } : {}) }
+                : undefined,
             );
           } catch (error) {
             if (!tag) throw error;
@@ -399,6 +423,17 @@ export async function main(argv: string[]): Promise<number> {
           console.log(
             `${failed ? `${failed} of ${all.length}` : `All ${all.length}`} files ${failed ? 'have errors' : 'passed'}.`,
           );
+        // Highest first; ties by how many findings lose a word or a part, then by name.
+        if (scores.length > 1) {
+          console.log('Ranked by score:');
+          for (const { file, score } of scores.sort(
+            (a, b) =>
+              b.score.score - a.score.score ||
+              b.score.lost - a.score.lost ||
+              a.file.localeCompare(b.file),
+          ))
+            console.log(`  ${score.score.toFixed(2).padStart(6)}  ${file}`);
+        }
         return failed ? 1 : 0;
       }
       case 'format': {
@@ -461,11 +496,15 @@ export async function main(argv: string[]): Promise<number> {
           console.log(JSON.stringify(geometry));
         } else {
           // With --metrics, the findings `check --metrics` prints, beside what vary measures.
-          const geometry = flag('--metrics')
+          const checked = flag('--metrics')
+            ? checkScene(scene, { metrics: true, fit: fitOption(rest), score: flag('--score') })
+            : undefined;
+          const geometry = checked
             ? {
                 ...canonicalGeometry(doc),
                 metrics: (await draw(source)).metrics,
-                findings: checkScene(scene, { metrics: true, fit: fitOption(rest) }).diagnostics,
+                findings: checked.diagnostics,
+                ...(checked.score ? { score: checked.score } : {}),
               }
             : canonicalGeometry(doc);
           console.log(JSON.stringify(geometry, null, flag('--json') ? 0 : 2));
