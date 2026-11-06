@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
+import { checkSource, resolveAppearance, wrapLines } from '../src/lib';
 
 const src = path.resolve(import.meta.dirname, '../src');
 
@@ -80,5 +81,14 @@ describe('the library entry', () => {
     const pkg = JSON.parse(fs.readFileSync(path.join(src, '../package.json'), 'utf8'));
     expect(pkg.exports['./lib']).toBe('./src/lib.ts');
     expect(pkg.exports['./editor']).toBe('./src/editor/index.ts');
+  });
+
+  it("measures text as the compiler does, so a host can size a node's text without the DOM", () => {
+    const title = 'Collect the inputs from every upstream service';
+    const look = resolveAppearance();
+    const node = checkSource(`node a "${title}"\nsize a width=120 height=auto`).byId.get('a')!;
+    const lines = wrapLines(title, 120 - 2 * look.paddingX, look.title, true);
+    expect(lines.length).toBeGreaterThan(1);
+    expect(node.h).toBe(lines.length * look.title.lineHeight + 2 * look.paddingY);
   });
 });
