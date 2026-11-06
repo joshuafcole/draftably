@@ -5,6 +5,10 @@ import {
   swatchFor,
   type AppearanceLayer,
 } from '../src/model/appearance';
+// Imported with the file, not inside a test: loading the session's modules can take seconds
+// while the whole suite transforms at once, and a test's timeout should not pay for it.
+// Only creating a session reads the page globals stubbed below.
+import { createDiagramSession } from '../src/state/session';
 
 const DARK: AppearanceLayer = {
   dark: true,
@@ -66,7 +70,6 @@ describe('a session with a host appearance', () => {
   };
 
   it('draws in the host’s paint, keeps it across a new source, and moves and writes nothing', async () => {
-    const { createDiagramSession } = await import('../src/state/session');
     const s = createDiagramSession({ appearance: DARK });
     await s.openSource(SOURCE);
     await settle(s);
