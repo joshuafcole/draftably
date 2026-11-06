@@ -208,6 +208,7 @@ main {
   margin: 8px 0 0;
   color: var(--muted);
   font-size: 16px;
+  text-wrap: pretty;
 }
 
 .hero-sub code {
@@ -307,6 +308,7 @@ main {
 
 .copy code {
   flex: 1;
+  min-width: 0;
   font-size: 13px;
   white-space: nowrap;
 }
@@ -1002,7 +1004,8 @@ main {
 /* Examples */
 
 .examples,
-.install {
+.install,
+.switch {
   max-width: var(--page);
   margin: 0 auto;
   padding: 56px var(--gutter) 0;
@@ -1104,8 +1107,8 @@ main {
 
 .install-cols {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 40px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 32px;
 }
 
 .install-cols > div {
@@ -1157,6 +1160,24 @@ main {
   margin-bottom: 14px;
 }
 
+/* A command breaks between words, never after a hyphen; a word wider than the box still breaks. */
+.copy-word {
+  display: inline-block;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.install p code,
+.switch p code {
+  white-space: nowrap;
+}
+
+/* One height for the row's commands, so their boxes line up whatever their length. */
+/* Room for two lines, so the row's command boxes match whether a command wraps or not. */
+.install-cols .copy {
+  min-height: 60px;
+}
+
 .install .commands {
   margin-top: 28px;
 }
@@ -1182,6 +1203,141 @@ main {
   color: var(--muted);
 }
 
+/* Coming from Mermaid: the two routes and a comparison beside the user's own source, drawn. */
+
+.switch-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
+  gap: 40px;
+  align-items: start;
+}
+
+.switch-lead {
+  max-width: 60ch;
+  margin: 0;
+  font-size: 16px;
+}
+
+.switch-routes {
+  display: grid;
+  gap: 20px;
+  margin-top: 20px;
+}
+
+.switch-routes > div {
+  display: flex;
+  flex-direction: column;
+}
+
+.switch h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.switch-routes p {
+  margin: 6px 0 12px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.switch .copy {
+  align-items: flex-start;
+  width: 100%;
+  height: auto;
+  min-height: 40px;
+  margin-top: auto;
+  padding: 10px 12px;
+  line-height: 20px;
+}
+
+.switch .copy code {
+  white-space: normal;
+}
+
+.switch .copy-icon {
+  margin-top: 2px;
+}
+
+.switch-table {
+  width: 100%;
+  margin-top: 28px;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.switch-table th,
+.switch-table td {
+  padding: 8px 12px 8px 0;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+
+.switch-table thead th {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.switch-table tbody th {
+  font-weight: 600;
+}
+
+.switch-table td {
+  color: var(--muted);
+}
+
+.switch-table td:last-child {
+  color: var(--text);
+}
+
+.switch-figure {
+  margin: 0;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--bg);
+}
+
+.switch-caption {
+  margin: 0;
+  padding: 10px 14px 0;
+  color: var(--muted);
+  font: 600 12px var(--font);
+}
+
+.switch-pane {
+  min-width: 0;
+}
+
+.switch-pane-drawing {
+  position: relative;
+  border-top: 1px solid var(--line);
+  background: var(--canvas);
+}
+
+.switch-source {
+  margin: 0;
+  padding: 8px 14px 14px;
+  font: 500 12.5px / 19px var(--mono);
+  font-variant-ligatures: none;
+  white-space: pre;
+  overflow-x: auto;
+}
+
+.switch-drawing {
+  /* The drawing's own shape, so the space is held before it draws. */
+  aspect-ratio: 2.3;
+  padding: 8px;
+}
+
+.switch-drawing svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
 /* Footer */
 
 .footer {
@@ -1201,7 +1357,8 @@ main {
 
 .footer-links {
   display: flex;
-  gap: 22px;
+  flex-wrap: wrap;
+  gap: 4px 22px;
   margin-left: auto;
   font-size: 13px;
 }
@@ -1237,16 +1394,30 @@ main {
   .cards {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .install-cols {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .switch-body {
+    grid-template-columns: 1fr;
+  }
+
+  /* With the full width, the source sits beside its drawing. */
+  .switch-figure {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .switch-pane-drawing {
+    border-top: 0;
+    border-left: 1px solid var(--line);
+  }
 }
 
 @media (max-width: 900px) {
   .hero .live {
     height: auto;
-  }
-
-  .install-cols {
-    grid-template-columns: 1fr;
-    gap: 32px;
   }
 }
 
@@ -1277,6 +1448,23 @@ main {
   .commands {
     grid-template-columns: 1fr;
     gap: 2px;
+  }
+
+  .install-cols {
+    grid-template-columns: 1fr;
+  }
+
+  .switch-figure {
+    display: block;
+  }
+
+  .switch-pane-drawing {
+    border-top: 1px solid var(--line);
+    border-left: 0;
+  }
+
+  .switch-table tbody th {
+    width: 32%;
   }
 
   .commands dd {

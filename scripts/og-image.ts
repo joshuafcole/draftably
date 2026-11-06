@@ -51,7 +51,7 @@ const html = `<!doctype html>
 </style>
 <div class="card">
   <div class="head">
-    <h1>Manual diagrams<br />are a drag.</h1>
+    <h1>Diagrams used to<br />be a drag.</h1>
     <span class="mark">${fs.readFileSync(path.join(root, 'src/assets/logo.svg'), 'utf8')}draftably</span>
   </div>
   <div class="frame">

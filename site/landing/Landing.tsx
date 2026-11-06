@@ -7,23 +7,32 @@ import { appUrl, paperOf } from '../draw';
 import { A, useLocation, useNavigate } from '@solidjs/router';
 import { demoEditorUrl, LiveEditor } from '../live/LiveEditor';
 import { deliver, ImportCancelled, readDiagramFile, unreadableFile } from '../reopen';
+import { CopyCommand } from './CopyCommand';
+import { Mermaid } from './Mermaid';
 import { Points } from './Points';
 import { drawSvg, enqueue, whenSeen } from './render';
 
 const GITHUB = 'https://github.com/byronwall/draftably';
 const NPM = 'https://www.npmjs.com/package/draftably';
 
-const HERO_EXAMPLES = ['checkout', 'order-lifecycle', 'support-triage', 'billing-schema'];
+const HERO_EXAMPLES = [
+  'checkout',
+  'login-sequence',
+  'order-lifecycle',
+  'support-triage',
+  'billing-schema',
+];
 /** The box each hero example labels "Drag me". */
 const HERO_HINTS: Record<string, string> = {
   checkout: 'db',
+  'login-sequence': 'auth',
   'order-lifecycle': 'cancelled',
   'support-triage': 'link',
   'billing-schema': 'invoices',
 };
 /** None of these repeat a hero tab, so every example on the page is a new one. */
 const CARD_EXAMPLES = [
-  'login-sequence',
+  'multi-region-failover',
   'incident-response',
   'data-lakehouse',
   'observability-stack',
@@ -71,13 +80,14 @@ export function Landing() {
       <Nav />
       <main id="main" tabIndex={-1} style={{ outline: 'none' }}>
         <section class="hero">
-          <h1>Manual diagrams are a drag.</h1>
+          <h1>Diagrams used to be a drag.</h1>
           <div class="hero-head">
             <div>
-              <p class="hero-kicker">Write yours. Drag only if you want to.</p>
+              <p class="hero-kicker">Now you write them. Drag only if you want to.</p>
               <p class="hero-sub">
-                For developers: architecture, flows, sequences, state machines and schemas, laid out
-                from plain text. Move a box and the file gets plain, readable lines.
+                Architecture, flows, sequences, state machines and schemas, laid out from text. Move
+                a box and the file gets readable lines. Use it in the browser, the terminal, your
+                app or your coding agent.
               </p>
             </div>
             <div class="hero-actions">
@@ -98,6 +108,7 @@ export function Landing() {
           <ReopenLine />
         </section>
         <Install />
+        <Mermaid />
         <Points />
         <Examples />
       </main>
@@ -168,48 +179,6 @@ function Nav() {
   );
 }
 
-/**
- * A shell command with a copy button. The icon turns to a check for a moment after a copy. If the
- * browser refuses the clipboard, the command text is selected so the user can copy it by hand.
- */
-function CopyCommand(props: { text: string; class?: string }) {
-  const [copied, setCopied] = createSignal(false);
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  let code!: HTMLElement;
-  const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(props.text);
-    } catch {
-      getSelection()?.selectAllChildren(code);
-      return;
-    }
-    setCopied(true);
-    clearTimeout(timer);
-    timer = setTimeout(() => setCopied(false), 1400);
-  };
-  onCleanup(() => clearTimeout(timer));
-  return (
-    <button
-      type="button"
-      class={`copy ${props.class ?? ''}`}
-      classList={{ 'is-copied': copied() }}
-      onClick={copy}
-      aria-label={`Copy "${props.text}"`}
-    >
-      <span class="copy-prompt">$</span>
-      <code ref={code}>{props.text}</code>
-      <span class="sr-only" aria-live="polite">
-        {copied() ? 'Copied' : ''}
-      </span>
-      <svg class="copy-icon" viewBox="0 0 16 16" aria-hidden="true">
-        <Show when={copied()} fallback={<path d="M5.5 5.5V3h7.5v7.5h-2.5M3 5.5h7.5V13H3z" />}>
-          <path d="M3.5 8.5l3 3 6-7" />
-        </Show>
-      </svg>
-    </button>
-  );
-}
-
 function Examples() {
   const cards = CARD_EXAMPLES.map(findExample).filter((e): e is ExampleInfo => !!e);
   return (
@@ -263,7 +232,7 @@ function Install() {
   return (
     <section class="install" id="install">
       <div class="section-head">
-        <h2>Three ways to use one file</h2>
+        <h2>One file, four ways to use it</h2>
       </div>
       <div class="install-cols">
         <div>
@@ -283,13 +252,22 @@ function Install() {
           <CopyCommand text="npx draftably open plan.draft" />
         </div>
         <div>
-          <h3>Teach your coding agent</h3>
+          <h3>Agent: let it draw for you</h3>
           <p>
             A bundled skill teaches an agent the language, so it writes, checks and renders{' '}
             <code>.draft</code> files on its own. Add <code>--global</code> for every project.{' '}
             <DocLink href="/docs/agent-skill">Read the guide</DocLink>.
           </p>
           <CopyCommand text="npx draftably skill install" />
+        </div>
+        <div>
+          <h3>Embed: put it in your app</h3>
+          <p>
+            A component for React, Solid, Vue and Svelte, an HTML element, or SVG from a build step.
+            Add the editor and your users can drag too.{' '}
+            <DocLink href="/docs/embed">Pick a route</DocLink>.
+          </p>
+          <CopyCommand text="pnpm add @draftably/react" />
         </div>
       </div>
       <dl class="commands">

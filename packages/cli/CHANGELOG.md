@@ -1,5 +1,28 @@
 # draftably
 
+## 0.11.0
+
+### Minor Changes
+
+- d31241d: The editor selects, edits in place and saves every piece of canvas text: sequence message labels, notes, legend rows, phase labels and soft group titles. Drag a note beside another shape, container or message to move it; the file gets its new near= and side=.
+- a337f9d: The editor shows the open file's .draft source in a Source tab beside the canvas. It follows moves, Tidy and inline edits, and has Copy all.
+- e935ae2: New `footnote` statement: a block of entries under the drawing, above the legend, with optional markers that labels point at as [1]. Notes and footnotes take [label](href) links that join config link-base= and stay clickable in the Editor, SVG and PDF.
+- 0eaa8ac: The Source tab is editable. A valid edit redraws the canvas and saves the file; an invalid line keeps the last valid drawing and shows its error at the line. Press ` to open the tab.
+- eb75538: New `draftably migrate <files|folder|glob>` rewrites flowchart and sequence `mermaid` fences in Markdown as `draft` fences. Other Mermaid charts stay. It prints a dry run with the importer's warnings; `--write` applies it, and `--accept-lossy` also converts fences with warnings.
+- b03caa4: Add a native asynchronous SVG runtime facade with structured diagnostics, detached diagram summaries, validation, bounded resource overrides, cancellation checks, and XML text validation. Shared CLI rendering remains the current SVG writer.
+- 652ec7c: Share the native SVG writer with the runtime. Add scoped inline IDs, safe HTTP(S) links, optional source metadata, and bounded SVG output. Version font family names by their bundled files and metrics. CLI exports keep authored links and embedded fonts.
+
+### Patch Changes
+
+- 2eb469f: Flow edges leave boxes on the right or bottom and enter on the left or top in a directed layout. Lines into members of a group that another line targets are no longer drawn along the member's border. A line to a group meets the group's side near its own line. A line out of a group crosses the title band when the way round reads backwards. `check` warns when a line has to leave or enter by a backward side.
+- e063456: The viewer's editor state is per diagram, and an embeddable editor (mountEditor) can put several live canvases on one page.
+- 29effde: Selecting a diagram, object or layer no longer changes its text weight, so long titles keep their wrapping and the list does not move.
+- fe01bb5: The guides for every package moved to draftably.dev/docs, and each package README now links there. The Emphasis states page draws each state live.
+- ba5f518: A line that runs between two sides, such as a container wall and a box or two container walls, now runs midway between them. Before, it could hug one side. Two lines on one side of a box, pill or circle now sit evenly about the side's middle more often, also when one of them is a straight line to another box.
+- 81e76a8: `@draftably/editor` now holds only the editable canvas. It no longer bundles the Mermaid and D2 importers, the import dialogs or the app's panel state, so the package drops from about 20 MB to 1.7 MB unpacked. Importing it no longer reads the window size or writes to localStorage. A mounted editor keeps its canvas shortcuts; app-only shortcuts, such as the command palette, stay in the app.
+- ae7bf20: An edge label too long for the gap between two boxes now stays inside their group and clear of other lines, instead of sitting on the group's border where another line crosses it.
+- 5e6adc4: SVG exports name the drawing for screen readers: the root `<svg>` has `id="draft-svg"`, `role="img"` and `aria-labelledby` pointing at its title. Layout and embedded source are unchanged.
+
 ## 0.10.0
 
 ### Minor Changes
