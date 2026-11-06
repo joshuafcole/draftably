@@ -12,7 +12,6 @@
 import {
   groupShadeFor,
   NODE_SHADE,
-  PRESETS,
   SHADES,
   shadesOf,
   swatchFor,
@@ -34,14 +33,14 @@ export function drawnShade(doc: Diagram, look: ResolvedAppearance, id: string): 
     group = isGroup(doc, id),
     family = style.color;
   if (!family || family === 'auto') return style.shade;
-  const own = style.shade ?? (group ? groupShadeFor(look.theme) : NODE_SHADE);
+  const own = style.shade ?? (group ? groupShadeFor(look.theme, look.dark) : NODE_SHADE);
   const parentId = findObject(doc, id)?.parentId,
     parent = parentId ? findGroup(doc, parentId) : undefined;
   if (!parent || styleOf(doc, parent.id).color !== family) return own;
   const outer = drawnShade(doc, look, parent.id);
   if (outer === undefined) return own;
   const need = group ? GROUP_STEP : NODE_STEP,
-    toward = PRESETS[look.theme]?.dark ? -1 : 1,
+    toward = look.dark ? -1 : 1,
     at = SHADES.indexOf(own),
     from = SHADES.indexOf(outer);
   // Far enough from the frame already, on the emphasis side or well past it on the other.

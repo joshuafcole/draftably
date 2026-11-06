@@ -6,8 +6,10 @@
  * through `s`. Parts that need a later one register a handler instead (`setDocumentOpener`, …).
  */
 import { createRoot } from 'solid-js';
+import type { AppearanceLayer } from '../../model/appearance';
 import { describeLink } from '../links';
 import { createActions } from './actions';
+import { createHostAppearance } from './appearance';
 import { createCanvasText } from './canvas-text';
 import { createDocument } from './document';
 import { createEditor } from './editor';
@@ -55,13 +57,20 @@ export interface SessionOptions {
   onHover?: (item: ViewItem | null) => void;
   /** In a read-only session, the user opened an object: a double click, or Enter on it. */
   onActivate?: (item: ViewItem) => void;
+  /**
+   * The host's paint over the diagram: canvas, text, lines, default surfaces and color shades,
+   * and whether its canvas is dark. Separate from the editor's own light or dark mode, and never
+   * written to the source. `setAppearance` changes it later.
+   */
+  appearance?: AppearanceLayer;
 }
 
 export function createDiagramSession(options: SessionOptions = {}) {
   return createRoot(dispose => {
     const s0 = Object.assign({ dispose }, createCanvasText());
     const s1 = Object.assign(s0, createDocument(s0, options));
-    const s2 = Object.assign(s1, createFileSession(s1));
+    const s1a = Object.assign(s1, createHostAppearance(s1));
+    const s2 = Object.assign(s1a, createFileSession(s1a));
     const s3 = Object.assign(s2, createScene(s2));
     const s4 = Object.assign(s3, createEmphasis(s3));
     const s5 = Object.assign(s4, createEditor(s4));
