@@ -27,7 +27,7 @@ import {
 import { cellsBandFor, layoutCells, layoutUnits } from './cells';
 import { marginNotes } from '../model/note';
 import { defaultShapeSize } from '../model/styles';
-import type { CellsChrome, Diagram, Direction, Lane, SequenceLayout } from '../model/types';
+import type { CellsChrome, Diagram, Direction, Lane, Rect, SequenceLayout } from '../model/types';
 import { planChannels, trimChannels, type Channel } from './channels';
 import { returnLanes, type FlowScope } from './lanes';
 import {
@@ -96,6 +96,8 @@ export interface Diagnostic {
   /** Source line of the rule involved, when there is one. */
   line?: number;
   ids: string[];
+  /** Where on the drawing a finding about its geometry is, to frame or mark it. */
+  box?: Rect;
 }
 
 /** A connection as the file declares it, plus the lane a fold's wrap edge returns along. */
