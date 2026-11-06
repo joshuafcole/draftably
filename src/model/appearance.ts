@@ -24,7 +24,8 @@ export const NODE_SHADE: Shade = 500;
  * Shade of a group that names a color without a shade. Groups are quiet surfaces behind nodes, so
  * this is a pale shade in light themes and a deep one in dark themes; the scale itself never flips.
  */
-export const groupShadeFor = (theme: ThemeId): Shade => (PRESETS[theme]?.dark ? 900 : 100);
+export const groupShadeFor = (theme: ThemeId, dark = PRESETS[theme]?.dark): Shade =>
+  dark ? 900 : 100;
 
 /** Built-in color families, available in every theme. `primary` and `secondary` follow the theme. */
 export const BUILT_IN_FAMILIES = [
@@ -99,6 +100,33 @@ export interface DiagramAppearance {
   config?: FileConfig;
   /** Named emphasis states from `state` statements, in file order. */
   states?: EmphasisState[];
+  /**
+   * Paint the page hosting the diagram lays over it, such as its own light or dark palette. Set
+   * by a host session, never by the file, and never written to the source.
+   */
+  host?: AppearanceLayer;
+}
+
+/**
+ * Colors a host lays over a diagram's appearance. Only paint: text is still measured in the
+ * file's fonts and spacing, so nothing moves. Unset fields keep the file's look; preset colors
+ * the host leaves alone are held to their contrast targets against the host's canvas.
+ */
+export interface AppearanceLayer {
+  /** The canvas is dark: built-in color ramps, group shades and nesting steps follow. */
+  dark?: boolean;
+  canvas?: string;
+  /** Titles and annotations. */
+  text?: string;
+  /** Secondary text, such as subtitles and counts. */
+  muted?: string;
+  /** Connection lines and their labels. */
+  connection?: string;
+  /** Shapes and containers that name no color. */
+  node?: Partial<Swatch>;
+  group?: Partial<Swatch>;
+  /** Shades of color families, as `theme-color` sets them, over the file's own. */
+  colors?: ColorDefinition[];
 }
 
 /** One way to draw the diagram: these objects and connections in focus, the rest faded or plain. */
@@ -528,18 +556,19 @@ const presetFamilies = new Map<string, Map<string, Map<Shade, Swatch>>>();
 export function builtInFamilies(
   theme: ThemeId,
   canvas = PRESETS[theme].canvas,
+  dark = PRESETS[theme].dark,
 ): Map<string, Map<Shade, Swatch>> {
-  const key = theme + canvas;
+  const key = theme + canvas + (dark === PRESETS[theme].dark ? '' : ':' + dark);
   let families = presetFamilies.get(key);
   if (!families) {
     const p = PRESETS[theme];
     families = new Map([
-      ['primary', anchoredRamp(p.primary, canvas, p.dark)],
-      ['secondary', anchoredRamp(p.secondary, canvas, p.dark)],
+      ['primary', anchoredRamp(p.primary, canvas, dark)],
+      ['secondary', anchoredRamp(p.secondary, canvas, dark)],
     ]);
     for (const [name, hue] of Object.entries(FAMILY_HUES)) {
       const [h, c] = p.hues?.[name] ?? hue;
-      families.set(name, ramp(h, c * p.chroma, canvas, p.dark));
+      families.set(name, ramp(h, c * p.chroma, canvas, dark));
     }
     presetFamilies.set(key, families);
   }
@@ -589,12 +618,14 @@ export function resolveAppearance(appearance?: DiagramAppearance): ResolvedAppea
     o = a.overrides;
   const titleFont = o.titleFont ?? p.titleFont,
     annotationFont = o.annotationFont ?? p.annotationFont;
-  const canvas = o.canvas ?? p.canvas;
+  const host = a.host ?? {};
+  const canvas = host.canvas ?? o.canvas ?? p.canvas,
+    dark = host.dark ?? p.dark;
   const families = new Map(
-    [...builtInFamilies(a.theme, canvas)].map(([name, shades]) => [name, new Map(shades)]),
+    [...builtInFamilies(a.theme, canvas, dark)].map(([name, shades]) => [name, new Map(shades)]),
   );
   const custom = new Set<string>();
-  for (const c of a.colors) {
+  for (const c of [...a.colors, ...(host.colors ?? [])]) {
     if (!families.has(c.family)) {
       families.set(c.family, new Map());
       custom.add(c.family);
@@ -611,7 +642,7 @@ export function resolveAppearance(appearance?: DiagramAppearance): ResolvedAppea
   const title = typeProfile(titleFont, true, p.titleSize, p.titleLine);
   const resolved: ResolvedAppearance = {
     theme: a.theme,
-    dark: p.dark,
+    dark,
     // Preset colors are held to the contrast targets against the actual canvas; colors the file
     // sets explicitly are used exactly as written.
     canvas,
@@ -645,6 +676,12 @@ export function resolveAppearance(appearance?: DiagramAppearance): ResolvedAppea
     custom,
     strikeRemoved: !!a.config?.strikeRemoved,
   };
+  // The host's paint goes over the file's, after the file's colors were held to the canvas.
+  if (host.text) resolved.text = resolved.node.ink = host.text;
+  if (host.muted) resolved.muted = host.muted;
+  if (host.connection) resolved.connection = host.connection;
+  if (host.node) resolved.node = { ...resolved.node, ...host.node };
+  if (host.group) resolved.group = { ...resolved.group, ...host.group };
   if (cache.size > 50) cache.clear();
   cache.set(key, resolved);
   return resolved;
@@ -669,7 +706,7 @@ export function swatchFor(
   return (
     r.families
       .get(family)
-      ?.get(shade ?? (kind === 'group' ? groupShadeFor(r.theme) : NODE_SHADE)) ?? surface
+      ?.get(shade ?? (kind === 'group' ? groupShadeFor(r.theme, r.dark) : NODE_SHADE)) ?? surface
   );
 }
 
