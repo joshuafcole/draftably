@@ -77,6 +77,8 @@ export function createDocument(s: CanvasTextPart, options: SessionOptions) {
 
   const doc = state.doc;
   const setDoc = state.setDoc;
+  /** A read-only session takes no edit: the user can still pan, zoom and select. */
+  const [readOnly, setReadOnly] = createSignal(!!options.readOnly);
   const saveStatus = state.saveStatus;
   const undoStack = state.undoStack;
   const redoStack = state.redoStack;
@@ -160,6 +162,10 @@ export function createDocument(s: CanvasTextPart, options: SessionOptions) {
   /** Push an undo step if the document changed since `before`. Returns whether it did. */
   function commit(before: string, label = 'Edit', kind: EditKind = 'edit'): boolean {
     if (before === snapshot()) return false;
+    if (readOnly()) {
+      restoreDocument(normalize(JSON.parse(before)), { keepCamera: true });
+      return false;
+    }
     if (commitHandler) return commitHandler(before, label, kind);
     pushUndo({ data: before, label });
     return true;
@@ -186,6 +192,7 @@ export function createDocument(s: CanvasTextPart, options: SessionOptions) {
 
   /** Run `fn` against the document as one undoable step. */
   function transact(label: string, fn: (draft: Diagram) => void, kind: EditKind = 'edit'): boolean {
+    if (readOnly()) return false;
     prepareForEdit();
     const before = snapshot();
     state.setDoc(produce(fn));
@@ -339,6 +346,8 @@ export function createDocument(s: CanvasTextPart, options: SessionOptions) {
   }
   return {
     options,
+    readOnly,
+    setReadOnly,
     doc,
     setDoc,
     saveStatus,

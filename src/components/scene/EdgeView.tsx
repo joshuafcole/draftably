@@ -35,6 +35,9 @@ export interface EdgeViewProps {
   doc: Diagram;
   route: DrawnRoute;
   selected?: boolean;
+  /** Drawn as if the pointer were over it, such as when a host points at it from elsewhere. */
+  hovered?: boolean;
+
   interactive?: boolean;
   /** Its label is being edited in place, so the drawn label hides. */
   editing?: boolean;
@@ -111,7 +114,7 @@ export function EdgeView(props: EdgeViewProps) {
   return (
     <g
       class="edge"
-      classList={{ selected: props.selected, editing: props.editing }}
+      classList={{ selected: props.selected, hovered: props.hovered, editing: props.editing }}
       data-kind="edge"
       data-id={props.route.id}
       opacity={paint().opacity < 1 ? paint().opacity : undefined}

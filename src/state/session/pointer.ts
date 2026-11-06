@@ -38,6 +38,7 @@ import type { ScenePart } from './scene';
 import type { SculptPart } from './sculpt';
 import type { ActionsPart } from './actions';
 import type { LayoutPart } from './layout';
+import type { ViewPart } from './view';
 
 type DragKind =
   | 'pan'
@@ -84,6 +85,8 @@ interface Gesture {
   onLabel?: boolean;
   previousSelection?: ReadonlySet<string>;
   guides?: Guide[];
+  /** A pan that began on an object in a read-only session, which already selected it. */
+  selected?: boolean;
 }
 
 // --- Pointer down ----------------------------------------------------------------------------
@@ -92,7 +95,7 @@ const targetData = (t: Element, selector: string) =>
   (t.closest(selector) as SVGElement | null)?.dataset;
 
 export function createPointer(
-  s: EditorPart & DocumentPart & ScenePart & SculptPart & ActionsPart & LayoutPart,
+  s: EditorPart & DocumentPart & ScenePart & SculptPart & ActionsPart & LayoutPart & ViewPart,
 ) {
   let gesture: Gesture | null = null;
   let lastClick: { id: string; index?: number; time: number; x: number; y: number } | null = null;
@@ -237,6 +240,7 @@ export function createPointer(
     const canvas = e.currentTarget as Element,
       t = e.target as Element;
     if (e.pointerType === 'touch' && beginTouch(e, canvas)) return e.preventDefault();
+    if (s.readOnly()) return viewPointerDown(e, canvas, t);
     if (s.timelineOpen() && e.button === 0 && !e.ctrlKey && !e.metaKey && !s.spaceHeld()) {
       // While previewing a timeline the canvas only pans.
       e.preventDefault();
@@ -416,6 +420,44 @@ export function createPointer(
     s.focusCanvas();
   }
 
+  /**
+   * A read-only canvas: a click selects (Shift adds or removes), a drag anywhere pans, Shift on
+   * the background draws a marquee, and links still open. Nothing edits the drawing.
+   */
+  function viewPointerDown(e: PointerEvent, canvas: Element, t: Element) {
+    if (e.metaKey || e.ctrlKey) {
+      e.preventDefault();
+      begin('zoom', e, canvas, { start: s.screenToWorld(e.clientX, e.clientY) });
+      return;
+    }
+    if (e.button > 1) return;
+    s.options.onInteract?.();
+    s.setPointer(s.screenToWorld(e.clientX, e.clientY));
+    const object = targetData(t, '[data-kind]'),
+      link = targetData(t, '[data-open-link]');
+    e.preventDefault();
+    if (e.button === 1 || s.spaceHeld()) return begin('pan', e, canvas);
+    if (link) {
+      if (s.options.openLink) s.options.openLink(link.openLink!);
+      else if (/^[a-z][a-z0-9+.-]*:/i.test(link.openLink!))
+        window.open(link.openLink!, '_blank', 'noopener');
+      return;
+    }
+    if (object?.id && s.viewItem(object.id)) {
+      if (e.shiftKey) s.selectItems([object.id], { add: true, toggle: true });
+      else if (!s.isSelected(object.id) || s.selection().size > 1) s.setSelection([object.id]);
+      begin('pan', e, canvas, { selected: true });
+      s.focusCanvas();
+      return;
+    }
+    if (e.shiftKey) {
+      begin('marquee', e, canvas, { previousSelection: new Set(s.selection()) });
+      s.focusCanvas();
+      return;
+    }
+    begin('pan', e, canvas);
+  }
+
   function startObjectDrag(e: PointerEvent, canvas: Element, id: string, doubleCandidate: boolean) {
     const roots = selectionRoots(s.doc, s.selection()),
       moving = new Set(roots);
@@ -446,6 +488,7 @@ export function createPointer(
     const canvas = e.currentTarget as Element;
     if (e.pointerType === 'touch' && moveTouch(e, canvas)) return e.preventDefault();
     if (!gesture && s.brushPointerMove(e)) return;
+    if (!gesture) s.pointAt(targetData(e.target as Element, '[data-kind]')?.id ?? null);
     const pos = s.screenToWorld(e.clientX, e.clientY);
     s.setPointer(pos);
     const g = gesture;
@@ -623,6 +666,7 @@ export function createPointer(
     if (g.kind === 'zoom') return s.persist();
     if (g.kind === 'pan') {
       if (g.moved) s.persist();
+      else if (g.selected) return;
       else if (g.clickId) s.setSelection([g.clickId]);
       else s.clearSelection();
       return;
@@ -731,6 +775,14 @@ export function createPointer(
   // --- Double click ----------------------------------------------------------------------------
 
   function onDoubleClick(e: MouseEvent) {
+    if (s.readOnly()) {
+      // The canvas holds the pointer during a pan, so the object is also found by position.
+      const under = document.elementFromPoint(e.clientX, e.clientY);
+      const id =
+        targetData(e.target as Element, '[data-kind]')?.id ??
+        (under && targetData(under, '[data-kind]')?.id);
+      return void s.activate(id);
+    }
     if (s.timelineOpen() || s.stroking()) return e.preventDefault();
     if (s.inlineEditId() || performance.now() < suppressDoubleClickUntil) return;
     const t = e.target as Element,
