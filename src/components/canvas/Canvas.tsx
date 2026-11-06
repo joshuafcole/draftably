@@ -95,6 +95,7 @@ export function Canvas(props: CanvasProps) {
         'space-held': s.spaceHeld(),
         'has-timeline': s.timelineOpen(),
         'has-brush': s.brushActive(),
+        'read-only': s.readOnly(),
       }}
       data-tool={s.tool()}
       aria-label="Diagram workspace"
@@ -120,7 +121,10 @@ export function Canvas(props: CanvasProps) {
         onPointerMove={s.onPointerMove}
         onPointerUp={onPointerUp}
         onPointerCancel={() => s.resetModifiers()}
-        onPointerLeave={s.brushPointerLeave}
+        onPointerLeave={() => {
+          s.pointAt(null);
+          s.brushPointerLeave();
+        }}
         onLostPointerCapture={() => s.brushActive() && s.cancelStroke()}
         onDblClick={s.onDoubleClick}
         onContextMenu={e => {
@@ -159,6 +163,7 @@ export function Canvas(props: CanvasProps) {
                   id={id}
                   rect={s.sceneRects().get(id)!}
                   selected={isSelected(id)}
+                  hovered={s.hoveredId() === id}
                   dropTarget={s.drag()?.dropTargetId === id}
                   editing={s.inlineEditId() === id}
                   interactive
@@ -178,6 +183,7 @@ export function Canvas(props: CanvasProps) {
                       doc={shown()}
                       route={route()}
                       selected={isSelected(id)}
+                      hovered={s.hoveredId() === id}
                       editing={s.inlineEditId() === id}
                       interactive
                     />
@@ -194,6 +200,7 @@ export function Canvas(props: CanvasProps) {
                   id={id}
                   rect={s.geometry(id)}
                   selected={isSelected(id)}
+                  hovered={s.hoveredId() === id}
                   editing={s.inlineEditId() === id}
                   interactive
                   zoom={camera().k}

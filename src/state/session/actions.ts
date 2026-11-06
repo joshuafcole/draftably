@@ -70,6 +70,7 @@ export function createActions(s: EditorPart & DocumentPart & ScenePart & LayoutP
   });
 
   function startInlineEdit(id: string) {
+    if (s.readOnly()) return;
     const text = parseTextId(id) && textValue(s.doc, id);
     if (text !== undefined) {
       finishInlineEdit(true);

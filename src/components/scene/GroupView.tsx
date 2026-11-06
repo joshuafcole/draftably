@@ -24,6 +24,8 @@ export interface GroupViewProps {
   id: string;
   rect: NodeLayout;
   selected?: boolean;
+  /** Drawn as if the pointer were over it, such as when a host points at it from elsewhere. */
+  hovered?: boolean;
   dropTarget?: boolean;
   interactive?: boolean;
   zoom?: number;
@@ -67,7 +69,7 @@ export function GroupView(props: GroupViewProps) {
   const soft = () => (
     <g
       class="group soft"
-      classList={{ selected: props.selected, focused: props.focused }}
+      classList={{ selected: props.selected, hovered: props.hovered, focused: props.focused }}
       data-kind="group"
       data-id={props.id}
       transform={`translate(${props.rect.x},${props.rect.y})`}
@@ -112,6 +114,7 @@ export function GroupView(props: GroupViewProps) {
       class="group"
       classList={{
         selected: props.selected,
+        hovered: props.hovered,
         'drop-target': props.dropTarget,
         focused: props.focused,
         editing: props.editing,

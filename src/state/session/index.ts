@@ -17,6 +17,9 @@ import { createPointer } from './pointer';
 import { createRouting } from './routing';
 import { createScene } from './scene';
 import { createSculpt } from './sculpt';
+import { createView, type ViewItem } from './view';
+
+export type { ViewItem, ViewItemKind } from './view';
 
 export interface ConfirmRequest {
   title: string;
@@ -36,6 +39,21 @@ export interface SessionOptions {
   openLink?: (href: string) => void;
   /** The user started a gesture or a tool on the canvas; a host closes its menus here. */
   onInteract?: () => void;
+  /**
+   * Take no edit: no drags, resizes, connections, inline text or edit shortcuts. The user can
+   * still pan, zoom and select, and a double click or Enter activates (`onActivate`).
+   * `setReadOnly` changes it later.
+   */
+  readOnly?: boolean;
+  /**
+   * The selection changed, by the user or because selected objects left the drawing. A
+   * selection the host set with `showSelection` is not reported back.
+   */
+  onSelect?: (items: ViewItem[]) => void;
+  /** The pointer moved onto an object, or off every object (null). */
+  onHover?: (item: ViewItem | null) => void;
+  /** In a read-only session, the user opened an object: a double click, or Enter on it. */
+  onActivate?: (item: ViewItem) => void;
 }
 
 export function createDiagramSession(options: SessionOptions = {}) {
@@ -50,7 +68,8 @@ export function createDiagramSession(options: SessionOptions = {}) {
     const s7 = Object.assign(s6, createActions(s6));
     const s8 = Object.assign(s7, createRouting(s7));
     const s9 = Object.assign(s8, createSculpt(s8));
-    return Object.assign(s9, createPointer(s9));
+    const s10 = Object.assign(s9, createView(s9));
+    return Object.assign(s10, createPointer(s10));
   });
 }
 
