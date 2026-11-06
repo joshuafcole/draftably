@@ -11,13 +11,18 @@
 import { placeNotes } from '../model/note';
 import { covers, segments, segmentInside, shrink } from '../model/geometry';
 import { groupHeaderFor } from '../model/labels';
-import { groupTitleInk, labelBoxes } from '../model/label-hits';
+import { groupTitleInk, labelBoxes, labelTextBoxes, titleLineBoxes } from '../model/label-hits';
 import { computeRoutes, type DrawnRoute } from '../model/routes';
 import type { Diagram, Point, Rect } from '../model/types';
 import { compile, type Diagnostic, type Scene } from './compile';
 import { flowSideNotes } from './flow-sides';
 import { projectScene, visibleRects } from './project';
 import type { Hint } from './syntax';
+
+/** Whether two boxes share more than `by` on both axes. */
+const overlapsBy = (a: Rect, b: Rect, by: number) =>
+  Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x) > by &&
+  Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y) > by;
 
 /** Room a fix leaves between the moved box and what it cleared. */
 const CLEAR = 16;
@@ -204,28 +209,76 @@ export function findConflicts(
     }
   }
 
-  // Labels on a box or on each other. Labels are centred on their spot.
-  const labels = labelBoxes(routes);
+  // Labels where their text cannot be read. Lines and their labels are drawn before boxes, so a
+  // box hides the label text it covers, and a title outside its shape is printed over it. A
+  // label's own box is opaque, so it hides a group's title or another label's text under it.
+  // Only text counts: a label's padding under a box's edge, or on another label's padding,
+  // crowds it (`label-crowded`) but loses no word.
+  const labels = labelBoxes(routes),
+    text = (r: DrawnRoute) => edges.get(r.id)?.label ?? '',
+    ink = new Map(labels.map(l => [l.route, labelTextBoxes(doc, l.route, text(l.route), look)])),
+    strikes = (a: Rect[], b: Rect) => a.some(t => overlapsBy(t, b, 1)),
+    titles = new Map(
+      doc.graph.nodes.map(n => {
+        const r = rects.get(n.id);
+        return [n.id, r ? titleLineBoxes(doc, n.id, n.title, r, look) : []];
+      }),
+    ),
+    same = (p: Point, q: Point) => Math.abs(p.x - q.x) < 1 && Math.abs(p.y - q.y) < 1;
   for (const [i, l] of labels.entries()) {
-    const text = edges.get(l.route.id)?.label ?? '';
+    const words = ink.get(l.route)!,
+      quoted = `The label "${text(l.route)}" on ${name(l.route)}`;
     for (const { id, r } of leaves) {
-      if (!covers(l.box, shrink(r, 1))) continue;
+      const filled = scene.byId.get(id)?.shape !== 'text',
+        hidden =
+          (filled && strikes(words, shrink(r, 1))) ||
+          (titles.get(id) ?? []).some(t => strikes(words, t));
+      if (!hidden && !covers(l.box, shrink(r, 1))) continue;
       warn(
-        'label-collision',
+        hidden ? 'label-collision' : 'label-crowded',
         [l.route.id, id],
-        `The label "${text}" on ${name(l.route)} covers ${id}.`,
+        hidden
+          ? `${quoted} is drawn under ${id}, which hides its text.`
+          : `${quoted} sits on the edge of ${id}.`,
         blame(scene, [id, l.route.from, l.route.to], k =>
           k === id ? clearOf(r, l.box) : undefined,
         ),
       );
     }
-    for (const m of labels.slice(i + 1)) {
-      if (!covers(l.box, m.box)) continue;
+    for (const g of doc.graph.groups) {
+      const r = rects.get(g.id);
+      if (!r || tinted.has(g.id) || !covers(l.box, groupTitleInk(g, r, look))) continue;
       warn(
         'label-collision',
+        [l.route.id, g.id],
+        `${quoted} covers the title of ${g.id}.`,
+        blame(scene, [g.id, l.route.from, l.route.to]),
+      );
+    }
+    for (const m of labels.slice(i + 1)) {
+      if (!covers(l.box, m.box)) continue;
+      const hidden = strikes(words, m.box) || strikes(ink.get(m.route)!, l.box);
+      warn(
+        hidden ? 'label-collision' : 'label-crowded',
         [l.route.id, m.route.id],
-        `The labels on ${l.route.id} and ${m.route.id} overlap.`,
+        hidden
+          ? `The labels on ${l.route.id} and ${m.route.id} overlap.`
+          : `The labels on ${l.route.id} and ${m.route.id} touch.`,
         blame(scene, [l.route.from, l.route.to, m.route.from, m.route.to]),
+      );
+    }
+    // Another line through the text. Lines that fan out of or into one port share a trunk with
+    // this label's own line.
+    const [start, end] = [l.route.points[0], l.route.points.at(-1)!];
+    for (const route of routes) {
+      if (route === l.route || same(route.points[0], start) || same(route.points.at(-1)!, end))
+        continue;
+      if (!segments(route.points).some(s => words.some(t => segmentInside(s, t) > 1))) continue;
+      warn(
+        'label-collision',
+        [l.route.id, route.id],
+        `Edge ${name(route)} runs through the label "${text(l.route)}" on ${l.route.id}.`,
+        blame(scene, [l.route.from, l.route.to, route.from, route.to]),
       );
     }
   }

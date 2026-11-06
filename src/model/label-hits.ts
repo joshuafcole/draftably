@@ -4,13 +4,20 @@
  * candidate and marks them on its card, so this has to stay cheap and read only the drawn scene.
  */
 import { resolveAppearance, type ResolvedAppearance } from './appearance';
-import { measureText } from './fonts';
+import { measureText, type TypeProfile } from './fonts';
 import { covers, segments, segmentInside, shrink } from './geometry';
 import { isCell, styleOf } from './graph';
-import { diamondMeasure, groupTitleLines, nodeLabel, titleArea } from './labels';
+import {
+  diamondMeasure,
+  edgeLabelLines,
+  edgeLabelType,
+  groupTitleLines,
+  nodeLabel,
+  titleArea,
+} from './labels';
 import type { DrawnRoute } from './routes';
 import type { StaticScene } from './static-scene';
-import type { DiagramGroup, Rect } from './types';
+import type { Diagram, DiagramGroup, Rect } from './types';
 
 /** Connection labels as boxes. Labels are centred on their spot. */
 export const labelBoxes = (routes: readonly DrawnRoute[]) =>
@@ -29,6 +36,54 @@ export const labelBoxes = (routes: readonly DrawnRoute[]) =>
         ]
       : [],
   );
+
+/** How tall a line of `type` inks: its glyphs' height, within the line's leading. */
+const glyphHeight = (type: TypeProfile) => Math.min(type.lineHeight, Math.ceil(type.size * 1.2));
+
+/** One box per line of text centred on `x`, the first line's middle at `y`. */
+const lineBoxes = (lines: string[], x: number, y: number, type: TypeProfile): Rect[] =>
+  lines.map((line, i) => {
+    const w = measureText(line, type),
+      h = glyphHeight(type);
+    return { x: x - w / 2, y: y + i * type.lineHeight - h / 2, w, h };
+  });
+
+/**
+ * The line boxes of a connection label's text, as the canvas sets it: each line centred on the
+ * label's spot, in the annotation type (a step larger for a sequence message). The label's
+ * padding is not in them.
+ */
+export function labelTextBoxes(
+  doc: Diagram,
+  route: DrawnRoute,
+  text: string,
+  look: ResolvedAppearance,
+): Rect[] {
+  const l = route.label;
+  if (!l || !text) return [];
+  const message = doc.layout.edges[route.id]?.row !== undefined,
+    type = edgeLabelType(look, message),
+    lines = edgeLabelLines(text, look, message);
+  return lineBoxes(lines, l.x, l.y - ((lines.length - 1) * type.lineHeight) / 2, type);
+}
+
+/** The line boxes of a shape's title, where the canvas sets it. */
+export function titleLineBoxes(
+  doc: Diagram,
+  id: string,
+  title: string,
+  r: Rect,
+  look: ResolvedAppearance,
+): Rect[] {
+  if (!title) return [];
+  const l = nodeLabel(doc, id, title, r);
+  return lineBoxes(
+    l.lines,
+    r.x + l.x,
+    r.y + l.y - ((l.lines.length - 1) * l.lineHeight) / 2,
+    look.title,
+  );
+}
 
 /** A group's title: its icon and text, as the canvas draws them. */
 export function groupTitleInk(g: DiagramGroup, r: Rect, look: ResolvedAppearance): Rect {
