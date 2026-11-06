@@ -4,6 +4,9 @@
   "version": "8.0.0",
   "license": "MIT",
   "type": "module",
+  "exports": {
+    ".": "./src/lib.ts"
+  },
   "packageManager": "pnpm@11.9.0",
   "scripts": {
     "dev": "vite",
