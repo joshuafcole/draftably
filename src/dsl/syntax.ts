@@ -337,8 +337,12 @@ export type Hint =
   | { type: 'nudge'; id: string; dx: number; dy: number; line: number }
   | { type: 'stay'; id: string; x: number; y: number; weight: number; line: number }
   | { type: 'pin'; id: string; x: number; y: number; line: number }
-  /** `height` is unset for `height=auto`: the title's height at that width, as without a size. */
-  | { type: 'size'; id: string; width: number; height?: number; line: number };
+  /**
+   * `height` is unset for `height=auto`: the title's height at that width, as without a size.
+   * `minHeight` (`min-height=`, with `height=auto` only) is a floor under that height, for a
+   * host that draws more than the title in the node and has measured what it draws.
+   */
+  | { type: 'size'; id: string; width: number; height?: number; minHeight?: number; line: number };
 
 export type Strength = 'prefer' | 'required';
 
@@ -1051,14 +1055,18 @@ export function parseModel(source: string | SourceDoc): Model {
           allow(['x', 'y']);
           m.hints.push({ type: 'pin', id: hid, x: num('x', 0, 0), y: num('y', 0, 0), line });
         } else {
-          allow(['width', 'height']);
+          allow(['width', 'height', 'min-height']);
+          const auto = attrs.get('height')?.value === 'auto';
+          assert(
+            auto || !attrs.has('min-height'),
+            'min-height is a floor under height=auto. Write height=auto, or remove min-height.',
+          );
           m.hints.push({
             type: 'size',
             id: hid,
             width: num('width', 164, 40, 1200),
-            ...(attrs.get('height')?.value === 'auto'
-              ? {}
-              : { height: num('height', 56, 24, 1200) }),
+            ...(auto ? {} : { height: num('height', 56, 24, 1200) }),
+            ...(attrs.has('min-height') ? { minHeight: num('min-height', 24, 24, 1200) } : {}),
             line,
           });
         }
