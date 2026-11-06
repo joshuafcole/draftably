@@ -1,6 +1,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { afterAll, describe, expect, it, vi } from 'vitest';
+// Imported with the file, not inside a test: loading the session's modules can take seconds
+// while the whole suite transforms at once, and a test's timeout should not pay for it.
+// Only creating a session reads the page globals the session test stubs.
+import { createDiagramSession } from '../src/state/session';
 
 const src = path.resolve(import.meta.dirname, '../src');
 
@@ -48,7 +52,6 @@ describe('a link mark in a session', () => {
     // A session reads the page's motion preference; these tests run without a DOM.
     vi.stubGlobal('matchMedia', () => ({ matches: false, addEventListener() {} }));
     vi.stubGlobal('window', { setTimeout, clearTimeout });
-    const { createDiagramSession } = await import('../src/state/session');
     const s = createDiagramSession();
     expect(s.describeLink('https://example.com/a')).toBe('Open https://example.com/a');
     s.dispose();
