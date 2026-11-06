@@ -63,7 +63,7 @@ const PLACING = new Set(['pin', 'near', 'nudge', 'stay', 'size', 'align']);
  * The refinement most likely to have caused a conflict among `ids`, in the order given, and how
  * to fix it: remove it, or move its target by `move`. A pin gets the new coordinates.
  */
-function blame(scene: Scene, ids: string[], move?: (id: string) => Move | undefined) {
+export function blame(scene: Scene, ids: string[], move?: (id: string) => Move | undefined) {
   for (const id of ids) {
     const h = scene.model.hints.find(h => PLACING.has(h.type) && hintTargets(h).includes(id));
     if (!h) continue;

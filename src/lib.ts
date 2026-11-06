@@ -43,6 +43,9 @@ export {
 // Route a projected document, and the drawing conflicts `check` reports.
 export { computeRoutes, type DrawnRoute, type SceneRoutes } from './model/routes';
 export { sceneConflicts } from './dsl/conflicts';
+// Everything `check` reports for a compiled scene, and with `metrics` how its drawing reads.
+export { checkScene, drawingNotes, type CheckOptions, type CheckResult } from './dsl/check';
+export type { Drawing } from './dsl/metrics';
 
 // A routed document ready to draw, and the components that draw it.
 export { buildStaticScene, type StaticScene as StaticDrawing } from './model/static-scene';

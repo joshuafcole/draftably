@@ -7,7 +7,8 @@
  * variants, in the same order, with the same numbers.
  */
 import { computeRoutes, type DrawnRoute } from '../model/routes';
-import type { Rect } from '../model/types';
+import type { VisibleGraph } from '../model/graph';
+import type { Diagram, Rect } from '../model/types';
 import { compile, type Diagnostic, type Scene } from '../dsl/compile';
 import { findConflicts, sceneConflicts } from '../dsl/conflicts';
 import { projectScene, visibleRects } from '../dsl/project';
@@ -687,7 +688,11 @@ const centers = (rects: Map<string, Rect>) => {
   );
 };
 
-interface Drawn {
+export interface Drawn {
+  scene: Scene;
+  /** The projected document, and the objects it shows. */
+  doc: Diagram;
+  vg: VisibleGraph;
   metrics: Omit<Metrics, 'moved'>;
   routes: DrawnRoute[];
   rects: Map<string, Rect>;
@@ -704,6 +709,11 @@ export async function draw(source: string): Promise<Drawn> {
   const scene = await compile(source);
   const errors = scene.diagnostics.filter(d => d.level === 'error');
   if (errors.length) throw Error(errors.map(d => d.message).join(' '));
+  return drawScene(scene);
+}
+
+/** Route and draw a compiled scene as the CLI does, and measure the drawing. */
+export function drawScene(scene: Scene): Drawn {
   const doc = projectScene(scene),
     { vg, rects } = visibleRects(doc),
     { routes, result } = computeRoutes(doc, vg, rects, { previous: [] });
@@ -716,6 +726,9 @@ export async function draw(source: string): Promise<Drawn> {
   const size = /width="(\d+(?:\.\d+)?)" height="(\d+(?:\.\d+)?)"/.exec(svg)!;
   const c = centers(rects);
   return {
+    scene,
+    doc,
+    vg,
     metrics: {
       width: Math.round(Number(size[1])),
       height: Math.round(Number(size[2])),

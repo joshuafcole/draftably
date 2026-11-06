@@ -1258,7 +1258,10 @@ crossings, bends, total line length and warnings. It also warns on how the drawi
 | `aspect`   | Wider than 2:1 and wider than 960px, so it shrinks in a page column; taller than 3:1; or with `--fit <shape>`, more than 1.5 times off that shape's aspect. |
 
 `inspect --json --metrics` adds the same numbers as a `metrics` object, so a script can compare
-two versions of a file without drawing an image.
+two versions of a file without drawing an image, and a `findings` list: every diagnostic
+`check --metrics` prints, each with its `level`, `code`, `message`, `ids` and, when a line caused
+it, `line`. A host that compiles a source itself gets the same list from the library's
+`checkScene(scene, { metrics: true })`.
 
 ## Examples
 
