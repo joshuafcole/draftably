@@ -42,6 +42,7 @@
     "prove:installed": "node scripts/prove-package.ts --browser",
     "prove:layout": "node scripts/prove-layout-tools.mjs",
     "prove:editors": "node scripts/prove-two-editors.mjs",
+    "prove:view-state": "node scripts/prove-view-state.mjs",
     "prove:site": "node scripts/prove-site.mjs",
     "prove:themes": "node scripts/prove-themes.mjs",
     "font-metrics": "node scripts/font-metrics.mjs",
