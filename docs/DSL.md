@@ -1255,12 +1255,14 @@ same file compiled without its refinement lines.
 `check --metrics` measures the drawing as `vary` does and prints one line: size and aspect,
 crossings, bends, total line length and warnings. It also warns on how the drawing reads:
 
-| Rule       | Meaning                                                                                                                                                     |
-| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `crossing` | Two edges that share no end cross. (The metrics line counts every crossing the router sees.)                                                                |
-| `detour`   | A route is over 2.5 times, and 300px more than, the distance between its ends.                                                                              |
-| `stranded` | A node is over 480px from every node it connects to.                                                                                                        |
-| `aspect`   | Wider than 2:1 and wider than 960px, so it shrinks in a page column; taller than 3:1; or with `--fit <shape>`, more than 1.5 times off that shape's aspect. |
+| Rule                  | Meaning                                                                                                                                                                                        |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `crossing`            | Two edges that share no end cross. (The metrics line counts every crossing the router sees.)                                                                                                   |
+| `detour`              | A route is over 2.5 times, and 300px more than, the distance between its ends.                                                                                                                 |
+| `stranded`            | A node is over 480px from every node it connects to.                                                                                                                                           |
+| `aspect`              | Wider than 2:1 and wider than 960px, so it shrinks in a page column; taller than 3:1; or with `--fit <shape>`, more than 1.5 times off that shape's aspect.                                    |
+| `label-detached`      | An edge label stands more than half its height clear of its own line, so it reads as another line's. Labels are never hidden; this is where one went when no spot on its line was free.        |
+| `label-overflows-run` | An edge label's text is wider (across an upright run, taller) than the straight run it sits on, by more than 7px (an eighth of a node's height, about a character), so it reaches past a bend. |
 
 `inspect --json --metrics` adds the same numbers as a `metrics` object, so a script can compare
 two versions of a file without drawing an image, and a `findings` list: every diagnostic
