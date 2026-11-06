@@ -1226,14 +1226,19 @@ Recommended: v1. Apply: draftably vary plan.draft --apply v1
 them on their own, so a conflict usually comes from a refinement. Each warning ends with its
 rule:
 
-| Rule                 | Meaning                                                                 |
-| -------------------- | ----------------------------------------------------------------------- |
-| `edge-through-node`  | A line runs through a box that is not one of its ends.                  |
-| `edge-through-title` | A line crosses a group's title.                                         |
-| `node-overlap`       | Two boxes overlap (across scopes; siblings are an `overlap` error).     |
-| `label-collision`    | An edge label covers a box or another label.                            |
-| `outside-group`      | A box sits outside its group's frame.                                   |
-| `note-overlap`       | A `note` with `near=` found no clear spot beside its object or message. |
+| Rule                 | Meaning                                                                                                                                               |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `edge-through-node`  | A line runs through a box that is not one of its ends.                                                                                                |
+| `edge-through-title` | A line crosses a group's title.                                                                                                                       |
+| `node-overlap`       | Two boxes overlap (across scopes; siblings are an `overlap` error).                                                                                   |
+| `label-collision`    | An edge label's text cannot be read: a box is drawn over it, its box covers a group's title or another label's text, or another line runs through it. |
+| `label-crowded`      | An edge label's padding is under a box or on another label, but its text is clear.                                                                    |
+| `outside-group`      | A box sits outside its group's frame.                                                                                                                 |
+| `note-overlap`       | A `note` with `near=` found no clear spot beside its object or message.                                                                               |
+
+Labels are tested by their text, not their box. Lines and their labels are drawn before boxes,
+so a box hides the part of a label under it; a label's box is opaque, so it hides a group's title
+or another label's text. Each line of text is measured as the canvas sets it.
 
 When a refinement on one of the objects caused it, the warning names its line and a fix:
 
