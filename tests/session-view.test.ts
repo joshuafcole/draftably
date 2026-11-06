@@ -1,5 +1,8 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import type { ViewItem } from '../src/state/session';
+// Imported with the file, not inside a test: loading the session's modules can take seconds
+// while the whole suite transforms at once, and a test's timeout should not pay for it.
+// Only creating a session reads the page globals stubbed below.
+import { createDiagramSession, type ViewItem } from '../src/state/session';
 
 const SOURCE = `diagram "View" version=1
 group lane "Lane"
@@ -34,10 +37,7 @@ beforeAll(() => {
 });
 afterAll(() => vi.unstubAllGlobals());
 
-async function open(
-  options: Parameters<typeof import('../src/state/session').createDiagramSession>[0] = {},
-) {
-  const { createDiagramSession } = await import('../src/state/session');
+async function open(options: Parameters<typeof createDiagramSession>[0] = {}) {
   const s = createDiagramSession(options);
   await s.openSource(SOURCE);
   for (let i = 0; i < 40 && s.fileCompiling(); i++) await new Promise(r => setTimeout(r, 0));
