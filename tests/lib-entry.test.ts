@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
-import { checkSource, resolveAppearance, wrapLines } from '../src/lib';
+import { checkScene, checkSource, resolveAppearance, wrapLines } from '../src/lib';
 
 const src = path.resolve(import.meta.dirname, '../src');
 
@@ -81,6 +81,17 @@ describe('the library entry', () => {
     const pkg = JSON.parse(fs.readFileSync(path.join(src, '../package.json'), 'utf8'));
     expect(pkg.exports['./lib']).toBe('./src/lib.ts');
     expect(pkg.exports['./editor']).toBe('./src/editor/index.ts');
+  });
+
+  it('checks a compiled scene as check does, and with metrics as check --metrics does', () => {
+    const scene = checkSource('node a "A"\nnode b "B"\nedge e a -> b');
+    const plain = checkScene(scene);
+    expect(plain.metrics).toBeUndefined();
+    const measured = checkScene(scene, { metrics: true, fit: 'tall' });
+    expect(measured.diagnostics.map(d => d.code)).toContain('aspect');
+    expect(measured.metrics?.warnings).toBe(
+      measured.diagnostics.filter(d => d.level === 'warning').length,
+    );
   });
 
   it("measures text as the compiler does, so a host can size a node's text without the DOM", () => {

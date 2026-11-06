@@ -85,4 +85,11 @@ describe('check --metrics', () => {
     expect(out).toMatch(/^Metrics: \d+×\d+ \(aspect [\d.]+\), 0 crossings/m);
     expect(out).toContain('[aspect]');
   });
+
+  it('adds the same findings to inspect --json --metrics', async () => {
+    const { out } = await run('inspect', good, '--json', '--metrics', '--fit', 'tall');
+    const geometry = JSON.parse(out);
+    expect(geometry.metrics.width).toBeGreaterThan(0);
+    expect(geometry.findings.map((d: { code: string }) => d.code)).toContain('aspect');
+  });
 });

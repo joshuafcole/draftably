@@ -7,6 +7,7 @@ import path from 'node:path';
 import { isMainThread, workerData } from 'node:worker_threads';
 import { compile, type Diagnostic } from '../dsl/compile';
 import { compareDetailed } from '../dsl/compare';
+import { checkScene } from '../dsl/check';
 import { hintMoves, sceneConflicts } from '../dsl/conflicts';
 import { statusLabel, usedStatuses, withState } from '../model/status';
 import type { Diagram } from '../model/types';
@@ -14,7 +15,7 @@ import { canonicalGeometry, projectScene } from '../dsl/project';
 import { DslError, formatSource } from '../dsl/syntax';
 import { embedSvgSource, isImageName, readImageSource } from '../model/embed';
 import { renderSvg } from './svg';
-import { draw, FITS, qualityNotes, type Fit, type Metrics } from './variants';
+import { draw, FITS, type Fit, type Metrics } from './variants';
 import { cliVersion, staleSkills } from './skill';
 import { svgSize } from './png';
 import { linkNotes, svgHref } from './links';
@@ -49,7 +50,8 @@ Commands:
   inspect <file> [--json]   Print canonical node and route geometry. --json prints it on one
        [--hints]            line; with --hints it adds the unrefined position (raw) of every
        [--metrics]          node a refinement moved. --metrics adds a metrics object with
-                            what vary measures: size, crossings, bends, length, warnings.
+                            what vary measures: size, crossings, bends, length, warnings, and
+                            a findings list of what check --metrics reports.
   inspect <file> --svg      Print a plain SVG drawing of the compiled diagram.
        [--state <id>]       Draw it in one emphasis state (also with --png).
        [--states]           Draw every emphasis state as its own aligned panel.
@@ -274,16 +276,17 @@ async function checkFile(
 ) {
   const source = await read(file),
     scene = await compile(source);
-  const diagnostics = [...scene.diagnostics, ...linkNotes(scene, file), ...sceneConflicts(scene)];
-  // Measure only a file that compiles cleanly; errors come first.
-  const drawn =
-    metrics && !diagnostics.some(d => d.level === 'error') ? await draw(source) : undefined;
-  if (drawn) diagnostics.push(...qualityNotes(drawn, metrics!.fit));
+  // The drawing is measured only for a file that compiles cleanly; errors come first.
+  const { diagnostics, metrics: measured } = checkScene(scene, {
+    metrics: !!metrics,
+    fit: metrics?.fit,
+    notes: linkNotes(scene, file),
+  });
   const errors = diagnostics.filter(d => d.level === 'error'),
     warnings = diagnostics.filter(d => d.level === 'warning');
   for (const d of diagnostics) if (!quiet || d.level !== 'info') console.log(tag + describe(d));
   if (hints) console.log(hintTable(await hintMoves(source, scene)));
-  if (drawn) console.log(tag + metricsLine({ ...drawn.metrics, warnings: warnings.length }));
+  if (measured) console.log(tag + metricsLine(measured));
   const nodes = scene.objects.filter(o => o.type === 'node').length;
   console.log(
     `${tag}${errors.length ? 'Problems' : warnings.length ? 'Warnings' : 'OK'}: ${counted(nodes, 'node')}, ${counted(scene.objects.length - nodes, 'group')}, ${counted(scene.edges.length, 'connection')}.`,
@@ -457,8 +460,13 @@ export async function main(argv: string[]): Promise<number> {
             if (raw.has(n.id)) Object.assign(n, { raw: raw.get(n.id) });
           console.log(JSON.stringify(geometry));
         } else {
+          // With --metrics, the findings `check --metrics` prints, beside what vary measures.
           const geometry = flag('--metrics')
-            ? { ...canonicalGeometry(doc), metrics: (await draw(source)).metrics }
+            ? {
+                ...canonicalGeometry(doc),
+                metrics: (await draw(source)).metrics,
+                findings: checkScene(scene, { metrics: true, fit: fitOption(rest) }).diagnostics,
+              }
             : canonicalGeometry(doc);
           console.log(JSON.stringify(geometry, null, flag('--json') ? 0 : 2));
         }
