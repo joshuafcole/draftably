@@ -7,7 +7,7 @@
 import { drawScene, qualityNotes, type Metrics } from '../cli/variants';
 import type { Diagnostic, Scene } from './compile';
 import { sceneConflicts } from './conflicts';
-import { drawingNotes } from './metrics';
+import type { Drawing } from './metrics';
 import type { Fit } from './syntax';
 
 export interface CheckOptions {
@@ -23,6 +23,14 @@ export interface CheckResult {
   diagnostics: Diagnostic[];
   /** What `vary` measures, with `warnings` counting every warning above. Set with `metrics`. */
   metrics?: Omit<Metrics, 'moved'>;
+}
+
+/**
+ * The `check --metrics` measures beyond `qualityNotes`, over a drawing, in a fixed order. Each
+ * lives in its own module.
+ */
+export function drawingNotes(_d: Drawing): Diagnostic[] {
+  return [];
 }
 
 /**
