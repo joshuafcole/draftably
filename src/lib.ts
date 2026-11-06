@@ -57,6 +57,7 @@ export { DiagramSessionProvider, useSessionIfAny } from './components/session-co
 // A document's resolved look: its palette, canvas colour and type.
 export {
   resolveAppearance,
+  type AppearanceLayer,
   type DiagramAppearance,
   type ResolvedAppearance,
   type ThemeId,
