@@ -1,6 +1,5 @@
 import { Show } from 'solid-js';
 import { LINK_MARK_PATH, type LinkMark } from '../../model/link';
-import { describeLink } from '../../state/links';
 import { useSessionIfAny } from '../session-context';
 
 /**
@@ -29,7 +28,7 @@ export function LinkMarkView(props: {
           width={m().size + 10}
           height={m().size + 10}
           rx={5}
-          aria-label={s ? describeLink(s, props.href) : props.href}
+          aria-label={s ? s.describeLink(props.href) : props.href}
         />
       </Show>
       <path
