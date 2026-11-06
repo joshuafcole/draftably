@@ -6,6 +6,7 @@
  * through `s`. Parts that need a later one register a handler instead (`setDocumentOpener`, …).
  */
 import { createRoot } from 'solid-js';
+import { describeLink } from '../links';
 import { createActions } from './actions';
 import { createCanvasText } from './canvas-text';
 import { createDocument } from './document';
@@ -50,7 +51,12 @@ export function createDiagramSession(options: SessionOptions = {}) {
     const s7 = Object.assign(s6, createActions(s6));
     const s8 = Object.assign(s7, createRouting(s7));
     const s9 = Object.assign(s8, createSculpt(s8));
-    return Object.assign(s9, createPointer(s9));
+    const s10 = Object.assign(s9, createPointer(s9));
+    // Asked by the scene's link marks, which reach the session only through context.
+    return Object.assign(s10, {
+      /** What opening `href` does, for a link mark's label. */
+      describeLink: (href: string): string => describeLink(s10 as DiagramSession, href),
+    });
   });
 }
 
