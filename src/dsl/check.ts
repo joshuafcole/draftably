@@ -10,6 +10,7 @@ import { sceneConflicts } from './conflicts';
 import { frameSprawlNotes } from './frame-sprawl';
 import { labelRunNotes } from './label-runs';
 import { portFaceNotes } from './port-faces';
+import { routeBlockedNotes } from './route-blocked';
 import type { Drawing } from './metrics';
 import type { Fit } from './syntax';
 
@@ -33,7 +34,12 @@ export interface CheckResult {
  * lives in its own module.
  */
 export function drawingNotes(d: Drawing): Diagnostic[] {
-  return [...labelRunNotes(d), ...portFaceNotes(d), ...frameSprawlNotes(d)];
+  return [
+    ...labelRunNotes(d),
+    ...portFaceNotes(d),
+    ...routeBlockedNotes(d),
+    ...frameSprawlNotes(d),
+  ];
 }
 
 /**
