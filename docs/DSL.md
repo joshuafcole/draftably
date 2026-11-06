@@ -1226,14 +1226,15 @@ Recommended: v1. Apply: draftably vary plan.draft --apply v1
 them on their own, so a conflict usually comes from a refinement. Each warning ends with its
 rule:
 
-| Rule                 | Meaning                                                                 |
-| -------------------- | ----------------------------------------------------------------------- |
-| `edge-through-node`  | A line runs through a box that is not one of its ends.                  |
-| `edge-through-title` | A line crosses a group's title.                                         |
-| `node-overlap`       | Two boxes overlap (across scopes; siblings are an `overlap` error).     |
-| `label-collision`    | An edge label covers a box or another label.                            |
-| `outside-group`      | A box sits outside its group's frame.                                   |
-| `note-overlap`       | A `note` with `near=` found no clear spot beside its object or message. |
+| Rule                 | Meaning                                                                                                                                                                                               |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `edge-through-node`  | A line runs through a box that is not one of its ends.                                                                                                                                                |
+| `edge-through-title` | A line crosses a group's title.                                                                                                                                                                       |
+| `node-overlap`       | Two boxes overlap (across scopes; siblings are an `overlap` error).                                                                                                                                   |
+| `label-collision`    | An edge label covers a box or another label.                                                                                                                                                          |
+| `outside-group`      | A box sits outside its group's frame.                                                                                                                                                                 |
+| `note-overlap`       | A `note` with `near=` found no clear spot beside its object or message.                                                                                                                               |
+| `backward-side`      | In a `direction=right` or `down` layout, a forward line leaves a box by its left or top, or enters by its right or bottom: no forward route was clear. A side set with `from=`/`to=` is not reported. |
 
 When a refinement on one of the objects caused it, the warning names its line and a fix:
 
@@ -1250,12 +1251,14 @@ same file compiled without its refinement lines.
 `check --metrics` measures the drawing as `vary` does and prints one line: size and aspect,
 crossings, bends, total line length and warnings. It also warns on how the drawing reads:
 
-| Rule       | Meaning                                                                                                                                                     |
-| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `crossing` | Two edges that share no end cross. (The metrics line counts every crossing the router sees.)                                                                |
-| `detour`   | A route is over 2.5 times, and 300px more than, the distance between its ends.                                                                              |
-| `stranded` | A node is over 480px from every node it connects to.                                                                                                        |
-| `aspect`   | Wider than 2:1 and wider than 960px, so it shrinks in a page column; taller than 3:1; or with `--fit <shape>`, more than 1.5 times off that shape's aspect. |
+| Rule         | Meaning                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `crossing`   | Two edges that share no end cross. (The metrics line counts every crossing the router sees.)                                                                                                                                                                                                                                                                                                                                            |
+| `detour`     | A route is over 2.5 times, and 300px more than, the distance between its ends.                                                                                                                                                                                                                                                                                                                                                          |
+| `stranded`   | A node is over 480px from every node it connects to.                                                                                                                                                                                                                                                                                                                                                                                    |
+| `aspect`     | Wider than 2:1 and wider than 960px, so it shrinks in a page column; taller than 3:1; or with `--fit <shape>`, more than 1.5 times off that shape's aspect.                                                                                                                                                                                                                                                                             |
+| `faces-away` | A line leaves by its left or top toward something wholly the other way, or arrives on a right or bottom side from something wholly the other way, so it loops round ("never arrive from below"). Leaving right or bottom and arriving left or top is how lines read, even round a loop, so those sides are never reported. Needs no layout direction; a line `backward-side` names is skipped, and so is a side set with `from=`/`to=`. |
+| `arrow-room` | The last run into an arrowhead or other end mark is under 11px (a fifth of a node's height), so the mark sits on a bend.                                                                                                                                                                                                                                                                                                                |
 
 `inspect --json --metrics` adds the same numbers as a `metrics` object, so a script can compare
 two versions of a file without drawing an image, and a `findings` list: every diagnostic

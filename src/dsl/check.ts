@@ -7,6 +7,7 @@
 import { drawScene, qualityNotes, type Metrics } from '../cli/variants';
 import type { Diagnostic, Scene } from './compile';
 import { sceneConflicts } from './conflicts';
+import { portFaceNotes } from './port-faces';
 import type { Drawing } from './metrics';
 import type { Fit } from './syntax';
 
@@ -29,8 +30,8 @@ export interface CheckResult {
  * The `check --metrics` measures beyond `qualityNotes`, over a drawing, in a fixed order. Each
  * lives in its own module.
  */
-export function drawingNotes(_d: Drawing): Diagnostic[] {
-  return [];
+export function drawingNotes(d: Drawing): Diagnostic[] {
+  return [...portFaceNotes(d)];
 }
 
 /**
