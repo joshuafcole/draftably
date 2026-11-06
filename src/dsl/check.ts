@@ -8,6 +8,7 @@ import { drawScene, qualityNotes, type Metrics } from '../cli/variants';
 import type { Diagnostic, Scene } from './compile';
 import { sceneConflicts } from './conflicts';
 import { labelRunNotes } from './label-runs';
+import { portFaceNotes } from './port-faces';
 import type { Drawing } from './metrics';
 import type { Fit } from './syntax';
 
@@ -31,7 +32,7 @@ export interface CheckResult {
  * lives in its own module.
  */
 export function drawingNotes(d: Drawing): Diagnostic[] {
-  return [...labelRunNotes(d)];
+  return [...labelRunNotes(d), ...portFaceNotes(d)];
 }
 
 /**
