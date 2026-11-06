@@ -1,6 +1,6 @@
 import { Show } from 'solid-js';
 import { LINK_MARK_PATH, type LinkMark } from '../../model/link';
-import { describeLink } from '../../state/links';
+import { useSceneHost } from './host';
 
 /**
  * The arrow that says an object is a link. On the editor canvas it is also the button that opens
@@ -12,6 +12,7 @@ export function LinkMarkView(props: {
   color: string;
   interactive?: boolean;
 }) {
+  const host = useSceneHost();
   const m = () => props.mark;
   return (
     <g
@@ -27,7 +28,7 @@ export function LinkMarkView(props: {
           width={m().size + 10}
           height={m().size + 10}
           rx={5}
-          aria-label={describeLink(props.href)}
+          aria-label={host.describeLink(props.href)}
         />
       </Show>
       <path

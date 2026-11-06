@@ -2,6 +2,7 @@ import { resolveAppearance } from './model/appearance';
 import { registerFonts } from './lib/font-data';
 import { createEffect, onCleanup, onMount, Show } from 'solid-js';
 import { Canvas } from './components/canvas/Canvas';
+import { SceneHostContext } from './components/scene/host';
 import { ComparisonDialog } from './components/comparison/ComparisonDialog';
 import { Dialogs } from './components/Dialogs';
 import { ExampleBar } from './components/ExampleBar';
@@ -26,6 +27,7 @@ import { onLeaveFile, setStartOpen, startOpen } from './state/launch';
 import { handleCopy, handleKeyDown, handleKeyUp, handlePaste } from './state/keyboard';
 import { cancelLayout } from './state/layout';
 import { resetModifiers } from './state/pointer';
+import { editorSceneHost } from './state/scene-host';
 import { restoreArchive, sculptBeforeUnload, sculptBlur } from './state/sculpt';
 import { toast } from './state/toast';
 import {
@@ -156,61 +158,63 @@ export default function App() {
   });
 
   return (
-    <div
-      class="app"
-      style={{
-        '--sidebar-width': `${sidebarWidth()}px`,
-        '--inspector-width': `${inspectorWidth()}px`,
-      }}
-      classList={{
-        'objects-open': objectsOpen(),
-        'inspector-open': inspectorOpen(),
-        'example-mode': exampleMode(),
-      }}
-    >
-      <Toolbar />
-      <div class="mode-bar-slot">
-        <Show when={exampleMode()}>
-          <ExampleBar />
-        </Show>
-      </div>
-      <div class="workspace">
-        <Show when={filesShown() || objectsOpen()}>
-          <Sidebar />
-        </Show>
-        {/* The banner centers over the canvas and never covers a panel. */}
-        <div class="canvas-area">
-          <Canvas />
-          <FileBanner />
+    <SceneHostContext.Provider value={editorSceneHost}>
+      <div
+        class="app"
+        style={{
+          '--sidebar-width': `${sidebarWidth()}px`,
+          '--inspector-width': `${inspectorWidth()}px`,
+        }}
+        classList={{
+          'objects-open': objectsOpen(),
+          'inspector-open': inspectorOpen(),
+          'example-mode': exampleMode(),
+        }}
+      >
+        <Toolbar />
+        <div class="mode-bar-slot">
+          <Show when={exampleMode()}>
+            <ExampleBar />
+          </Show>
         </div>
-        <Show when={inspectorOpen()}>
-          <RightPanel />
+        <div class="workspace">
+          <Show when={filesShown() || objectsOpen()}>
+            <Sidebar />
+          </Show>
+          {/* The banner centers over the canvas and never covers a panel. */}
+          <div class="canvas-area">
+            <Canvas />
+            <FileBanner />
+          </div>
+          <Show when={inspectorOpen()}>
+            <RightPanel />
+          </Show>
+        </div>
+        <StatusBar />
+        <Menus />
+        <Dialogs />
+        <ComparisonDialog />
+        <Toast />
+        <Tips />
+        <Show when={startOpen()}>
+          <StartScreen variant="dialog" />
         </Show>
+        <input
+          ref={diagramInput}
+          type="file"
+          hidden
+          accept=".json,.svg,.dot,.gv,.mmd,.mermaid,.d2,image/png,image/jpeg,image/webp,image/gif"
+          onChange={onFiles}
+        />
+        <input
+          ref={imageInput}
+          type="file"
+          hidden
+          multiple
+          accept="image/png,image/jpeg,image/webp,image/gif"
+          onChange={onFiles}
+        />
       </div>
-      <StatusBar />
-      <Menus />
-      <Dialogs />
-      <ComparisonDialog />
-      <Toast />
-      <Tips />
-      <Show when={startOpen()}>
-        <StartScreen variant="dialog" />
-      </Show>
-      <input
-        ref={diagramInput}
-        type="file"
-        hidden
-        accept=".json,.svg,.dot,.gv,.mmd,.mermaid,.d2,image/png,image/jpeg,image/webp,image/gif"
-        onChange={onFiles}
-      />
-      <input
-        ref={imageInput}
-        type="file"
-        hidden
-        multiple
-        accept="image/png,image/jpeg,image/webp,image/gif"
-        onChange={onFiles}
-      />
-    </div>
+    </SceneHostContext.Provider>
   );
 }
