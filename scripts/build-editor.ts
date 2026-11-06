@@ -4,29 +4,14 @@ import { cpSync, readFileSync, rmSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import postcss, { type Rule } from 'postcss';
 import { build, type Plugin } from 'vite';
 import solid from 'vite-plugin-solid';
+import { scopeEditorCss as scope } from './lib/scope-css.ts';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const pkg = path.join(root, 'packages/editor');
 const out = path.join(pkg, 'dist');
 const APP_CSS = path.join(root, 'src/styles/app.css');
-
-/** `:root`, `html` and `body` become the editor itself; every other rule only applies inside it. */
-function scope(css: string) {
-  const ast = postcss.parse(css);
-  ast.walkRules((rule: Rule) => {
-    if (rule.parent?.type === 'atrule' && /keyframes/.test((rule.parent as { name: string }).name))
-      return;
-    rule.selectors = rule.selectors.map(sel => {
-      if (/^(:root|html|body)\b/.test(sel))
-        return sel.replace(/^(:root|html|body)/, '.draft-editor');
-      return `.draft-editor ${sel}`;
-    });
-  });
-  return ast.toString();
-}
 
 /** Every stylesheet the editor imports is scoped and injected once, instead of styling the page. */
 const scopedCss: Plugin = {
