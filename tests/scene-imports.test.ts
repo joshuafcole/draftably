@@ -32,3 +32,19 @@ describe('scene components', () => {
     expect(files.filter(f => f.startsWith('state/'))).toEqual([]);
   });
 });
+
+describe('the library entry', () => {
+  it('loads no editor state, importer or editor chrome', () => {
+    const files = reachable('lib.ts');
+    expect(files).toContain('components/scene/StaticScene.tsx');
+    const chrome = files.filter(
+      f =>
+        f.startsWith('state/') ||
+        f.startsWith('import/') ||
+        (f.startsWith('components/') &&
+          !f.startsWith('components/scene/') &&
+          f !== 'components/Icon.tsx'),
+    );
+    expect(chrome).toEqual([]);
+  });
+});
