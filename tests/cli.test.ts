@@ -86,6 +86,20 @@ describe('check --metrics', () => {
     expect(out).toContain('[aspect]');
   });
 
+  it('weighs the findings with --score, and ranks several files by it', async () => {
+    const sprawl = write(
+      'score/sprawl.draft',
+      'diagram "S" version=1\nnode a "A"\nnode b "B"\nedge e a -> b\npin a x=0 y=0\npin b x=900 y=500\n',
+    );
+    const { code, out } = await run('check', good, sprawl, '--score');
+    expect(code).toBe(0);
+    expect(out).toMatch(/: Score: 0\.00 \(0 points/);
+    const ranked = out.slice(out.indexOf('Ranked by score:'));
+    expect(ranked.indexOf(sprawl)).toBeLessThan(ranked.indexOf(good));
+    const { out: json } = await run('inspect', sprawl, '--json', '--metrics', '--score');
+    expect(JSON.parse(json).score.counts['frame-sprawl']).toBe(1);
+  });
+
   it('adds the same findings to inspect --json --metrics', async () => {
     const { out } = await run('inspect', good, '--json', '--metrics', '--fit', 'tall');
     const geometry = JSON.parse(out);

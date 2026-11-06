@@ -11,6 +11,7 @@ import { frameSprawlNotes } from './frame-sprawl';
 import { labelRunNotes } from './label-runs';
 import { portFaceNotes } from './port-faces';
 import { routeBlockedNotes } from './route-blocked';
+import { drawingScore, type DrawingScore } from './score';
 import type { Drawing } from './metrics';
 import type { Fit } from './syntax';
 
@@ -19,6 +20,8 @@ export interface CheckOptions {
   metrics?: boolean;
   /** The image shape `aspect` holds the drawing to, as `--fit` does. */
   fit?: Fit;
+  /** Also weigh the findings into one number for ranking, as `--score` does. Implies `metrics`. */
+  score?: boolean;
   /** Notes to list after the scene's own, such as the CLI's link notes. */
   notes?: Diagnostic[];
 }
@@ -27,6 +30,8 @@ export interface CheckResult {
   diagnostics: Diagnostic[];
   /** What `vary` measures, with `warnings` counting every warning above. Set with `metrics`. */
   metrics?: Omit<Metrics, 'moved'>;
+  /** The findings weighed for ranking. Set with `score`, when the drawing was measured. */
+  score?: DrawingScore;
 }
 
 /**
@@ -48,11 +53,13 @@ export function drawingNotes(d: Drawing): Diagnostic[] {
  */
 export function checkScene(scene: Scene, options: CheckOptions = {}): CheckResult {
   const diagnostics = [...scene.diagnostics, ...(options.notes ?? []), ...sceneConflicts(scene)];
-  if (!options.metrics || diagnostics.some(d => d.level === 'error')) return { diagnostics };
+  const measure = options.metrics || options.score;
+  if (!measure || diagnostics.some(d => d.level === 'error')) return { diagnostics };
   const drawn = drawScene(scene);
   diagnostics.push(...qualityNotes(drawn, options.fit), ...drawingNotes(drawn));
   return {
     diagnostics,
     metrics: { ...drawn.metrics, warnings: diagnostics.filter(d => d.level === 'warning').length },
+    ...(options.score ? { score: drawingScore(diagnostics, drawn) } : {}),
   };
 }

@@ -1275,6 +1275,27 @@ two versions of a file without drawing an image, and a `findings` list: every di
 it, `line`. A host that compiles a source itself gets the same list from the library's
 `checkScene(scene, { metrics: true })`.
 
+`check --score` (it implies `--metrics`) weighs every warning into one number per drawing, for
+ranking several: with more than one file it ends with the files ranked, highest first. **It ranks;
+it does not judge.** There is no pass mark, and a file passes `check` whatever its score. Each
+finding costs what it hides from a reader:
+
+| Weight | Rules                                                                                          | A reader…                       |
+| ------ | ---------------------------------------------------------------------------------------------- | ------------------------------- |
+| 10     | `node-overlap`, `edge-through-node`, `edge-through-title`, `label-collision`, `outside-group`  | loses a word or part of it      |
+| 3      | `label-detached`, `note-overlap`, `backward-side`, `faces-away`, `arrow-room`, `route-blocked` | places a relation or word worse |
+| 2      | `crossing`, `detour`                                                                           | follows a line worse            |
+| 1      | `label-crowded`, `label-overflows-run`, `stranded`, `aspect`                                   | sees a rougher drawing          |
+| cost   | `frame-sprawl`: 2 points for each unit of footprint past 8                                     | scans more empty space          |
+
+Other notes (`heading-prose`, `relaxed`, `legend-missing` and the like) are advice about the
+source and cost nothing. The score is the sum over the drawing's size, its nodes, groups and
+connections counted together but never fewer than 8, so a large drawing does not rank worse for
+being large. Thresholds are stated in node units, the default box being 164×56: 7px is an eighth
+of its height, 11px a fifth. `inspect --json --metrics --score` adds the score as a `score`
+object: `score`, `raw`, `size`, `sprawl`, `issues`, `lost` (the weight-10 findings) and `counts`
+by rule.
+
 ## Examples
 
 draftably comes with these diagrams. Select a name to open a copy in the Editor. You need no install, and nothing is saved until you ask.
