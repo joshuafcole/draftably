@@ -13,7 +13,6 @@ export {
   useDiagramSession,
   useSessionIfAny,
 } from '../components/session-context';
-// A host's own node bodies, drawn in place of titles; layout reads `size … min-height=` instead.
 export {
   NodeContentProvider,
   type NodeContent,

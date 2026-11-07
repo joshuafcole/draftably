@@ -54,7 +54,6 @@ export function NodeView(props: NodeViewProps) {
   const cell = () => isCell(props.doc, props.id);
   const radius = () => (cell() ? 0 : look().radius);
   const clipId = () => `${props.idPrefix ?? ''}image-clip-${props.id}`;
-  /** A host's body for this node, drawn in place of its title (`NodeContentProvider`). */
   const content = useNodeContent();
   const body = () => (content?.draws(props.id) ? content : undefined);
 

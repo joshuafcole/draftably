@@ -35,10 +35,7 @@ export interface MountOptions extends SessionOptions {
   source: string;
   /** Receives the new text after every kept edit, undo and redo. */
   onChange?: (source: string) => void;
-  /**
-   * Draw some nodes' bodies yourself, in place of their titles. Layout never measures them:
-   * declare the room a body needs in the source with `size id width= height=auto min-height=`.
-   */
+  /** Draw some nodes' bodies yourself. Declare their room with `size … min-height=`. */
   nodeContent?: NodeContent;
 }
 
