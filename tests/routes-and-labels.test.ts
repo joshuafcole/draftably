@@ -6,7 +6,7 @@ import { projectScene, visibleRects } from '../src/dsl/project';
 import { printSource, readSource } from '../src/dsl/syntax';
 import { translateEdit } from '../src/dsl/translate';
 import { clone } from '../src/model/geometry';
-import { placeAlong, placeOf } from '../src/model/route-marks';
+import { hoppedPath, hopsOf, placeAlong, placeOf } from '../src/model/route-marks';
 import { computeRoutes } from '../src/model/routes';
 import type { Diagram, Point } from '../src/model/types';
 
@@ -219,20 +219,100 @@ describe('hops', () => {
     'pin d x=200 y=260',
   ].join('\n');
 
-  it('draw an arc where a level run crosses a line it shares no end with, only when asked', async () => {
+  it('draw one arc per crossing, on the line with the greater id, only when asked', async () => {
     const off = await drawn(CROSS),
       on = await drawn(`${CROSS}\nrouting hops=on\n`);
     expect(off.routes.every(r => !r.path.includes('A'))).toBe(true);
-    expect(on.route('across').path).toMatch(/A5,5 0 0 [01] /);
-    expect(on.route('down').path).not.toContain('A');
+    // `down` > `across`: the upright line hops, arcing right (clockwise going down).
+    expect(on.route('down').path).toMatch(/A5,5 0 0 1 /);
+    expect(on.route('across').path).not.toContain('A');
     // The route itself is unchanged.
-    expect(on.route('across').points).toEqual(off.route('across').points);
+    expect(on.route('down').points).toEqual(off.route('down').points);
+    // Renamed so the level line has the greater id, it hops instead, arcing up.
+    const swapped = await drawn(`${CROSS.replaceAll('across', 'zlevel')}\nrouting hops=on\n`);
+    expect(swapped.route('zlevel').path).toMatch(/A5,5 0 0 [01] /);
+    expect(swapped.route('down').path).not.toContain('A');
   });
 
-  it('leave lines that share an end alone', async () => {
-    const shared = CROSS.replace('edge down c -> d', 'edge down c -> b');
-    const on = await drawn(`${shared}\nrouting hops=on\n`);
-    expect(on.routes.every(r => !r.path.includes('A'))).toBe(true);
+  it('hop lines that share an end where they cross in open space (#596), never at the end', () => {
+    // `rewrites` leaves the compactor and `drains` arrives at it; they cross 100 away from it.
+    const rewrites = {
+        id: 'rewrites',
+        points: [
+          { x: 0, y: 0 },
+          { x: 200, y: 0 },
+        ],
+      },
+      drains = {
+        id: 'drains',
+        points: [
+          { x: 100, y: -80 },
+          { x: 100, y: 80 },
+          { x: 0, y: 80 },
+          { x: 0, y: 0 },
+        ],
+      };
+    // The greater id hops, at the crossing; the shared anchor at 0,0 is no crossing.
+    expect(hopsOf([rewrites, drains])).toEqual([[{ x: 100, y: 0 }], []]);
+    expect(hopsOf([drains, rewrites])).toEqual([[], [{ x: 100, y: 0 }]]);
+    // A crossing within a hop's room of a corner is left plain.
+    const near = {
+      id: 'z',
+      points: [
+        { x: 196, y: -40 },
+        { x: 196, y: 40 },
+      ],
+    };
+    expect(hopsOf([rewrites, near])).toEqual([[], []]);
+  });
+
+  it('an upright hop arcs right whichever way its line runs', () => {
+    const down = hoppedPath(
+        [
+          { x: 0, y: 0 },
+          { x: 0, y: 100 },
+        ],
+        6,
+        [{ x: 0, y: 50 }],
+      ),
+      up = hoppedPath(
+        [
+          { x: 0, y: 100 },
+          { x: 0, y: 0 },
+        ],
+        6,
+        [{ x: 0, y: 50 }],
+      );
+    expect(down).toBe('M0,0L0,45A5,5 0 0 1 0,55L0,100');
+    expect(up).toBe('M0,100L0,55A5,5 0 0 0 0,45L0,0');
+  });
+
+  it('a label placed for itself keeps off a hop (#629)', async () => {
+    // Measured: without the hop as a mark, this label's box sits over the arc on `down`.
+    const src = [
+      'diagram "H" version=1',
+      'node a "A"',
+      'node b "B"',
+      'node c "C"',
+      'node d "D"',
+      'edge zz a -> b "a long label"',
+      'edge down c -> d "q"',
+      'pin a x=0 y=100',
+      'pin b x=300 y=100',
+      'pin c x=150 y=0',
+      'pin d x=150 y=260',
+      'routing hops=on',
+    ].join('\n');
+    const on = await drawn(src),
+      hops = hopsOf(on.routes.map(r => ({ id: r.id, points: r.points }))).flat();
+    expect(hops).toHaveLength(1);
+    for (const r of on.routes) {
+      const l = r.label!;
+      const over = hops.some(
+        h => Math.abs(h.x - l.x) < l.w / 2 + 5 && Math.abs(h.y - l.y) < l.h / 2 + 5,
+      );
+      expect(over, `${r.id}'s label over the hop`).toBe(false);
+    }
   });
 
   it('a routing line keeps hops=on through a settings change', () => {

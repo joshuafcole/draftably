@@ -9,7 +9,7 @@ import { resolveAppearance, type ResolvedAppearance } from './appearance';
 import { measureText } from './fonts';
 import { edgeLabelLines, edgeLabelSize, groupTitleLines, SELF_LOOP } from './labels';
 import { hasMarkers, markerRects, stoppedPoints } from './markers';
-import { hoppedPath, hopsOf, labelLeader, placeAlong, type Leader } from './route-marks';
+import { hopRects, hoppedPath, hopsOf, labelLeader, placeAlong, type Leader } from './route-marks';
 import {
   ancestors,
   findEdge,
@@ -838,11 +838,21 @@ export function drawRoutes(
         : { ...route, points };
     }),
   };
-  // A plain arrow claims no room, so a diagram without markers places its labels as it did.
-  const marks = result.routes.flatMap(route => {
-    const edge = findEdge(doc, route.id);
-    return edge && hasMarkers(edge) ? markerRects(route.points, edge) : [];
-  });
+  // `routing hops=on`: an arc where one line passes over another. Sequence messages never hop.
+  const hops =
+    doc.settings.routing?.hops === 'on'
+      ? hopsOf(result.routes.map(r => ({ id: r.id, points: message(r) ? [] : r.points })))
+      : null;
+  // A plain arrow claims no room, so a diagram without markers places its labels as it did. A hop's
+  // arc is a mark too: a label placed for itself keeps off it, as #629 had it (an authored place
+  // is not moved).
+  const marks = [
+    ...result.routes.flatMap(route => {
+      const edge = findEdge(doc, route.id);
+      return edge && hasMarkers(edge) ? markerRects(route.points, edge) : [];
+    }),
+    ...(hops ? hopRects(hops) : []),
+  ];
   // A label's home is the nearest open group that holds both ends of its edge.
   const home = (e: VisibleEdge) => {
     const up = new Set(ancestors(doc, e.b));
@@ -911,16 +921,6 @@ export function drawRoutes(
       return { points: r.points, marks: edge ? markerRects(r.points, edge) : [] };
     }),
   );
-  // `routing hops=on`: an arc where a level run passes over a line it shares no end with.
-  const hops =
-    doc.settings.routing?.hops === 'on'
-      ? hopsOf(
-          result.routes.map(r => {
-            const e = findEdge(doc, r.id);
-            return { points: r.points, ends: [e?.from ?? r.from, e?.to ?? r.to] as const };
-          }),
-        )
-      : null;
   const drawn = result.routes.map((route, i) => {
     const c = crosses.get(route.id),
       edge = findEdge(doc, route.id),

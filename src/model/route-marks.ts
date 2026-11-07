@@ -135,62 +135,92 @@ export function labelLeader(points: readonly Point[], box: Rect): Leader | undef
   return { x1: c.x + dx * s, y1: c.y + dy * s, x2: to.x, y2: to.y };
 }
 
-/** One line for `hopsOf`: its points, and the two things it joins. */
+/** One line for `hopsOf`: its id (which line of a crossing pair hops) and its points. */
 export interface HopLine {
+  id: string;
   points: readonly Point[];
-  ends: readonly [string, string];
 }
 
+const isLevel = (a: Point, b: Point) => Math.abs(a.y - b.y) < 0.5;
+const isUpright = (a: Point, b: Point) => Math.abs(a.x - b.x) < 0.5;
+
 /**
- * Where each line hops: a point on one of its level runs where an upright run of another line
- * crosses it, when the two lines share no end. Crossings near a corner or an end of either line
- * are left plain, as a hop there would read as a bend.
+ * Where each line hops: one point per crossing of a level run with an upright run of another line,
+ * on the line with the greater id, so of every crossing pair exactly one line hops and always the
+ * same one, whatever else is drawn. Lines that share an end are candidates too: two lines may meet
+ * at a box they share, and that is not a crossing, but they may still cross in open space. A
+ * crossing within a hop's room of a corner or an end of either run is left plain, as a hop there
+ * would read as a bend (and a shared anchor is never a crossing).
  */
 export function hopsOf(lines: readonly HopLine[]): Point[][] {
   const room = HOP_RADIUS + HOP_ROOM,
-    runs = lines.map(l => l.points.slice(1).map((b, i) => [l.points[i], b] as const));
-  return lines.map((line, i) =>
-    runs[i].flatMap(([a, b]) => {
-      if (Math.abs(a.y - b.y) > 0.5 || Math.abs(a.x - b.x) < 2 * room) return [];
-      const y = a.y,
-        lo = Math.min(a.x, b.x) + room,
-        hi = Math.max(a.x, b.x) - room;
-      const out: Point[] = [];
-      lines.forEach((other, j) => {
-        if (j === i || other.ends.some(e => line.ends.includes(e))) return;
-        for (const [c, d] of runs[j]) {
-          if (Math.abs(c.x - d.x) > 0.5) continue;
-          const x = c.x;
-          if (x <= lo || x >= hi) continue;
-          if (y <= Math.min(c.y, d.y) + room || y >= Math.max(c.y, d.y) - room) continue;
-          if (!out.some(p => Math.abs(p.x - x) < 2 * room)) out.push({ x, y });
+    runs = lines.map(l => l.points.slice(1).map((b, i) => [l.points[i], b] as const)),
+    out: Point[][] = lines.map(() => []),
+    clear = (t: number, p: number, q: number) =>
+      t > Math.min(p, q) + room && t < Math.max(p, q) - room;
+  for (let i = 0; i < lines.length; i++)
+    for (let j = i + 1; j < lines.length; j++) {
+      const hopper = lines[i].id > lines[j].id ? i : j;
+      for (const r of runs[i])
+        for (const s of runs[j]) {
+          const [h, v] =
+            isLevel(...r) && isUpright(...s)
+              ? [r, s]
+              : isUpright(...r) && isLevel(...s)
+                ? [s, r]
+                : [];
+          if (!h || !v) continue;
+          const x = v[0].x,
+            y = h[0].y;
+          if (!clear(x, h[0].x, h[1].x) || !clear(y, v[0].y, v[1].y)) continue;
+          const mine = out[hopper];
+          if (!mine.some(p => Math.hypot(p.x - x, p.y - y) < 2 * room)) mine.push({ x, y });
         }
-      });
-      return out;
-    }),
-  );
+    }
+  return out;
 }
 
+/** The squares a line's hop arcs take up, for labels to keep clear of (as #629 did). */
+export const hopRects = (hops: readonly Point[][]): Rect[] =>
+  hops.flat().map(h => ({
+    x: h.x - HOP_RADIUS,
+    y: h.y - HOP_RADIUS,
+    w: 2 * HOP_RADIUS,
+    h: 2 * HOP_RADIUS,
+  }));
+
 /**
- * A rounded path, as `roundedPath` draws it, with an arc over each hop on its straight runs. A
- * hop always bulges up, whichever way its run goes.
+ * A rounded path, as `roundedPath` draws it, with an arc over each hop on its straight runs. The
+ * bulge is the same way up everywhere: a level run arcs up, an upright run arcs right, whichever
+ * way the line runs.
  */
 export function hoppedPath(points: readonly Point[], radius: number, hops: readonly Point[]) {
   if (!points.length) return '';
   let path = `M${points[0].x},${points[0].y}`;
+  const R = HOP_RADIUS;
   const run = (from: Point, to: Point) => {
-    if (Math.abs(from.y - to.y) < 0.5) {
-      const dir = Math.sign(to.x - from.x);
+    const level = Math.abs(from.y - to.y) < 0.5,
+      upright = Math.abs(from.x - to.x) < 0.5;
+    if (level || upright) {
+      // Along the run: x on a level one, y on an upright one.
+      const along = (p: Point) => (level ? p.x : p.y),
+        across = (p: Point) => (level ? p.y : p.x),
+        dir = Math.sign(along(to) - along(from));
       const on = hops
         .filter(
           h =>
-            Math.abs(h.y - from.y) < 0.5 &&
-            (h.x - from.x) * dir > HOP_RADIUS &&
-            (to.x - h.x) * dir > HOP_RADIUS,
+            Math.abs(across(h) - across(from)) < 0.5 &&
+            (along(h) - along(from)) * dir > R &&
+            (along(to) - along(h)) * dir > R,
         )
-        .sort((p, q) => (p.x - q.x) * dir);
-      for (const h of on)
-        path += `L${h.x - dir * HOP_RADIUS},${h.y}A${HOP_RADIUS},${HOP_RADIUS} 0 0 ${dir > 0 ? 1 : 0} ${h.x + dir * HOP_RADIUS},${h.y}`;
+        .sort((p, q) => (along(p) - along(q)) * dir);
+      for (const h of on) {
+        const [a, b] = level
+          ? [`${h.x - dir * R},${h.y}`, `${h.x + dir * R},${h.y}`]
+          : [`${h.x},${h.y - dir * R}`, `${h.x},${h.y + dir * R}`];
+        // Up on a level run and right on an upright one: clockwise going right or down.
+        path += `L${a}A${R},${R} 0 0 ${dir > 0 ? 1 : 0} ${b}`;
+      }
     }
     path += `L${to.x},${to.y}`;
   };
