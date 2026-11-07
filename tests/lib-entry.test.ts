@@ -6,6 +6,8 @@ import {
   applyEdits,
   checkScene,
   checkSource,
+  LAYOUT_ENGINES,
+  layoutShape,
   resolveAppearance,
   vary,
   wrapLines,
@@ -124,6 +126,19 @@ describe('the library entry', () => {
       if (v.id !== 'v0') expect(drawn.source).toBe(applyEdits(source, v.edits).source);
     }
     expect(run.variants.map(v => v.id)).toContain(run.recommended);
+  });
+
+  it('names the engines a layout line can use, as the Arrange panel offers them', () => {
+    const ids = LAYOUT_ENGINES.map(e => e.id);
+    expect(ids).toContain('compound-flow');
+    expect(ids).toContain('layered');
+    for (const engine of LAYOUT_ENGINES) {
+      expect(engine.name.length).toBeGreaterThan(0);
+      // Each one is a word a `layout` line takes: it compiles.
+      const line = `node a "A"\nnode b "B"\nedge e a -> b\nlayout root engine=${engine.id}`;
+      expect(checkSource(line).diagnostics ?? []).toEqual([]);
+      expect(layoutShape(line, 'root')).toMatchObject({ engine: true, recipe: engine.id });
+    }
   });
 
   it("measures text as the compiler does, so a host can size a node's text without the DOM", () => {

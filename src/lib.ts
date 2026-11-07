@@ -6,6 +6,9 @@
  * The live editor (a session and its canvas) is a separate entry, `./editor`.
  */
 
+import { ENGINES as LINE_ENGINES } from './dsl/syntax';
+import { LayoutLab } from './engines/layout-engine.js';
+
 // The language: read, print and format a source.
 export {
   DslError,
@@ -94,6 +97,19 @@ export {
   type VaryOptions,
   type VaryResult,
 } from './cli/variants';
+
+// The engines a `layout` line can name, as the Arrange panel offers them: id, name, one line.
+// A scope's `layout` line as settings: its recipe or engine, direction, fit, gap and fold.
+export { layoutShape, type LayoutShape, type ShapeChange } from './dsl/layout-edits';
+export interface LayoutEngine {
+  readonly id: string;
+  readonly name: string;
+  readonly short: string;
+}
+export const LAYOUT_ENGINES: readonly LayoutEngine[] = LINE_ENGINES.map(id => {
+  const one = LayoutLab.algorithms.find(a => a.id === id);
+  return { id, name: one?.name ?? id, short: one?.short ?? '' };
+});
 
 // A routed document ready to draw, and the components that draw it.
 export { buildStaticScene, type StaticScene as StaticDrawing } from './model/static-scene';
