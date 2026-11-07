@@ -7,6 +7,7 @@ export {
   LEGIBLE_ZOOM,
   type CameraMover,
   type ClearSpotOptions,
+  type CrowdedNote,
   type EdgeGeometry,
   type FitOptions,
   type GeometryCause,

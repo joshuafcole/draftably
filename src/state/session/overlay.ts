@@ -13,7 +13,7 @@
  * one moves and zooms with the drawing, the other is fixed to the canvas for chrome attached to a
  * point. What a mark means stays the host's.
  */
-import { createEffect, createSignal, on, untrack } from 'solid-js';
+import { createEffect, createMemo, createSignal, on, untrack } from 'solid-js';
 import { rectUnion } from '../../model/geometry';
 import {
   clearOf,
@@ -52,6 +52,16 @@ export interface EdgeGeometry {
   rect: Rect;
   /** The bundle whose trunk this is, when the ID is a bundle's or a line it carries. */
   bundle?: string;
+}
+
+/** A note drawn over what it landed on, for want of a clear spot. */
+export interface CrowdedNote {
+  id: string;
+  text: string;
+  /** The object it is near, when it names one. */
+  near?: string;
+  /** Where the drawing put it, in the drawing's units. */
+  rect: Rect;
 }
 
 export interface ClearSpotOptions {
@@ -261,7 +271,44 @@ export function createOverlay(s: Parts) {
     return () => listeners.delete(listen);
   }
 
-  return { rectOf, edgeOf, toScreen, toStage, keepOut, clearSpot, onGeometry, geometryVersion };
+  /**
+   * The notes the drawn state shows that found no clear spot (`note-overlap`): each is drawn over
+   * whatever it landed on. A host may raise one as its own overlay instead, and hold it off the
+   * canvas with {@link holdNotes}; the drawing, its obstacles and its exports keep it.
+   */
+  const crowdedNotes = createMemo<CrowdedNote[]>(() =>
+    s.viewerFrame().notes.flatMap(n =>
+      n.overlaps && !n.hidden && n.note.id !== undefined
+        ? [
+            {
+              id: n.note.id,
+              text: n.note.text,
+              rect: { x: n.rect.x, y: n.rect.y, w: n.rect.w, h: n.rect.h },
+              ...(n.note.near !== undefined ? { near: n.note.near } : {}),
+            },
+          ]
+        : [],
+    ),
+  );
+  const [heldNotes, setHeldNotes] = createSignal<ReadonlySet<string>>(new Set(), {
+    equals: (a, b) => a.size === b.size && [...a].every(id => b.has(id)),
+  });
+  /** Notes (by ID) the canvas leaves undrawn because the host draws them; none by default. */
+  const holdNotes = (ids: Iterable<string>) => setHeldNotes(new Set(ids));
+
+  return {
+    rectOf,
+    edgeOf,
+    toScreen,
+    toStage,
+    keepOut,
+    clearSpot,
+    onGeometry,
+    geometryVersion,
+    crowdedNotes,
+    heldNotes,
+    holdNotes,
+  };
 }
 
 export type OverlayPart = ReturnType<typeof createOverlay>;

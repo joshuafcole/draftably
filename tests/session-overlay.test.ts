@@ -244,4 +244,33 @@ describe('the geometry notice', () => {
     s.moveCamera({ x: 12, y: 34, k: 2 });
     expect(s.rectOf('a', 'screen')).toEqual(screenOf(trunk.rect, s.camera()));
   });
+
+  it('names the notes that found no clear spot, and leaves a held one to the host', async () => {
+    const s = await open(
+      [
+        'diagram "Sign-in" version=1',
+        'node user "User"',
+        'node app "Web app"',
+        'node auth "Auth"',
+        'edge m1 user -> app "sign in"',
+        'edge m2 app -> auth "verify"',
+        'edge m3 auth -> app "token" kind=async',
+        'edge m4 app -> user "welcome"',
+        'phase p1 "Check" m2 m3',
+        'layout root sequence',
+        'note crowded "Nowhere to go for this note." near=m1 side=above',
+        'note free "Retry." near=m4 side=below',
+      ].join('\n'),
+    );
+    const crowded = s.crowdedNotes();
+    expect(crowded.map(n => n.id)).toEqual(['crowded']);
+    expect(crowded[0]).toMatchObject({ near: 'm1', text: 'Nowhere to go for this note.' });
+    expect(crowded[0]!.rect).toEqual(s.rectOf('crowded'));
+    expect(s.heldNotes().size).toBe(0);
+    s.holdNotes(['crowded']);
+    expect([...s.heldNotes()]).toEqual(['crowded']);
+    // Held, it is still the drawing's: its place and its obstacles do not change.
+    expect(s.rectOf('crowded')).toEqual(crowded[0]!.rect);
+    expect(s.crowdedNotes().map(n => n.id)).toEqual(['crowded']);
+  });
 });

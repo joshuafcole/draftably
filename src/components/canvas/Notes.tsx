@@ -11,8 +11,11 @@ export function Notes() {
   const s = useDiagramSession();
   // Links are written as exports write them, since exports copy these notes.
   const markup = () =>
-    noteMarkup(resolveAppearance(s.doc.appearance), s.viewerFrame().notes, href =>
-      exportHref(s, href),
+    noteMarkup(
+      resolveAppearance(s.doc.appearance),
+      // A note the host draws as its own overlay is left undrawn here (`holdNotes`).
+      s.viewerFrame().notes.filter(n => n.note.id === undefined || !s.heldNotes().has(n.note.id)),
+      href => exportHref(s, href),
     );
   // The markup escapes its text, as in exports.
   // eslint-disable-next-line solid/no-innerhtml

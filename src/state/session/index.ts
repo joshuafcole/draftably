@@ -38,6 +38,7 @@ export type { PanelSide } from '../../model/panels';
 export { LEGIBLE_ZOOM, type CameraMover, type FitOptions, type RevealOptions } from './camera';
 export type {
   ClearSpotOptions,
+  CrowdedNote,
   EdgeGeometry,
   GeometryCause,
   GeometryChange,
