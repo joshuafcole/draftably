@@ -7,6 +7,7 @@ export {
   LEGIBLE_ZOOM,
   type CameraMover,
   type FitOptions,
+  type PanelSide,
   type RevealOptions,
   type ConfirmRequest,
   type DiagramSession,

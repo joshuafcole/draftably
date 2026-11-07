@@ -3,6 +3,7 @@
  * view state, like the camera: they live in the URL (`?state=write`), never in the file.
  */
 import { createSignal } from 'solid-js';
+import { panelDoc, type PanelSide } from '../../model/panels';
 import { withState } from '../../model/status';
 import type { DocumentPart } from './document';
 
@@ -12,8 +13,18 @@ export function createEmphasis(s: DocumentPart) {
       s.options.urlState ? new URLSearchParams(location.search).get('state') : null,
     );
     const [grid, setGrid] = createSignal(false);
-    return { active, setActive, grid, setGrid };
+    const [panel, setPanel] = createSignal<PanelSide | null>(s.options.panel ?? null);
+    return { active, setActive, grid, setGrid, panel, setPanel };
   })();
+
+  /** The side of a marked document this session draws, or null for the whole merge. */
+  const panel = state.panel;
+  /**
+   * Draw one side of a marked document, as a comparison panel does: `before` leaves out what was
+   * added and shows old values, `after` leaves out what was removed. The layout stays the
+   * merge's, so every object kept sits where it does in the other panel. Null draws the merge.
+   */
+  const showPanel = (side: PanelSide | null) => state.setPanel(side);
 
   /** The file's states, in file order. */
   const states = () => s.doc.appearance.states ?? [];
@@ -44,12 +55,16 @@ export function createEmphasis(s: DocumentPart) {
     return true;
   }
 
-  /** The document as the canvas draws it: in the active state, or as it is. */
+  /** The document as the canvas draws it: in the active state, or as it is, on the shown side. */
   const drawnDoc = () => {
-    const id = activeState();
-    return id ? withState(s.doc, id) : s.doc;
+    const id = activeState(),
+      doc = id ? withState(s.doc, id) : s.doc,
+      side = panel();
+    return side ? panelDoc(doc, side) : doc;
   };
   return {
+    panel,
+    showPanel,
     states,
     activeState,
     gridOpen,

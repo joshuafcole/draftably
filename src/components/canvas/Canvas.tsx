@@ -66,6 +66,12 @@ export function Canvas(props: CanvasProps) {
   const camera = () => s.doc.camera;
   // The drawing in the chosen emphasis state; edits still go to `doc`.
   const shown = createMemo(s.drawnDoc);
+  // A comparison panel leaves out the other side's objects; the scene still lays out the merge.
+  const kept = createMemo(() => {
+    const d = shown();
+    return new Set([...d.graph.nodes, ...d.graph.groups, ...d.graph.edges].map(o => o.id));
+  });
+  const keep = (ids: string[]) => (s.panel() ? ids.filter(id => kept().has(id)) : ids);
   const isSelected = (id: string) => s.selection().has(id);
   const empty = () => !s.nodeIds().length && !s.groupIds().length;
 
@@ -157,7 +163,7 @@ export function Canvas(props: CanvasProps) {
           </Show>
           <SequenceBackdrop doc={shown()} part="panel" />
           <g>
-            <For each={s.groupIds()}>
+            <For each={keep(s.groupIds())}>
               {id => (
                 <GroupView
                   doc={shown()}
@@ -176,7 +182,7 @@ export function Canvas(props: CanvasProps) {
           <SequenceBackdrop doc={shown()} part="phases" />
           <Lifelines doc={s.doc} ids={s.nodeIds()} rect={id => s.sceneRects().get(id)} />
           <g>
-            <For each={s.routeIds()}>
+            <For each={keep(s.routeIds())}>
               {id => (
                 <Show when={s.routesById().get(id)}>
                   {route => (
@@ -194,7 +200,7 @@ export function Canvas(props: CanvasProps) {
             </For>
           </g>
           <g>
-            <For each={s.nodeIds()}>
+            <For each={keep(s.nodeIds())}>
               {id => (
                 <NodeView
                   doc={shown()}
@@ -211,7 +217,7 @@ export function Canvas(props: CanvasProps) {
           </g>
           <PositionMarks doc={shown()} rects={s.sceneRects()} bounds={s.sceneBounds()} />
           <g>
-            <For each={s.edgeIds()}>
+            <For each={keep(s.edgeIds())}>
               {id => (
                 <Show when={s.routesById().get(id)?.cross && s.routesById().get(id)}>
                   {route => <CrossingView doc={s.doc} route={route()} selected={isSelected(id)} />}

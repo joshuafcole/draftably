@@ -7,6 +7,7 @@
  */
 import { createRoot } from 'solid-js';
 import type { AppearanceLayer } from '../../model/appearance';
+import type { PanelSide } from '../../model/panels';
 import { describeLink } from '../links';
 import { createActions } from './actions';
 import { createHostAppearance } from './appearance';
@@ -25,6 +26,7 @@ import { createView, type ViewItem } from './view';
 import type { Camera } from '../../model/types';
 
 export type { ViewItem, ViewItemKind } from './view';
+export type { PanelSide } from '../../model/panels';
 export { LEGIBLE_ZOOM, type CameraMover, type FitOptions, type RevealOptions } from './camera';
 
 export interface ConfirmRequest {
@@ -72,6 +74,11 @@ export interface SessionOptions {
    * written to the source. `setAppearance` changes it later.
    */
   appearance?: AppearanceLayer;
+  /**
+   * Draw one side of a marked document (`showPanel` changes it later): `before` without what was
+   * added, `after` without what was removed, both on the merge's layout.
+   */
+  panel?: PanelSide;
 }
 
 export function createDiagramSession(options: SessionOptions = {}) {
