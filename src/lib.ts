@@ -75,6 +75,26 @@ export { checkScene, drawingNotes, type CheckOptions, type CheckResult } from '.
 export type { Drawing } from './dsl/metrics';
 export { drawingScore, WEIGHTS, type DrawingScore } from './dsl/score';
 
+// `draftably vary` as a call: layout and routing variants of a source, each compiled, routed,
+// measured and drawn, ranked against the source as it is. No file is read or written.
+export {
+  applyEdits,
+  drawScene,
+  FITS,
+  improves,
+  vary,
+  type Drawn,
+  type Edit as VaryEdit,
+  type Fit,
+  type LineChange,
+  type Measured,
+  type Metrics as VaryMetrics,
+  type Prefer,
+  type Variant,
+  type VaryOptions,
+  type VaryResult,
+} from './cli/variants';
+
 // A routed document ready to draw, and the components that draw it.
 export { buildStaticScene, type StaticScene as StaticDrawing } from './model/static-scene';
 export { StaticScene } from './components/scene/StaticScene';

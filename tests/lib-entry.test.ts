@@ -2,7 +2,14 @@ import fs from 'node:fs';
 import path from 'node:path';
 import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
-import { checkScene, checkSource, resolveAppearance, wrapLines } from '../src/lib';
+import {
+  applyEdits,
+  checkScene,
+  checkSource,
+  resolveAppearance,
+  vary,
+  wrapLines,
+} from '../src/lib';
 
 const src = path.resolve(import.meta.dirname, '../src');
 
@@ -92,6 +99,31 @@ describe('the library entry', () => {
     expect(measured.metrics?.warnings).toBe(
       measured.diagnostics.filter(d => d.level === 'warning').length,
     );
+  });
+
+  it('varies a source as `draftably vary` does, with each variant drawn and ranked', async () => {
+    const source = [
+      'node a "A"',
+      'node b "B"',
+      'node c "C"',
+      'node d "D"',
+      'edge ab a -> b',
+      'edge bc b -> c',
+      'edge cd c -> d',
+      'edge ad a -> d',
+      'layout root flow direction=right',
+    ].join('\n');
+    const run = await vary(source, { limit: 3, fit: 'square' });
+    expect(run.variants[0].id).toBe('v0');
+    expect(run.variants.length).toBeGreaterThan(1);
+    expect(run.variants.length).toBeLessThanOrEqual(4);
+    for (const v of run.variants) {
+      const drawn = run.drawn.get(v.id)!;
+      expect(drawn.svg).toMatch(/^<svg/);
+      // A variant's source is the file with its edits, and only those.
+      if (v.id !== 'v0') expect(drawn.source).toBe(applyEdits(source, v.edits).source);
+    }
+    expect(run.variants.map(v => v.id)).toContain(run.recommended);
   });
 
   it("measures text as the compiler does, so a host can size a node's text without the DOM", () => {
