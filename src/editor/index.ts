@@ -4,6 +4,10 @@
  */
 export {
   createDiagramSession,
+  LEGIBLE_ZOOM,
+  type CameraMover,
+  type FitOptions,
+  type RevealOptions,
   type ConfirmRequest,
   type DiagramSession,
   type SessionOptions,
@@ -24,6 +28,7 @@ export {
 } from '../components/scene/node-content';
 export type { CanvasProps } from '../components/canvas/Canvas';
 export type { AppearanceLayer } from '../model/appearance';
+export type { Camera } from '../model/types';
 // What `mountEditor` sets up around the canvas, for a host that mounts `Editor` in its own tree:
 // the bundled faces text is measured in, and the shortcuts for the active session.
 export { registerFonts } from '../lib/font-data';
