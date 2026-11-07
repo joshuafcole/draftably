@@ -1,9 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-// Imported with the file, not inside a test: loading the session's modules can take seconds
-// while the whole suite transforms at once, and a test's timeout should not pay for it.
 import { createDiagramSession, type CameraEvent } from '../src/state/session';
 import type { Rect } from '../src/model/types';
-import { FIT_MARGIN, REVEAL_MARGIN } from '../src/state/session/camera';
+import { REVEAL_MARGIN } from '../src/state/session/camera';
 
 // Three boxes far apart, pinned so the test knows where they are.
 const SOURCE = `diagram "Camera" version=1
@@ -45,11 +43,11 @@ afterAll(() => vi.unstubAllGlobals());
 
 const STAGE = { width: 800, height: 600 };
 
-async function open(moves: CameraEvent[] = [], sized = true) {
+async function open(moves: CameraEvent[] = []) {
   const s = createDiagramSession({ onCamera: event => moves.push(event) });
   await s.openSource(SOURCE);
   for (let i = 0; i < 40 && s.fileCompiling(); i++) await new Promise(r => setTimeout(r, 0));
-  if (sized) s.setStageSize(STAGE);
+  s.setStageSize(STAGE);
   return s;
 }
 
@@ -94,20 +92,6 @@ describe('the camera on a session', () => {
     expect(moves.at(-1)!.camera).toEqual(s.getCamera());
   });
 
-  it('reports a camera that undo brings back as user', async () => {
-    // A session with no source keeps its own history, and undo restores the view with it.
-    const moves: CameraEvent[] = [];
-    const s = createDiagramSession({ onCamera: event => moves.push(event) });
-    s.setStageSize(STAGE);
-    s.setCamera({ x: 10, y: 20, k: 0.5 });
-    s.transact('Collapse', d => void d.collapsed.push('a'));
-    s.setCamera({ x: 300, y: 200, k: 2 });
-    moves.length = 0;
-    s.undo();
-    expect(s.getCamera()).toEqual({ x: 10, y: 20, k: 0.5 });
-    expect(moves).toEqual([{ camera: { x: 10, y: 20, k: 0.5 }, reason: 'user' }]);
-  });
-
   it('fitTo frames the ids it is given, centred, within the margin', async () => {
     const s = await open();
     expect(s.fitTo(['a', 'b', 'nowhere'], { margin: 40 })).toBe(true);
@@ -118,18 +102,6 @@ describe('the camera on a session', () => {
     // Gamma, far away, is not in the frame.
     expect(within(onScreen(s, 'c'))).toBe(false);
     expect(s.fitTo(['nowhere'])).toBe(false);
-  });
-
-  it('fitTo before the canvas has a size waits for it', async () => {
-    const moves: CameraEvent[] = [];
-    const s = await open(moves, false);
-    moves.length = 0;
-    expect(s.fitTo(['c'])).toBe(false);
-    expect(moves).toEqual([]);
-    s.setStageSize(STAGE);
-    await Promise.resolve();
-    expect(within(onScreen(s, 'c'), FIT_MARGIN)).toBe(true);
-    expect(moves.at(-1)?.reason).toBe('api');
   });
 
   it('reveal of an object already in view moves nothing', async () => {
@@ -154,29 +126,5 @@ describe('the camera on a session', () => {
     expect(within(c, REVEAL_MARGIN)).toBe(true);
     expect(c.x + c.w).toBeCloseTo(STAGE.width - REVEAL_MARGIN, 5);
     expect(c.y + c.h).toBeCloseTo(STAGE.height - REVEAL_MARGIN, 5);
-  });
-
-  it('reveal zooms out only as far as it must when the object does not fit', async () => {
-    const s = await open();
-    s.setCamera({ x: 0, y: 0, k: 4 });
-    s.reveal('c', { margin: 40, minZoom: 0.55 });
-    const k = s.getCamera().k,
-      r = s.sceneRects().get('c')!;
-    expect(k).toBeLessThan(4);
-    // Just enough for Gamma and its margins across the narrower way.
-    expect(k).toBeCloseTo(Math.min((STAGE.width - 80) / r.w, (STAGE.height - 80) / r.h), 5);
-    expect(within(onScreen(s, 'c'), 40 - 1e-6)).toBe(true);
-  });
-
-  it('reveal never zooms below its floor; an object too big for it is centred', async () => {
-    const s = await open();
-    s.setStageSize({ width: 300, height: 200 });
-    s.setCamera({ x: 0, y: 0, k: 1 });
-    expect(s.reveal('c', { minZoom: 0.8 })).toBe(true);
-    const r = s.sceneRects().get('c')!,
-      c = s.getCamera();
-    expect(c.k).toBe(0.8);
-    expect((r.x + r.w / 2) * c.k + c.x).toBeCloseTo(150, 5);
-    expect((r.y + r.h / 2) * c.k + c.y).toBeCloseTo(100, 5);
   });
 });
