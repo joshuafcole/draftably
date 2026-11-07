@@ -52,7 +52,13 @@ const PACKAGES: Record<string, { manifest: string; paths: RegExp[] }> = {
   },
   '@draftably/solid': {
     manifest: 'packages/solid/package.json',
-    paths: [/^packages\/solid\//],
+    // ./host is built from src/host.ts and the compiler and scene it loads.
+    paths: [
+      /^packages\/solid\//,
+      /^src\/(?:host\.ts$|dsl\/|model\/|engines\/|components\/scene\/|runtime\/svg-renderer\.ts$)/,
+      /^scripts\/build-frameworks\.ts$/,
+      /^tsconfig\.host\.json$/,
+    ],
   },
   '@draftably/vue': {
     manifest: 'packages/vue/package.json',

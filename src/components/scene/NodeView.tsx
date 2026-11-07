@@ -5,7 +5,7 @@ import { nodeLabel } from '../../model/labels';
 import { portPoint } from '../../model/routes';
 import { resolveAppearance } from '../../model/appearance';
 import { drawnSwatch, participantAccent } from '../../model/colors';
-import { accentPath } from '../../cli/svg';
+import { accentPath } from '../../runtime/svg-renderer';
 import { HALO_GAP, haloInk, MARKER, statusPaint } from '../../model/status';
 import { countText, STACK_OFFSETS } from '../../model/stack';
 import { measureText } from '../../model/fonts';
@@ -98,6 +98,7 @@ export function NodeView(props: NodeViewProps) {
       <Show when={label().leader && label().mode !== 'center'}>
         <path
           class="leader"
+          fill="none"
           d={`M${props.rect.w / 2},${props.rect.h / 2} L${label().x},${label().y}`}
         />
       </Show>

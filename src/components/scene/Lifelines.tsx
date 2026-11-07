@@ -1,5 +1,5 @@
 import { For, Show } from 'solid-js';
-import { sequenceBackdrop } from '../../cli/svg';
+import { sequenceBackdrop } from '../../runtime/svg-renderer';
 import { resolveAppearance } from '../../model/appearance';
 import type { Diagram, NodeLayout } from '../../model/types';
 import { LIFELINE } from '../../dsl/frame';

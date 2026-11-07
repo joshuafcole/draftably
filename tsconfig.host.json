@@ -1,0 +1,11 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "declaration": true,
+    "emitDeclarationOnly": true,
+    "declarationDir": "packages/solid/dist/host/types",
+    "rootDir": "."
+  },
+  "include": ["src/host.ts"]
+}
