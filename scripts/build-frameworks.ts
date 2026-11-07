@@ -1,6 +1,5 @@
 // Builds the React, Solid and Vue wrappers with tsc. Svelte ships its component source.
-// @draftably/solid also ships ./host: the compiler and the scene components, built from
-// src/host.ts on the host's Solid, which stays a peer and is never bundled.
+// @draftably/solid also ships ./host, built from src/host.ts with Solid as a peer.
 import { cpSync, mkdirSync, readdirSync, rmSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import path from 'node:path';
