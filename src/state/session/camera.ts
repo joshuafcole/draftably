@@ -9,6 +9,7 @@
  */
 import { createEffect, on } from 'solid-js';
 import { clamp, rectUnion } from '../../model/geometry';
+import { drawnRect } from './overlay';
 import type { Camera, Rect } from '../../model/types';
 import type { DocumentPart } from './document';
 import type { EmphasisPart } from './emphasis';
@@ -61,22 +62,8 @@ export function createCamera(s: DocumentPart & ScenePart & EmphasisPart & Editor
     return { x: -c.x / c.k, y: -c.y / c.k, w: width / c.k, h: height / c.k };
   }
 
-  /**
-   * Where an object is drawn: a shape's or container's box, a connection's path and label, or the
-   * panel of a note with that ID, while the drawn state shows it.
-   */
-  function rectOf(id: string): Rect | undefined {
-    const box = s.sceneRects().get(id);
-    if (box) return box;
-    const route = s.routesById().get(id);
-    if (!route?.points.length)
-      return s.viewerFrame().notes.find(n => n.note.id === id && !n.hidden)?.rect;
-    const l = route.label;
-    return rectUnion([
-      ...route.points.map(p => ({ x: p.x, y: p.y, w: 0, h: 0 })),
-      ...(l ? [{ x: l.x - l.w / 2, y: l.y - l.h / 2, w: l.w, h: l.h }] : []),
-    ]);
-  }
+  /** Where an object is drawn, in the drawing's units (`overlay.ts`). */
+  const rectOf = (id: string) => drawnRect(s, id);
 
   // A move asked for before the canvas had a size runs on its first real size.
   let pending: (() => void) | undefined;

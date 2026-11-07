@@ -6,7 +6,13 @@ export {
   createDiagramSession,
   LEGIBLE_ZOOM,
   type CameraMover,
+  type ClearSpotOptions,
+  type EdgeGeometry,
   type FitOptions,
+  type GeometryCause,
+  type GeometryChange,
+  type KeepOutOptions,
+  type OverlaySpace,
   type PanelSide,
   type RevealOptions,
   type ConfirmRequest,
@@ -35,7 +41,8 @@ export {
 } from '../components/scene/node-content';
 export type { CanvasProps } from '../components/canvas/Canvas';
 export type { AppearanceLayer } from '../model/appearance';
-export type { Camera } from '../model/types';
+export type { Camera, Point, Rect } from '../model/types';
+export type { NoteSide } from '../model/note';
 // What `mountEditor` sets up around the canvas, for a host that mounts `Editor` in its own tree:
 // the bundled faces text is measured in, and the shortcuts for the active session.
 export { registerFonts } from '../lib/font-data';

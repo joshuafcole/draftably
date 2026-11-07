@@ -31,6 +31,18 @@ export interface CanvasProps {
   onDropFiles?: (files: File[]) => Promise<void> | void;
   /** Shown under the hint on an empty canvas, such as a button that builds from a list. */
   emptyAction?: JSX.Element;
+  /**
+   * A host's marks that move and zoom with the drawing, above it: an HTML layer whose origin is
+   * the drawing's, so a child positioned at an object's `rectOf(id)` sits on it at any camera.
+   * It takes no pointer events itself; a child that wants them sets `pointer-events: auto`.
+   */
+  sceneLayer?: JSX.Element;
+  /**
+   * A host's chrome fixed to the canvas, above the scene layer: positioned in canvas pixels
+   * (`rectOf(id, 'screen')`), so a mark attached to a point pans with it but keeps its size.
+   * Pointer events as for `sceneLayer`; the wheel over either layer still zooms the canvas.
+   */
+  screenLayer?: JSX.Element;
 }
 
 /**
@@ -267,6 +279,17 @@ export function Canvas(props: CanvasProps) {
           <Overlay />
         </g>
       </svg>
+      <div class="host-layers" onWheel={e => s.onWheel(e)}>
+        <div
+          class="host-layer host-layer--scene"
+          style={{
+            transform: `translate(${camera().x}px, ${camera().y}px) scale(${camera().k})`,
+          }}
+        >
+          {props.sceneLayer}
+        </div>
+        <div class="host-layer host-layer--screen">{props.screenLayer}</div>
+      </div>
 
       <Show when={empty()}>
         <div class="empty-canvas">

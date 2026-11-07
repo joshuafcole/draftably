@@ -18,6 +18,7 @@ import { createEditor } from './editor';
 import { createEmphasis } from './emphasis';
 import { createFileSession } from './file-session';
 import { createLayout } from './layout';
+import { createOverlay } from './overlay';
 import { createPointer } from './pointer';
 import { createRouting } from './routing';
 import { createScene } from './scene';
@@ -35,6 +36,14 @@ export type { HistoryHandler } from './document';
 export type { HostArrangement, SessionEdit } from './file-session';
 export type { PanelSide } from '../../model/panels';
 export { LEGIBLE_ZOOM, type CameraMover, type FitOptions, type RevealOptions } from './camera';
+export type {
+  ClearSpotOptions,
+  EdgeGeometry,
+  GeometryCause,
+  GeometryChange,
+  KeepOutOptions,
+  OverlaySpace,
+} from './overlay';
 
 export interface ConfirmRequest {
   title: string;
@@ -123,7 +132,8 @@ export function createDiagramSession(options: SessionOptions = {}) {
     const s9 = Object.assign(s8, createSculpt(s8));
     const s10 = Object.assign(s9, createView(s9));
     const s10a = Object.assign(s10, createCamera(s10));
-    const s11 = Object.assign(s10a, createPointer(s10a));
+    const s10b = Object.assign(s10a, createOverlay(s10a));
+    const s11 = Object.assign(s10b, createPointer(s10b));
     // Asked by the scene's link marks, which reach the session only through context.
     return Object.assign(s11, {
       /** What opening `href` does, for a link mark's label. */

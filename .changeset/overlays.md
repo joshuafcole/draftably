@@ -1,0 +1,5 @@
+---
+'draftably': minor
+---
+
+A positioner and overlay layers for a host's own marks over the drawing. A session gives where each object is drawn with `rectOf(id, space)` (shapes, containers, connections with their label, and notes by ID) and `edgeOf(id, space)` (a connection's route and label box), in the drawing's units (`stage`) or canvas pixels (`screen`), following each frame of a glide or layout animation; `toScreen` and `toStage` convert between the two. `onGeometry(listen)` fires after each compile or layout, camera move, animation frame and canvas resize, with the cause, and `geometryVersion` counts the same changes as a signal. `keepOut(rect)` and `clearSpot(near, size, options)` search the obstacle set notes are placed against (`obstaclesOf`, `clearOf` and `spotsBeside` in `model/note.ts`, which `placeNotes` now uses), with the drawing's notes in it, so a host's overlay and the notes agree on what is clear. The canvas takes `sceneLayer`, an HTML layer that pans and zooms with the drawing, and `screenLayer`, fixed to the canvas for chrome attached to a point; neither takes pointer events except where a child asks, and the wheel over either still zooms.

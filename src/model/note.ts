@@ -133,6 +133,94 @@ function rowSpots(row: Rect, lanes: Rect, side: NoteSide, w: number, h: number):
   return [...new Set(xs)].map(at => ({ x: at, y: Math.round(y), w, h }));
 }
 
+/** One thing a note (or a host's overlay) keeps clear of, with the object it belongs to. */
+export interface Obstacle {
+  /** The object, connection or note it is part of; none for an unnamed note or a margin. */
+  id?: string;
+  rect: Rect;
+}
+
+/**
+ * What a note keeps clear of, by kind: shapes (by 4), each straight piece of every line, a
+ * sequence's labels (they sit on their rows), notes already placed (by 8), and group frames, which
+ * a note may sit inside but not across. `placeNotes` searches against these, and a session's
+ * `keepOut` and `clearSpot` search against the same set, so a host's overlays and the drawing's
+ * notes agree on what is clear.
+ */
+export interface Obstacles {
+  shapes: Obstacle[];
+  lines: Obstacle[];
+  labels: Obstacle[];
+  frames: Obstacle[];
+  notes: Obstacle[];
+}
+
+/** The obstacle set of a drawing, before any note is placed in it. */
+export function obstaclesOf(
+  doc: Diagram,
+  rects: ReadonlyMap<string, Rect>,
+  routes: readonly BoundedRoute[],
+): Obstacles {
+  const groups = new Set(doc.graph.groups.map(g => g.id)),
+    seq = doc.layout.sequence,
+    named = (id: string | undefined) => (id ? { id } : {});
+  return {
+    shapes: [...rects].filter(([id]) => !groups.has(id)).map(([id, rect]) => ({ id, rect })),
+    frames: [...rects].filter(([id]) => groups.has(id)).map(([id, rect]) => ({ id, rect })),
+    lines: routes.flatMap(r =>
+      r.points.slice(1).map((p, i) => {
+        const a = r.points[i];
+        return {
+          ...named(r.id),
+          rect: {
+            x: Math.min(a.x, p.x) - 2,
+            y: Math.min(a.y, p.y) - 2,
+            w: Math.abs(p.x - a.x) + 4,
+            h: Math.abs(p.y - a.y) + 4,
+          },
+        };
+      }),
+    ),
+    // A sequence's labels sit on their rows, in the way of a note; elsewhere nothing changes.
+    labels: routes.flatMap(r =>
+      seq && r.label ? [{ ...named(r.id), rect: labelBox(r.label) }] : [],
+    ),
+    notes: [],
+  };
+}
+
+/**
+ * Whether `r` is clear of `set`, as a note must be: off every shape by 4, off every line and label,
+ * off every placed note by 8, and inside or outside each frame but not across its border. Objects
+ * named in `ignore` are not in the way.
+ */
+export function clearOf(set: Obstacles, r: Rect, ignore?: ReadonlySet<string>): boolean {
+  const kept = (o: Obstacle) => !o.id || !ignore?.has(o.id);
+  return (
+    !set.shapes.some(o => kept(o) && overlaps(o.rect, r, 4)) &&
+    !set.lines.some(o => kept(o) && overlaps(o.rect, r)) &&
+    !set.labels.some(o => kept(o) && overlaps(o.rect, r)) &&
+    !set.notes.some(o => kept(o) && overlaps(o.rect, r, 8)) &&
+    // A note may sit inside a group, but not across its border.
+    set.frames.every(o => !kept(o) || !overlaps(o.rect, r) || contains(o.rect, r))
+  );
+}
+
+/**
+ * The spots a `w`×`h` box tries beside `at` on `side`, in order: start-aligned, centered,
+ * end-aligned along the side, then the same a little further out. What `placeNotes` tries.
+ */
+export function spotsBeside(at: Rect, w: number, h: number, side: NoteSide): Rect[] {
+  const across = side === 'below' || side === 'above';
+  return [GAP, GAP + 24, GAP + 56].flatMap(d =>
+    [0, 0.5, 1].map(t => {
+      const x = across ? at.x + (at.w - w) * t : side === 'right' ? at.x + at.w + d : at.x - d - w,
+        y = across ? (side === 'below' ? at.y + at.h + d : at.y - d - h) : at.y + (at.h - h) * t;
+      return { x: Math.round(x), y: Math.round(y), w, h };
+    }),
+  );
+}
+
 /**
  * Place every anchored note beside its object or message, clear of shapes, group borders, lines
  * and earlier notes when a nearby spot allows it. Frame notes, and notes whose object is not drawn,
@@ -146,35 +234,16 @@ export function placeNotes(
   rects: ReadonlyMap<string, Rect>,
   routes: readonly BoundedRoute[],
 ): PlacedNote[] {
-  const groups = new Set(doc.graph.groups.map(g => g.id)),
-    shapes = [...rects].filter(([id]) => !groups.has(id)).map(([, r]) => r),
-    frames = [...rects].filter(([id]) => groups.has(id)).map(([, r]) => r),
-    lines = routes.flatMap(r =>
-      r.points.slice(1).map((p, i) => {
-        const a = r.points[i];
-        return {
-          x: Math.min(a.x, p.x) - 2,
-          y: Math.min(a.y, p.y) - 2,
-          w: Math.abs(p.x - a.x) + 4,
-          h: Math.abs(p.y - a.y) + 4,
-        };
-      }),
-    ),
+  const set = obstaclesOf(doc, rects, routes),
     seq = doc.layout.sequence,
-    // A sequence's labels sit on their rows, in the way of a note; elsewhere nothing changes.
-    labels = routes.flatMap(r => (seq && r.label ? [labelBox(r.label)] : [])),
     // A sequence keeps a margin spot for every note, shown or not, so no state moves a lane.
     margins =
       doc.appearance.notes?.flatMap((n, i) => (noteShown(doc, n) ? (seq?.notes?.[i] ?? []) : [])) ??
-      [],
-    placed: Rect[] = [...margins];
-  const clear = (r: Rect) =>
-    !shapes.some(s => overlaps(s, r, 4)) &&
-    !lines.some(s => overlaps(s, r)) &&
-    !labels.some(s => overlaps(s, r)) &&
-    !placed.some(s => overlaps(s, r, 8)) &&
-    // A note may sit inside a group, but not across its border.
-    frames.every(g => !overlaps(g, r) || contains(g, r));
+      [];
+  set.notes = margins.map(rect => ({ rect }));
+  const clear = (r: Rect) => clearOf(set, r);
+  const push = (note: Note, rect: Rect) =>
+    set.notes.push({ ...(note.id ? { id: note.id } : {}), rect });
   const place = (note: Note, i: number): PlacedNote => {
     const box = noteBox(look, note),
       at = note.near ? rects.get(note.near) : undefined,
@@ -186,30 +255,24 @@ export function placeNotes(
           ...message.points.map(p => ({ ...p, w: 0, h: 0 })),
           ...(message.label ? [labelBox(message.label)] : []),
         ]),
-        spots = rowSpots(row, rectUnion(shapes), note.side ?? 'below', box.rect.w, box.rect.h),
+        spots = rowSpots(
+          row,
+          rectUnion(set.shapes.map(o => o.rect)),
+          note.side ?? 'below',
+          box.rect.w,
+          box.rect.h,
+        ),
         spot = spots.find(r => clear(r) && contains(seq!.panel, r));
-      placed.push(spot ?? spots[0]);
+      push(note, spot ?? spots[0]);
       return { ...box, rect: spot ?? spots[0], ...(spot ? {} : { overlaps: true }) };
     }
     if (!at) return { ...box, inFrame: true };
     const { w, h } = box.rect,
-      side = note.side ?? 'below',
-      across = side === 'below' || side === 'above';
-    // Along the side: start-aligned, centered, end-aligned; then the same a little further out.
-    const spots = [GAP, GAP + 24, GAP + 56].flatMap(d =>
-      [0, 0.5, 1].map(t => {
-        const x = across
-            ? at.x + (at.w - w) * t
-            : side === 'right'
-              ? at.x + at.w + d
-              : at.x - d - w,
-          y = across ? (side === 'below' ? at.y + at.h + d : at.y - d - h) : at.y + (at.h - h) * t;
-        return { x: Math.round(x), y: Math.round(y), w, h };
-      }),
-    );
+      side = note.side ?? 'below';
+    const spots = spotsBeside(at, w, h, side);
     const spot = spots.find(clear),
       rect = spot ?? spots[0];
-    placed.push(rect);
+    push(note, rect);
     return {
       ...box,
       rect,

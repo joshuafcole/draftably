@@ -19,6 +19,26 @@
   touch-action: none;
 }
 
+/* A host's overlay layers (CanvasProps.sceneLayer, screenLayer): above the drawing, taking no
+   pointer events but where a child asks for them. */
+.host-layers,
+.host-layer--screen {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.host-layers {
+  overflow: hidden;
+}
+.host-layer--scene {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  transform-origin: 0 0;
+}
+
 .stage[data-tool='pan'],
 .stage.space-held {
   cursor: grab;
