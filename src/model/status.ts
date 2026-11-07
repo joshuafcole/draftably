@@ -182,6 +182,12 @@ export const edgeInk = (look: ResolvedAppearance, edge: DiagramEdge, diff: boole
       : look.connection);
 
 /**
+ * The states a reader picks from, in file order: every state but those with `chips=hidden`. The
+ * chips, the grid, `[` and `]` and `--states` list these; a hidden state is drawn only on request.
+ */
+export const listedStates = (doc: Diagram) => (doc.appearance.states ?? []).filter(s => !s.hidden);
+
+/**
  * The document drawn in emphasis state `id`. Listed objects (a group with all its members) and
  * listed connections are in focus, and so is a connection between two focused nodes. With
  * `rest=dim`, everything else fades, except the containers that hold something in focus, so the

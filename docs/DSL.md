@@ -684,7 +684,12 @@ In the Editor, a file with states shows a row of chips over the canvas: **All**,
 **Grid**. A chip draws that state in place, and `[` and `]` step through them in file order.
 **Grid** shows every state side by side, as `--states` draws them; click a panel to draw that
 state. The state is part of the address (`?state=write`), so a link or a reload keeps it, but it
-is never written to the file. Edits work in any state, on faded objects too. `check`
+is never written to the file.
+
+`chips=hidden` keeps a state off that list: no chip, no grid panel, no stop for `[` and `]`, and
+no panel in `--states`. It is for a file that holds many states for a tool that steps through
+them itself, such as one per step of a walkthrough. A hidden state is still a state:
+`?state=` and `--state` draw it, and so does a host's `showState`. Edits work in any state, on faded objects too. `check`
 reports an ID a state lists that the file does not declare. Deleting an object or connection in
 the Editor takes it out of every state.
 

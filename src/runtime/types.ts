@@ -78,7 +78,8 @@ export interface DiagramSummary {
   height: number;
   viewBox: readonly [number, number, number, number];
   items: readonly ItemSummary[];
-  states: readonly { id: string; label: string }[];
+  /** Every state in file order; `hidden` marks one `chips=hidden` keeps off a reader's list. */
+  states: readonly { id: string; label: string; hidden?: true }[];
   activeState: string | null;
 }
 

@@ -137,6 +137,11 @@ export interface EmphasisState {
   ids: string[];
   /** How everything else draws: faded like a context line, or as usual. */
   rest: 'dim' | 'plain';
+  /**
+   * Left out of the state chips, the grid, `[` and `]` and `--states`, from `chips=hidden`. A host
+   * that steps through many states itself still draws one with `showState`, and `--state` draws it.
+   */
+  hidden?: boolean;
 }
 
 export interface Heading {

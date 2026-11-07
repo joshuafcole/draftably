@@ -61,3 +61,28 @@ describe('state panels', () => {
     expect(new Set(paths('persist')).size).toBe(1);
   });
 });
+
+describe('states hidden from the chips', () => {
+  const HIDDEN = SOURCE + 'state step1 "Step 1" orders chips=hidden\n';
+
+  it('parses chips=hidden, and old lines parse as before', () => {
+    const states = projectScene(checkSource(HIDDEN)).appearance.states!;
+    expect(states.map(s => [s.id, !!s.hidden])).toEqual([
+      ['write', false],
+      ['read', false],
+      ['events', false],
+      ['step1', true],
+    ]);
+    expect(() => checkSource('node a "A"\nstate s "S" a chips=off\n')).toThrow(
+      /chips=shown\|hidden/,
+    );
+  });
+
+  it('leaves a hidden state out of the panels, but draws it on its own', () => {
+    const d = projectScene(checkSource(HIDDEN)),
+      svg = renderSvg(d, { states: true });
+    expect(svg.match(/data-state="/g)).toHaveLength(3);
+    expect(svg).not.toContain('Step 1');
+    expect(styleOf(withState(d, 'step1'), 'orders').spot).toBe('focus');
+  });
+});

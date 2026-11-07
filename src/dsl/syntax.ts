@@ -682,7 +682,7 @@ export function parseModel(source: string | SourceDoc): Model {
       }
       case 'state': {
         assert(args.length >= 1, 'A state needs an ID: state write "Write path" api orders.');
-        allow(['rest']);
+        allow(['rest', 'chips']);
         const sid = id(args[0]),
           label = args[1]?.quoted ? args[1].value : undefined,
           ids = args.slice(label === undefined ? 1 : 2).map(w => id(w)),
@@ -694,6 +694,11 @@ export function parseModel(source: string | SourceDoc): Model {
           states.push(state);
         }
         if (attrs.has('rest')) state.rest = choice('rest', 'dim', ['dim', 'plain'] as const);
+        if (attrs.has('chips')) {
+          if (choice('chips', 'shown', ['shown', 'hidden'] as const) === 'hidden')
+            state.hidden = true;
+          else delete state.hidden;
+        }
         for (const x of ids) {
           assert(!state.ids.includes(x), `${x} is already in state ${sid}.`);
           state.ids.push(x);

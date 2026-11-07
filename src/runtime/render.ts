@@ -404,7 +404,11 @@ export async function renderWithScene(
     height: Number(match[6]),
     viewBox: [Number(match[1]), Number(match[2]), Number(match[3]), Number(match[4])] as const,
     items,
-    states: (scene.model.appearance.states ?? []).map(s => ({ id: s.id, label: s.label })),
+    states: (scene.model.appearance.states ?? []).map(s => ({
+      id: s.id,
+      label: s.label,
+      ...(s.hidden ? { hidden: true as const } : {}),
+    })),
     activeState: options.state ?? null,
     provenance: {
       runtimeVersion,

@@ -4,7 +4,7 @@
  */
 import { createSignal } from 'solid-js';
 import { panelDoc, type PanelSide } from '../../model/panels';
-import { withState } from '../../model/status';
+import { listedStates, withState } from '../../model/status';
 import type { DocumentPart } from './document';
 
 export function createEmphasis(s: DocumentPart) {
@@ -26,18 +26,25 @@ export function createEmphasis(s: DocumentPart) {
    */
   const showPanel = (side: PanelSide | null) => state.setPanel(side);
 
-  /** The file's states, in file order. */
-  const states = () => s.doc.appearance.states ?? [];
+  /**
+   * The states the chips list, in file order: every state but those with `chips=hidden`. The grid
+   * and `stepState` go through these too.
+   */
+  const states = () => listedStates(s.doc);
 
-  /** The drawn state's ID, or null for none; a stale ID from the URL counts as none. */
+  /**
+   * The drawn state's ID, or null for none; a stale ID from the URL counts as none. A hidden state
+   * counts once `showState` draws it, though no chip is pressed for it.
+   */
   const activeState = () => {
     const id = state.active();
-    return id && states().some(s => s.id === id) ? id : null;
+    return id && (s.doc.appearance.states ?? []).some(s => s.id === id) ? id : null;
   };
 
   const gridOpen = state.grid;
   const setGridOpen = state.setGrid;
 
+  /** Draw state `id`, hidden from the chips or not, or none with null. */
   function showState(id: string | null) {
     state.setActive(id);
     if (!s.options.urlState) return;
@@ -47,11 +54,16 @@ export function createEmphasis(s: DocumentPart) {
     history.replaceState(history.state, '', url);
   }
 
-  /** Step through None and each state in file order; false when the file has none. */
+  /**
+   * Step through None and each listed state in file order; false when the file lists none. From a
+   * hidden state, a step goes to the first or last listed state.
+   */
   function stepState(by: 1 | -1) {
     const ids = [null, ...states().map(s => s.id)];
     if (ids.length < 2) return false;
-    showState(ids[(ids.indexOf(activeState()) + by + ids.length) % ids.length]);
+    // A hidden state is not on the list, so a step from it starts as if from None.
+    const at = Math.max(0, ids.indexOf(activeState()));
+    showState(ids[(at + by + ids.length) % ids.length]);
     return true;
   }
 

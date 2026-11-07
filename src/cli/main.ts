@@ -10,7 +10,7 @@ import { compareDetailed } from '../dsl/compare';
 import { checkScene } from '../dsl/check';
 import type { DrawingScore } from '../dsl/score';
 import { hintMoves, sceneConflicts } from '../dsl/conflicts';
-import { statusLabel, usedStatuses, withState } from '../model/status';
+import { listedStates, statusLabel, usedStatuses, withState } from '../model/status';
 import type { Diagram } from '../model/types';
 import { canonicalGeometry, projectScene } from '../dsl/project';
 import { DslError, formatSource } from '../dsl/syntax';
@@ -472,7 +472,12 @@ export async function main(argv: string[]): Promise<number> {
           doc = drawnState(projectScene(scene), option(rest, '--state')),
           opts = { href: svgHref(scene, file), states: flag('--states') };
         if (opts.states) {
-          if (!doc.appearance.states?.length) throw new UsageError('The file has no state lines.');
+          if (!listedStates(doc).length)
+            throw new UsageError(
+              doc.appearance.states?.length
+                ? 'Every state is chips=hidden, so --states has none to draw.'
+                : 'The file has no state lines.',
+            );
           if (doc.appearance.compare)
             throw new UsageError('--states draws panels, and so does compare; use one at a time.');
         }

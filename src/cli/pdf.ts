@@ -24,7 +24,7 @@ import {
 import { compile } from '../dsl/compile';
 import { projectScene } from '../dsl/project';
 import { formatSource } from '../dsl/syntax';
-import { withState } from '../model/status';
+import { listedStates, withState } from '../model/status';
 import { svgHref } from './links';
 import { findChrome } from './png';
 import { renderSvg } from './svg';
@@ -104,7 +104,7 @@ async function sheets(inputs: PdfInput[], opts: PdfOptions) {
     if (errors.length) fail(errors.map(d => `${d.line ? `Line ${d.line}: ` : ''}${d.message}`));
     const doc = projectScene(scene),
       title = doc.appearance.heading?.title || doc.title || path.basename(input.name, '.draft');
-    const states = opts.states ? (doc.appearance.states ?? []) : [];
+    const states = opts.states ? listedStates(doc) : [];
     const pages: Sheet[] = (states.length ? states : [undefined]).map(state => {
       // Links are written as `inspect --svg` writes them: joined to a URL `link-base`.
       const svg = renderSvg(state ? withState(doc, state.id) : doc, {

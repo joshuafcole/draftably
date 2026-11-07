@@ -36,6 +36,7 @@ import {
   HALO_GAP,
   haloInk,
   isDiff,
+  listedStates,
   MARKER,
   statusPaint,
   usedStatuses,
@@ -483,7 +484,7 @@ function openSvg(
  * box and one set of routes, and each object sits at the same place in every panel.
  */
 function statesSvg(doc: Diagram, look: ResolvedAppearance, opts: SvgOptions): string {
-  const states = doc.appearance.states ?? [],
+  const states = listedStates(doc),
     docs = states.map(s => withState(withoutMargins(doc), s.id)),
     { defs, marker } = markersFor(look, docs, opts.idPrefix ? `${opts.idPrefix}-` : ''),
     shared = routesOf(doc),
