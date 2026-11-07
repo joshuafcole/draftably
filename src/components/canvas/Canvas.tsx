@@ -54,11 +54,15 @@ export function Canvas(props: CanvasProps) {
     const activate = () => setActiveSession(s);
     stage.addEventListener('pointerdown', activate, true);
     stage.addEventListener('focusin', activate, true);
+    // A click with no press before it (assistive tech, a script) activates this session too, so the
+    // zoom controls act on this canvas and not the one used last.
+    stage.addEventListener('click', activate, true);
     onCleanup(() => {
       observer.disconnect();
       svg.removeEventListener('wheel', s.onWheel);
       stage.removeEventListener('pointerdown', activate, true);
       stage.removeEventListener('focusin', activate, true);
+      stage.removeEventListener('click', activate, true);
     });
   });
 
