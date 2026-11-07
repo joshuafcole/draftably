@@ -48,6 +48,24 @@ import { toast, type ToastAction } from '../toast';
 import type { DocumentPart } from './document';
 import type { CanvasTextPart } from './canvas-text';
 
+/**
+ * Where a host has placed a drawing: each object's rectangle by id, and the routes to draw as they
+ * are. Objects it leaves out keep the compile's place. The routes must be the host's for exactly
+ * these places (`makeRoom`, `relaxRoom`).
+ */
+export interface HostArrangement {
+  nodes: Readonly<Record<string, { x: number; y: number; w: number; h: number }>>;
+  routes: RoutingResult;
+}
+
+/** Put a projected document's objects where the arrangement says. */
+function arrange(doc: Diagram, arrangement: HostArrangement) {
+  for (const [id, r] of Object.entries(arrangement.nodes)) {
+    const at = doc.layout.nodes[id];
+    if (at) doc.layout.nodes[id] = { ...at, x: r.x, y: r.y, w: r.w, h: r.h };
+  }
+}
+
 export interface FileSessionInfo {
   name: string;
   path: string;
@@ -303,6 +321,7 @@ export function createFileSession(s: DocumentPart & CanvasTextPart) {
     source: string,
     selection: string[] | (() => string[]) = s.selectedIds(),
     mapId: (id: string) => string = id => id,
+    arrangement?: HostArrangement,
   ): Promise<Scene | null> {
     const ticket = ++showing;
     state.setCompiling(true);
@@ -331,15 +350,23 @@ export function createFileSession(s: DocumentPart & CanvasTextPart) {
       void pending.then(r => {
         if (ticket !== showing) return;
         batch(() => {
-          adopt(r);
+          if (!arrangement) adopt(r);
           routeSink.awaiting(false);
         });
       });
     batch(() => {
       s.mapSourceIds(mapId);
-      s.restoreDocument(projectScene(scene, viewState()), { keepCamera: true });
-      if (!pending) adopt(routes as Routes | undefined);
-      routeSink.awaiting(!!pending);
+      const projected = projectScene(scene, viewState());
+      if (arrangement) arrange(projected, arrangement);
+      s.restoreDocument(projected, { keepCamera: true });
+      // A host's arrangement brings its own routes; the compile's are for the compile's layout.
+      if (arrangement)
+        routeSink.adopt({
+          fingerprint: routingFingerprint(unwrap(s.doc)),
+          result: clone(arrangement.routes),
+        });
+      else if (!pending) adopt(routes as Routes | undefined);
+      routeSink.awaiting(!!pending && !arrangement);
       // A drag in a file keeps quick routes until its saved version is drawn.
       routeSink.quick(false);
       // Selected text (a note, a legend row) stays selected across its own save.
@@ -359,14 +386,18 @@ export function createFileSession(s: DocumentPart & CanvasTextPart) {
   }
 
   /** Show a newer file from disk. Local history cannot undo past someone else's change. */
-  async function acceptDisk(source: string, revision: string, { announce = false } = {}) {
+  async function acceptDisk(
+    source: string,
+    revision: string,
+    { announce = false, arrangement }: { announce?: boolean; arrangement?: HostArrangement } = {},
+  ) {
     const previous = state.scene(),
       previousSource = localSource;
     diskSource = source;
     setLocal(source);
     diskRevision = revision;
     resetHistory();
-    const scene = await showSource(source);
+    const scene = await showSource(source, undefined, undefined, arrangement);
     if (!scene) return;
     state.setStatus('saved');
     if (!announce) return;
@@ -903,15 +934,30 @@ export function createFileSession(s: DocumentPart & CanvasTextPart) {
    * Edit `source` for a host such as an embedded editor. Nothing is read from or written to disk;
    * `onChange` receives the new text after every kept edit, undo and redo.
    */
-  function openSource(source: string, onChange: (source: string) => void = () => {}) {
+  function openSource(
+    source: string,
+    onChange: (source: string) => void = () => {},
+    { arrangement }: { arrangement?: HostArrangement } = {},
+  ) {
     hostSave = onChange;
-    return begin({ name: '', path: '', source, revision: 'host' });
+    arranged = arrangement;
+    return begin({ name: '', path: '', source, revision: 'host' }, arrangement);
   }
 
-  /** Show text the host changed. Local undo history cannot step past it. */
-  function receiveSource(source: string) {
-    if (source === localSource) return Promise.resolve();
-    return acceptDisk(source, `host:${source.length}:${Date.now()}`);
+  /** The arrangement the shown source was drawn with, if a host gave one. */
+  let arranged: HostArrangement | undefined;
+
+  /**
+   * Show text the host changed. Local undo history cannot step past it.
+   *
+   * With `arrangement`, the host places it: the source's objects are drawn where the arrangement
+   * puts them and its routes are drawn as they are, instead of the compile's layout and routes
+   * (`makeRoom` makes one). The same text with a new arrangement is drawn again.
+   */
+  function receiveSource(source: string, { arrangement }: { arrangement?: HostArrangement } = {}) {
+    if (source === localSource && arrangement === arranged) return Promise.resolve();
+    arranged = arrangement;
+    return acceptDisk(source, `host:${source.length}:${Date.now()}`, { arrangement });
   }
 
   /** The source of the example as it was opened, for Reset. */
@@ -952,8 +998,11 @@ export function createFileSession(s: DocumentPart & CanvasTextPart) {
     keepScratch();
   }
 
-  function begin(info: FileSessionInfo): Promise<void> {
-    if (info.revision !== 'host') hostSave = null;
+  function begin(info: FileSessionInfo, arrangement?: HostArrangement): Promise<void> {
+    if (info.revision !== 'host') {
+      hostSave = null;
+      arranged = undefined;
+    }
     stopListening();
     setDraft(null);
     if (!info.example) scratchKey = '';
@@ -974,7 +1023,7 @@ export function createFileSession(s: DocumentPart & CanvasTextPart) {
           }),
     );
     state.setInfo(info);
-    return acceptDisk(info.source, info.revision);
+    return acceptDisk(info.source, info.revision, { arrangement });
   }
 
   function onExternalChange(source: string, revision: string) {

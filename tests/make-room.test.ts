@@ -1,0 +1,260 @@
+/**
+ * Making room (`dsl/dilate.ts`, `dsl/make-room.ts`): opening a card warps the drawing instead of
+ * laying it out again. Property tests over seeded random drawings, compiled for real:
+ *
+ * - relaxation off: every point outside the opened box moves by its cut's translation or not at
+ *   all, on each axis, and no route is recomputed;
+ * - relaxation on: no box moves more than the cap from where the warp put it, and the same open
+ *   set draws the same geometry whatever order its containers were opened in.
+ */
+import { describe, expect, it } from 'vitest';
+import { compile } from '../src/dsl/compile';
+import { dilate, type Cut, type WarpBox } from '../src/dsl/dilate';
+import { makeRoom, relaxRoom, type RoomDrawing } from '../src/dsl/make-room';
+import { projectScene, visibleRects } from '../src/dsl/project';
+import { computeRoutes } from '../src/model/routes';
+import type { Point, Rect } from '../src/model/types';
+
+/** A small seeded generator, so a failure names the seed that made it. */
+function random(seed: number) {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+async function drawn(source: string): Promise<RoomDrawing> {
+  const doc = projectScene(await compile(source)),
+    { vg, rects } = visibleRects(doc),
+    { result } = computeRoutes(doc, vg, rects, { previous: [] });
+  return { doc, routes: result };
+}
+
+/**
+ * A random flat drawing of `n` nodes and some flows, in which each of `cards` is a card at rest
+ * and, opened, a container of its own few parts. A flow into a card lands on one of its parts once
+ * it is open.
+ */
+function world(seed: number) {
+  const next = random(seed),
+    n = 5 + Math.floor(next() * 6),
+    ids = Array.from({ length: n }, (_, i) => `n${i}`),
+    cards = [ids[Math.floor(next() * n)]!],
+    second = ids[Math.floor(next() * n)]!;
+  if (second !== cards[0]) cards.push(second);
+  const parts = new Map(cards.map(c => [c, 1 + Math.floor(next() * 3)]));
+  const flows: Array<[string, string]> = [];
+  for (let i = 1; i < n; i++) flows.push([ids[Math.floor(next() * i)]!, ids[i]!]);
+  for (let i = 0; i < n / 2; i++) {
+    const a = ids[Math.floor(next() * n)]!,
+      b = ids[Math.floor(next() * n)]!;
+    if (a !== b && !flows.some(([x, y]) => x === a && y === b)) flows.push([a, b]);
+  }
+  const direction = next() < 0.5 ? 'right' : 'down';
+  const source = (open: ReadonlySet<string>) => {
+    const lines = [`layout root flow direction=${direction}`];
+    for (const id of ids) {
+      if (!open.has(id)) {
+        lines.push(`node ${id} "Node ${id}"`);
+        continue;
+      }
+      lines.push(`group ${id} "Opened ${id}"`);
+      const k = parts.get(id)!;
+      for (let j = 0; j < k; j++) lines.push(`node ${id}.p${j} "Part ${j}" in=${id}`);
+      for (let j = 1; j < k; j++) lines.push(`edge ${id}.f${j} ${id}.p${j - 1} -> ${id}.p${j}`);
+    }
+    const end = (id: string) => (open.has(id) ? `${id}.p0` : id);
+    flows.forEach(([a, b], i) => lines.push(`edge e${i} ${end(a)} -> ${end(b)}`));
+    return lines.join('\n') + '\n';
+  };
+  return { cards, source };
+}
+
+const close = (a: number, b: number) => Math.abs(a - b) < 0.01;
+const moves = (was: number, now: number, deltas: number[]) => deltas.some(d => close(now - was, d));
+
+/** The translations a cut set can give one coordinate: none, or any of its cuts' signed deltas. */
+function translations(cuts: Array<Cut & { frame: string }>, axis: 'x' | 'y') {
+  const own = cuts.filter(c => c.axis === axis && c.frame === 'root');
+  const signed = own.map(c => c.dir * c.delta),
+    sums = new Set([0]);
+  for (const d of signed) for (const s of [...sums]) sums.add(s + d);
+  return [...sums];
+}
+
+describe('dilate, the warp itself', () => {
+  const boxes: WarpBox[] = [
+    { id: 'a', parent: 'root', x: 0, y: 0, w: 100, h: 50 },
+    { id: 'card', parent: 'root', x: 150, y: 0, w: 100, h: 50 },
+    { id: 'b', parent: 'root', x: 300, y: 0, w: 100, h: 50 },
+    { id: 'c', parent: 'root', x: 300, y: 100, w: 100, h: 50 },
+  ];
+
+  it('grows toward the emptier side, and moves nothing that side has none of', () => {
+    // One box left of the card, two right: the card grows left and pushes only `a`.
+    const out = dilate(boxes, [{ id: 'card', w: 300, h: 50 }]);
+    expect(out.rects.get('card')).toEqual({ x: -50, y: 0, w: 300, h: 50 });
+    expect(out.rects.get('a')).toEqual({ x: -200, y: 0, w: 100, h: 50 });
+    expect(out.rects.get('b')).toEqual({ x: 300, y: 0, w: 100, h: 50 });
+    expect(out.rects.get('c')).toEqual({ x: 300, y: 100, w: 100, h: 50 });
+  });
+
+  it('an end on the opened card follows the edge it stood on', () => {
+    const out = dilate(boxes, [{ id: 'card', w: 100, h: 200 }]);
+    const card = out.rects.get('card')!;
+    expect(out.point({ x: 150, y: 25 })).toEqual({ x: card.x, y: card.y + 25 });
+    expect(out.point({ x: 200, y: 50 })).toEqual({ x: card.x + 50, y: card.y + card.h });
+  });
+
+  it('a nested opening grows its container, which opens one level out, bottom up', () => {
+    const nested: WarpBox[] = [
+      { id: 'g', parent: 'root', x: 0, y: 0, w: 300, h: 200 },
+      { id: 'in', parent: 'g', x: 24, y: 48, w: 100, h: 50 },
+      { id: 'side', parent: 'g', x: 24, y: 120, w: 100, h: 50 },
+      { id: 'out', parent: 'root', x: 400, y: 0, w: 100, h: 50 },
+    ];
+    const out = dilate(nested, [{ id: 'in', w: 400, h: 50 }]);
+    const g = out.rects.get('g')!;
+    // Inside g the part grows right, and g with it; at the root g has `out` beyond it and nothing
+    // before it, so it grows left, and `out` holds still.
+    expect(g).toEqual({ x: -300, y: 0, w: 600, h: 200 });
+    expect(out.rects.get('in')).toEqual({ x: -276, y: 48, w: 400, h: 50 });
+    expect(out.rects.get('side')).toEqual({ x: -276, y: 120, w: 100, h: 50 });
+    expect(out.rects.get('out')).toEqual({ x: 400, y: 0, w: 100, h: 50 });
+    expect(out.cuts.map(c => c.scope).sort()).toEqual(['g', 'g', 'root', 'root']);
+  });
+
+  it('is the same whatever order the openings are listed in', () => {
+    const two = [
+      { id: 'a', w: 220, h: 90 },
+      { id: 'c', w: 150, h: 260 },
+    ];
+    const one = dilate(boxes, two),
+      other = dilate(boxes, [...two].reverse());
+    expect([...other.rects]).toEqual([...one.rects]);
+  });
+});
+
+describe('makeRoom, relaxation off', () => {
+  const seeds = Array.from({ length: 24 }, (_, i) => 1000 + i * 7919);
+
+  it.each(seeds)(
+    'seed %i: outside the opened box, everything moves by a cut or not at all',
+    async seed => {
+      const { cards, source } = world(seed),
+        card = cards[0]!,
+        rest = await drawn(source(new Set())),
+        open = await drawn(source(new Set([card])));
+      const made = makeRoom(rest, new Map([[card, open]]), open.doc);
+      expect(made.rerouted).toEqual([]);
+      const xs = translations(made.cuts, 'x'),
+        ys = translations(made.cuts, 'y'),
+        before = visibleRects(rest.doc).rects,
+        after = visibleRects(made.doc).rects,
+        opened = after.get(card)!;
+      for (const [id, was] of before) {
+        if (id === card) continue;
+        const now = after.get(id)!;
+        expect(moves(was.x, now.x, xs), `${id} x`).toBe(true);
+        expect(moves(was.y, now.y, ys), `${id} y`).toBe(true);
+        expect(moves(was.x + was.w, now.x + now.w, xs), `${id} right`).toBe(true);
+        expect(moves(was.y + was.h, now.y + now.h, ys), `${id} bottom`).toBe(true);
+      }
+      // Routes between boxes that stayed outside keep every point, each moved by a cut or not at all.
+      const restRoutes = new Map(rest.routes.routes.map(r => [r.id, r]));
+      for (const r of made.routes.routes) {
+        const was = restRoutes.get(r.id);
+        if (!was) continue;
+        const outside = (p: Point, box: Rect) =>
+          p.x < box.x || p.x > box.x + box.w || p.y < box.y || p.y > box.y + box.h;
+        const touches =
+          r.from.startsWith(`${card}.`) ||
+          r.to.startsWith(`${card}.`) ||
+          r.from === card ||
+          r.to === card;
+        if (!touches) expect(r.points.length, `${r.id} kept its bends`).toBe(was.points.length);
+        const kept = touches ? r.points.filter(p => outside(p, opened)) : r.points;
+        for (const p of kept) {
+          const source_ = touches ? undefined : was.points[r.points.indexOf(p)];
+          if (!source_) continue;
+          expect(moves(source_.x, p.x, xs), `${r.id} point x`).toBe(true);
+          expect(moves(source_.y, p.y, ys), `${r.id} point y`).toBe(true);
+        }
+      }
+    },
+  );
+
+  it.each(seeds.slice(0, 8))(
+    'seed %i: the opened box holds its content, and nothing overlaps it',
+    async seed => {
+      const { cards, source } = world(seed),
+        card = cards[0]!,
+        rest = await drawn(source(new Set())),
+        open = await drawn(source(new Set([card])));
+      const made = makeRoom(rest, new Map([[card, open]]), open.doc);
+      const after = visibleRects(made.doc).rects,
+        frame = after.get(card)!,
+        own = visibleRects(open.doc).rects.get(card)!;
+      expect({ w: frame.w, h: frame.h }).toEqual({ w: own.w, h: own.h });
+      for (const [id, r] of after) {
+        if (id === card) continue;
+        const mine = id.startsWith(`${card}.`);
+        const overlaps =
+          r.x < frame.x + frame.w &&
+          r.x + r.w > frame.x &&
+          r.y < frame.y + frame.h &&
+          r.y + r.h > frame.y;
+        if (mine)
+          expect(r.x >= frame.x && r.x + r.w <= frame.x + frame.w, `${id} inside`).toBe(true);
+        else expect(overlaps, `${id} clear of the opened box`).toBe(false);
+      }
+    },
+  );
+});
+
+describe('makeRoom, relaxation on', () => {
+  const seeds = Array.from({ length: 6 }, (_, i) => 77 + i * 104729);
+
+  it.each(seeds)(
+    'seed %i: capped, and the same in any order of opening',
+    async seed => {
+      const { cards, source } = world(seed),
+        all = new Set(cards),
+        rest = await drawn(source(new Set())),
+        final = await drawn(source(all)),
+        // Each card's own drawing: it open, the other still closed.
+        own = new Map(
+          await Promise.all(cards.map(async c => [c, await drawn(source(new Set([c])))] as const)),
+        );
+      const forward = makeRoom(rest, new Map(cards.map(c => [c, own.get(c)!])), final.doc),
+        backward = makeRoom(
+          rest,
+          new Map([...cards].reverse().map(c => [c, own.get(c)!])),
+          final.doc,
+        );
+      const rects = (doc: RoomDrawing['doc']) =>
+        [...visibleRects(doc).rects].sort(([a], [b]) => (a < b ? -1 : 1));
+      expect(rects(backward.doc)).toEqual(rects(forward.doc));
+
+      const cap = 40,
+        fixed = cards,
+        one = await relaxRoom(forward, { fixed, maxMove: cap }),
+        other = await relaxRoom(backward, { fixed, maxMove: cap });
+      expect(rects(other.doc)).toEqual(rects(one.doc));
+      expect(other.routes.routes.map(r => r.points)).toEqual(one.routes.routes.map(r => r.points));
+      const warped = visibleRects(forward.doc).rects;
+      for (const [id, r] of visibleRects(one.doc).rects) {
+        const was = warped.get(id)!;
+        expect(Math.hypot(r.x - was.x, r.y - was.y), `${id} within the cap`).toBeLessThanOrEqual(
+          cap + 0.01,
+        );
+        if (fixed.includes(id)) expect(r).toEqual(was);
+      }
+    },
+    60_000,
+  );
+});

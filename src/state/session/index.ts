@@ -32,7 +32,7 @@ export type { ViewItem, ViewItemKind } from './view';
 export type { DragTranslation, NewIdRequest } from '../../dsl/translate';
 export type { SourceOperation } from '../../dsl/operations';
 export type { HistoryHandler } from './document';
-export type { SessionEdit } from './file-session';
+export type { HostArrangement, SessionEdit } from './file-session';
 export type { PanelSide } from '../../model/panels';
 export { LEGIBLE_ZOOM, type CameraMover, type FitOptions, type RevealOptions } from './camera';
 

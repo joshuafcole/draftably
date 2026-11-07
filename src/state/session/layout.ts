@@ -11,9 +11,17 @@ import { normalize } from '../../model/document';
 import { clamp, clone } from '../../model/geometry';
 import { findGroup, selectionRoots } from '../../model/graph';
 import { layoutShape, type LayoutShape, type ShapeChange } from '../../dsl/layout-edits';
-import type { Diagram, LayoutAlgorithmId, NodeGeometry, RoutingSettings } from '../../model/types';
+import type {
+  Diagram,
+  LayoutAlgorithmId,
+  NodeGeometry,
+  Point,
+  RoutingSettings,
+} from '../../model/types';
+import type { Route } from '../../engines/routing-engine.js';
+import { unwrap } from 'solid-js/store';
 import { CancelledError, startEngineTask, type RunningTask } from '../../lib/engine-tasks';
-import { sourceScope, UnstorableLayout } from './file-session';
+import { type HostArrangement, sourceScope, UnstorableLayout } from './file-session';
 import { toast } from '../toast';
 import type { DocumentPart } from './document';
 import type { FileSessionPart } from './file-session';
@@ -459,6 +467,125 @@ export function createLayout(s: DocumentPart & FileSessionPart & EditorPart & Sc
     });
   }
 
+  /** How long a host-arranged change glides, and its curve: the editor's own expand motion. */
+  const GLIDE_MS = 200;
+
+  /**
+   * Show a source the host placed itself (`HostArrangement`, made by `makeRoom`), gliding from the
+   * drawing on screen: every shape eases to its new rectangle and every line that keeps its bends
+   * eases point by point with them, so nothing is routed while it moves. A shape that is new rides
+   * with its nearest container that was already drawn and fades in. With reduced motion, or on a
+   * hidden page, the new drawing is shown at once; the places are the same either way.
+   */
+  async function receiveArranged(
+    source: string,
+    arrangement: HostArrangement,
+    { motion = true }: { motion?: boolean } = {},
+  ): Promise<{ settled: Promise<void> }> {
+    const from = clone(unwrap(s.doc.layout.nodes)),
+      fromRoutes = new Map(s.routing().result.routes.map(r => [r.id, clone(r)]));
+    await s.receiveSource(source, { arrangement });
+    if (!motion || s.reducedMotion() || document.hidden) return { settled: Promise.resolve() };
+    // Resolves once the source is drawn; `settled` once the glide has ended.
+    return { settled: glide(from, fromRoutes, arrangement) };
+  }
+
+  function glide(
+    from: NodeGeometry,
+    fromRoutes: Map<string, Route>,
+    arrangement: HostArrangement,
+  ): Promise<void> {
+    const to = clone(unwrap(s.doc.layout.nodes)),
+      parentOf = new Map(
+        [...s.doc.graph.nodes, ...s.doc.graph.groups].map(o => [o.id, o.parentId] as const),
+      ),
+      startRevision = s.revision(),
+      fresh = Object.keys(to).filter(id => !from[id]);
+    /** The nearest container above `id` that was drawn before, which a new shape rides with. */
+    const carrier = (id: string) => {
+      for (let p = parentOf.get(id); p; p = parentOf.get(p)) if (from[p]) return p;
+      return undefined;
+    };
+    const lerp = (a: number, b: number, k: number) => a + (b - a) * k;
+    const point = (a: Point, b: Point, k: number) => ({
+      x: lerp(a.x, b.x, k),
+      y: lerp(a.y, b.y, k),
+    });
+    fadeIn(fresh);
+    return new Promise(resolve => {
+      const start = performance.now();
+      const frame = (now: number) => {
+        if (s.revision() !== startRevision) {
+          batch(() => {
+            s.setAnimationGeometry(null);
+            s.setAnimationRoutes(null);
+          });
+          resolve();
+          return;
+        }
+        const t = clamp((now - start) / GLIDE_MS, 0, 1),
+          k = 1 - (1 - t) ** 3,
+          nodes: NodeGeometry = {};
+        for (const [id, p] of Object.entries(to)) {
+          const old = from[id];
+          if (old) {
+            nodes[id] = {
+              ...p,
+              x: lerp(old.x, p.x, k),
+              y: lerp(old.y, p.y, k),
+              w: lerp(old.w, p.w, k),
+              h: lerp(old.h, p.h, k),
+            };
+            continue;
+          }
+          const c = carrier(id),
+            was = c ? from[c] : undefined,
+            now_ = c ? to[c] : undefined;
+          nodes[id] =
+            was && now_
+              ? {
+                  ...p,
+                  x: p.x + lerp(was.x, now_.x, k) - now_.x,
+                  y: p.y + lerp(was.y, now_.y, k) - now_.y,
+                }
+              : p;
+        }
+        const routes = arrangement.routes.routes.map(r => {
+          const old = fromRoutes.get(r.id);
+          return old && old.points.length === r.points.length
+            ? { ...r, points: r.points.map((p, i) => point(old.points[i], p, k)) }
+            : r;
+        });
+        batch(() => {
+          s.setAnimationGeometry(t < 1 ? nodes : null);
+          s.setAnimationRoutes(t < 1 ? { ...arrangement.routes, routes } : null);
+        });
+        if (t < 1) requestAnimationFrame(frame);
+        else resolve();
+      };
+      requestAnimationFrame(frame);
+    });
+  }
+
+  /** Fade in what a change reveals: new shapes, and the lines that reach them. */
+  function fadeIn(ids: string[]) {
+    const svg = s.canvasElement(),
+      fresh = new Set(ids);
+    if (!svg || !fresh.size) return;
+    requestAnimationFrame(() => {
+      for (const el of svg.querySelectorAll<SVGGElement>('g[data-kind][data-id]')) {
+        const id = el.dataset.id!,
+          edge = s.doc.graph.edges.find(e => e.id === id);
+        if (edge ? fresh.has(edge.from) || fresh.has(edge.to) : fresh.has(id))
+          el.animate([{ opacity: 0 }, { opacity: 1 }], {
+            duration: GLIDE_MS,
+            easing: 'cubic-bezier(0.2, 0, 0, 1)',
+            delay: 60,
+          });
+      }
+    });
+  }
+
   function acceptPreview() {
     const p = state.preview();
     if (!p) return;
@@ -550,6 +677,7 @@ export function createLayout(s: DocumentPart & FileSessionPart & EditorPart & Sc
     captureCheckpoint,
     setDocumentOpener,
     restoreCheckpoint,
+    receiveArranged,
   };
 }
 

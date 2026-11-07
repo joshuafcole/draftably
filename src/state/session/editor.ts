@@ -2,7 +2,7 @@
  * Interaction state that is never saved: the active tool, temporary geometry, drag feedback,
  * and the canvas camera helpers.
  */
-import { createSignal } from 'solid-js';
+import { createSignal, onCleanup } from 'solid-js';
 import { clamp, rectUnion } from '../../model/geometry';
 import { findNode, objectRect } from '../../model/graph';
 import type { NodeGeometry, Point, PortSide, Rect } from '../../model/types';
@@ -52,9 +52,16 @@ export function createEditor(s: DocumentPart & ScenePart & EmphasisPart) {
     const [inlineEditId, setInlineEditId] = createSignal<string | null>(null);
     const [spaceHeld, setSpaceHeld] = createSignal(false);
     const [stageSize, setStageSize] = createSignal({ width: 1, height: 1 });
-    const [reducedMotion, setReducedMotion] = createSignal(
-      matchMedia('(prefers-reduced-motion: reduce)').matches,
-    );
+    const motion =
+      typeof matchMedia === 'function' ? matchMedia('(prefers-reduced-motion: reduce)') : null;
+    const [reducedMotion, setReducedMotion] = createSignal(motion?.matches ?? false);
+    // Every session follows the reader's setting as it changes, not only the app's: a host that
+    // embeds a session gets the same motion rule.
+    if (motion?.addEventListener && motion.removeEventListener) {
+      const follow = (e: MediaQueryListEvent) => setReducedMotion(e.matches);
+      motion.addEventListener('change', follow);
+      onCleanup(() => motion.removeEventListener('change', follow));
+    }
     return {
       tool,
       setTool,

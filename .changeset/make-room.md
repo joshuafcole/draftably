@@ -1,0 +1,5 @@
+---
+'draftably': minor
+---
+
+Make room for a container that opens without laying the drawing out again, as an option beside the default relayout. `dilate` warps a drawing: one signed cut per axis at the opened box's edge, growing toward the emptier side; everything beyond it translates by the shortfall, boxes spanning it widen, routes warp point by point, bottom up per container. `makeRoom` applies it to documents: the drawing at rest, a drawing per opened container with its own content laid out, and the document to draw; it keeps every route's course, joining a route that now ends inside an opened container to that container's own course just inside its frame. `relaxRoom` optionally follows it with a warm-started local tidy that holds the given objects and moves nothing further than `maxMove` from the warp. A session shows a host's arrangement with `receiveSource(text, { arrangement })` or `openSource(text, onChange, { arrangement })`, and glides to one with `receiveArranged`, easing shapes and lines point by point and fading in what opened. Every session now follows a change to `prefers-reduced-motion` while it is open, not only the app's.

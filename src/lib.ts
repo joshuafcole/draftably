@@ -43,6 +43,28 @@ export {
   type ViewState,
 } from './dsl/project';
 
+// Make room for containers that open by warping the drawing instead of laying it out again, and
+// optionally smooth what the warp leaves with a bounded local tidy.
+export {
+  dilate,
+  warpRoutes,
+  type Cut,
+  type DilateOptions,
+  type Dilation,
+  type Opening,
+  type WarpBox,
+} from './dsl/dilate';
+export {
+  CannotMakeRoom,
+  makeRoom,
+  relaxRoom,
+  RELAX_MAX_MOVE,
+  type MadeRoom,
+  type RelaxOptions,
+  type RoomDrawing,
+} from './dsl/make-room';
+export type { Route, RoutingResult } from './engines/routing-engine.js';
+
 // Route a projected document, and the drawing conflicts `check` reports.
 export { computeRoutes, type DrawnRoute, type SceneRoutes } from './model/routes';
 export { sceneConflicts } from './dsl/conflicts';

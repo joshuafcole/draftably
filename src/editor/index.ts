@@ -13,6 +13,7 @@ export {
   type DiagramSession,
   type DragTranslation,
   type HistoryHandler,
+  type HostArrangement,
   type NewIdRequest,
   type SessionEdit,
   type SourceOperation,

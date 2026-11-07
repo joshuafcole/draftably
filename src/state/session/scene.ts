@@ -39,6 +39,11 @@ export function createScene(s: DocumentPart & FileSessionPart) {
     const [quickRouting, setQuickRouting] = createSignal(false);
     /** Earlier routes that a timeline should keep stable while it scrubs. */
     const [routePrior, setRoutePrior] = createSignal<PriorRoute[] | null>(null);
+    /**
+     * Routes drawn as they are while shapes glide (`animationGeometry`): a host-arranged change
+     * moves its lines point by point with its shapes instead of routing each frame.
+     */
+    const [animationRoutes, setAnimationRoutes] = createSignal<RoutingResult | null>(null);
     /** Routes already computed for a document (e.g. by a comparison candidate) to show as-is. */
     const [adoptedRoutes, setAdoptedRoutes] = createSignal<{
       fingerprint: string;
@@ -118,7 +123,9 @@ export function createScene(s: DocumentPart & FileSessionPart) {
       epoch();
       const vg = visible(),
         map = rects(),
-        quick = quickRouting(),
+        gliding = animationRoutes();
+      if (gliding) return { result: gliding, routes: drawRoutes(s.doc, vg, map, gliding) };
+      const quick = quickRouting(),
         temporary = !!sculptGeometry() || !!animationGeometry();
       const adopted = adoptedRoutes(),
         fingerprint = routingFingerprint(s.doc),
@@ -179,6 +186,8 @@ export function createScene(s: DocumentPart & FileSessionPart) {
       routePrior,
       setRoutePrior,
       setAdoptedRoutes,
+      animationRoutes,
+      setAnimationRoutes,
       geometry,
       visible,
       nodeIds,
@@ -208,6 +217,8 @@ export function createScene(s: DocumentPart & FileSessionPart) {
     routePrior,
     setRoutePrior,
     setAdoptedRoutes,
+    animationRoutes,
+    setAnimationRoutes,
     geometry,
     visible: visibleScene,
     nodeIds,
@@ -245,6 +256,8 @@ export function createScene(s: DocumentPart & FileSessionPart) {
     routePrior,
     setRoutePrior,
     setAdoptedRoutes,
+    animationRoutes,
+    setAnimationRoutes,
     geometry,
     visibleScene,
     nodeIds,
