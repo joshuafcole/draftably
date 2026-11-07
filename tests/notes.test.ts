@@ -253,3 +253,30 @@ describe('notes per state', () => {
     );
   });
 });
+
+describe('note leaders', () => {
+  it('draws a line across the gap from the note to its object, only when asked', () => {
+    const scene = checkSource(SOURCE + 'note "Billed monthly." near=seat leader=on\n'),
+      doc = projectScene(scene),
+      { rects } = visibleRects(doc),
+      [n] = placeNotes(doc, scene.look, rects, []),
+      seat = rects.get('seat')!;
+    // Below the seat: from the note's top edge up to the seat's bottom edge, inside both spans.
+    expect(n.leader!.y1).toBe(n.rect.y);
+    expect(n.leader!.y2).toBe(seat.y + seat.h);
+    expect(n.leader!.x1).toBe(n.leader!.x2);
+    expect(n.leader!.x1).toBeGreaterThanOrEqual(Math.max(seat.x, n.rect.x));
+    expect(n.leader!.x1).toBeLessThanOrEqual(Math.min(seat.x + seat.w, n.rect.x + n.rect.w));
+    expect(renderSvg(doc)).toContain('class="note-leader"');
+    expect(renderSvg(projectScene(checkSource(SOURCE + 'note "x" near=seat\n')))).not.toContain(
+      'note-leader',
+    );
+  });
+
+  it('needs near=, and goes when the object does', () => {
+    expect(() => checkSource(SOURCE + 'note "x" leader=on\n')).toThrow(/leader= points/);
+    const src = readSource(SOURCE + 'note "x" near=seat side=right leader=on\n');
+    removeReferences(src, 'seat');
+    expect(printSource(src)).toContain('note "x"\n');
+  });
+});

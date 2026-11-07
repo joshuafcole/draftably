@@ -518,6 +518,7 @@ export function normalizeAppearance(input: Raw): DiagramAppearance {
         ...(Array.isArray(n.states)
           ? { states: n.states.filter((x: unknown) => typeof x === 'string') }
           : {}),
+        ...(n.leader === true ? { leader: true } : {}),
       });
   if (notes.length) out.notes = notes;
   const footnotes: Footnote[] = [];

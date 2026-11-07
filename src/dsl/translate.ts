@@ -179,6 +179,7 @@ export function translateEdit(input: EditInput): EditResult {
     st.args[st.args.length - 1] = quoted(n.text);
     setAttr(st, 'near', n.near ? bare(n.near) : undefined);
     setAttr(st, 'side', n.near && n.side ? bare(n.side) : undefined);
+    if (!n.near) setAttr(st, 'leader', undefined);
   });
   writeRows(
     source,

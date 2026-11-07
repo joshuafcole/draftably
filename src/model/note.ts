@@ -25,6 +25,8 @@ export interface Note {
   width?: number;
   /** The emphasis states the note shows in, from `states=`; every drawing when unset. */
   states?: string[];
+  /** Draw a short line from the note to the object it is near, from `leader=on`. */
+  leader?: boolean;
 }
 
 /**
@@ -41,6 +43,8 @@ export interface PlacedNote {
   inFrame?: boolean;
   overlaps?: boolean;
   hidden?: boolean;
+  /** With `leader=on`: the line from the note's edge to its object's, across the gap between. */
+  leader?: { x1: number; y1: number; x2: number; y2: number };
 }
 
 /**
@@ -200,9 +204,15 @@ export function placeNotes(
         return { x: Math.round(x), y: Math.round(y), w, h };
       }),
     );
-    const spot = spots.find(clear);
-    placed.push(spot ?? spots[0]);
-    return { ...box, rect: spot ?? spots[0], ...(spot ? {} : { overlaps: true }) };
+    const spot = spots.find(clear),
+      rect = spot ?? spots[0];
+    placed.push(rect);
+    return {
+      ...box,
+      rect,
+      ...(spot ? {} : { overlaps: true }),
+      ...(note.leader ? { leader: leaderLine(rect, at, side) } : {}),
+    };
   };
   const notes = doc.appearance.notes ?? [],
     out: PlacedNote[] = notes.map(note => ({
@@ -219,8 +229,32 @@ export function placeNotes(
 }
 
 /**
+ * A leader across the gap between a note on `side` of `at` and `at` itself: straight, level with
+ * the middle of the stretch where the two face each other, or of the object when they don't.
+ */
+function leaderLine(note: Rect, at: Rect, side: NoteSide) {
+  const across = side === 'below' || side === 'above',
+    mid = (a0: number, a1: number, b0: number, b1: number) => {
+      const lo = Math.max(a0, b0),
+        hi = Math.min(a1, b1);
+      return Math.round(lo <= hi ? (lo + hi) / 2 : (b0 + b1) / 2);
+    };
+  if (across) {
+    const x = mid(note.x, note.x + note.w, at.x, at.x + at.w);
+    return side === 'below'
+      ? { x1: x, y1: note.y, x2: x, y2: at.y + at.h }
+      : { x1: x, y1: note.y + note.h, x2: x, y2: at.y };
+  }
+  const y = mid(note.y, note.y + note.h, at.y, at.y + at.h);
+  return side === 'right'
+    ? { x1: note.x, y1: y, x2: at.x + at.w, y2: y }
+    : { x1: note.x + note.w, y1: y, x2: at.x, y2: y };
+}
+
+/**
  * SVG markup for placed notes: a quiet panel with a bar on its left edge, then the text. Links
- * are `<a>` elements with `href` as `write` gives it. A note with an ID carries it as `data-note`.
+ * are `<a>` elements with `href` as `write` gives it. A note with an ID carries it as `data-note`,
+ * and one with a leader draws it first, under the panel.
  */
 export function noteMarkup(
   look: ResolvedAppearance,
@@ -232,7 +266,7 @@ export function noteMarkup(
     link = swatchFor(look, 'primary', 700).fill;
   return notes
     .filter(n => !n.hidden)
-    .map(({ note, rect: r, lines }) => {
+    .map(({ note, rect: r, lines, leader: l }) => {
       const text = lines
         .map(
           (line, i) =>
@@ -241,6 +275,9 @@ export function noteMarkup(
         .join('');
       return (
         `<g class="diagram-note"${note.id ? ` data-note="${esc(note.id)}"` : ''}>` +
+        (l
+          ? `<line class="note-leader" x1="${l.x1}" y1="${l.y1}" x2="${l.x2}" y2="${l.y2}" stroke="${look.muted}" stroke-width="1"/>`
+          : '') +
         `<rect x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" rx="4" fill="${panel.fill}"/>` +
         `<rect x="${r.x}" y="${r.y}" width="3" height="${r.h}" rx="1.5" fill="${look.muted}"/>` +
         text +

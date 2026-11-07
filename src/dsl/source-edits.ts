@@ -132,6 +132,7 @@ function unanchorNotes(doc: SourceDoc, id: string) {
     if (s.command === 'note' && getAttr(s, 'near')?.value === id) {
       setAttr(s, 'near', undefined);
       setAttr(s, 'side', undefined);
+      setAttr(s, 'leader', undefined);
     }
 }
 

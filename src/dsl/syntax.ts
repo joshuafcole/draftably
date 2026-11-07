@@ -1001,11 +1001,12 @@ export function parseModel(source: string | SourceDoc): Model {
       case 'note': {
         // `note "text"`, or `note id "text"` with an ID a host or tool can address it by.
         count(1, 2);
-        allow(['near', 'side', 'width', 'states']);
+        allow(['near', 'side', 'width', 'states', 'leader']);
         const body = args[args.length - 1],
           nid = args.length === 2 ? id(args[0]) : undefined;
         assert(body.quoted && body.value.trim(), 'A note needs its text in quotes.');
         assert(attrs.has('near') || !attrs.has('side'), 'side= places a note beside near=<id>.');
+        assert(attrs.has('near') || !attrs.has('leader'), 'leader= points a note at near=<id>.');
         if (nid) once(`note ${nid}`);
         (m.appearance.notes ??= []).push({
           ...(nid ? { id: nid } : {}),
@@ -1014,6 +1015,9 @@ export function parseModel(source: string | SourceDoc): Model {
           ...(attrs.has('side') ? { side: choice('side', 'below', NOTE_SIDES) } : {}),
           ...(attrs.has('width') ? { width: num('width', NOTE_WIDTH, 80, 1200) } : {}),
           ...(attrs.has('states') ? { states: idList('states') } : {}),
+          ...(attrs.has('leader') && choice('leader', 'off', ['on', 'off'] as const) === 'on'
+            ? { leader: true }
+            : {}),
         });
         m.noteLines.push(line);
         break;
