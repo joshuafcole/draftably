@@ -10,6 +10,7 @@ import type { AppearanceLayer } from '../../model/appearance';
 import { describeLink } from '../links';
 import { createActions } from './actions';
 import { createHostAppearance } from './appearance';
+import { createCamera, type CameraMover } from './camera';
 import { createCanvasText } from './canvas-text';
 import { createDocument } from './document';
 import { createEditor } from './editor';
@@ -21,8 +22,10 @@ import { createRouting } from './routing';
 import { createScene } from './scene';
 import { createSculpt } from './sculpt';
 import { createView, type ViewItem } from './view';
+import type { Camera } from '../../model/types';
 
 export type { ViewItem, ViewItemKind } from './view';
+export { LEGIBLE_ZOOM, type CameraMover, type FitOptions, type RevealOptions } from './camera';
 
 export interface ConfirmRequest {
   title: string;
@@ -58,6 +61,12 @@ export interface SessionOptions {
   /** In a read-only session, the user opened an object: a double click, or Enter on it. */
   onActivate?: (item: ViewItem) => void;
   /**
+   * The camera moved: `by: 'host'` when the host moved it (`moveCamera`, `fitTo`, `reveal`),
+   * `'user'` for everything else, the editor's own fits included. A call that leaves the camera
+   * where it was reports nothing.
+   */
+  onCamera?: (camera: Camera, by: CameraMover) => void;
+  /**
    * The host's paint over the diagram: canvas, text, lines, default surfaces and color shades,
    * and whether its canvas is dark. Separate from the editor's own light or dark mode, and never
    * written to the source. `setAppearance` changes it later.
@@ -79,7 +88,8 @@ export function createDiagramSession(options: SessionOptions = {}) {
     const s8 = Object.assign(s7, createRouting(s7));
     const s9 = Object.assign(s8, createSculpt(s8));
     const s10 = Object.assign(s9, createView(s9));
-    const s11 = Object.assign(s10, createPointer(s10));
+    const s10a = Object.assign(s10, createCamera(s10));
+    const s11 = Object.assign(s10a, createPointer(s10a));
     // Asked by the scene's link marks, which reach the session only through context.
     return Object.assign(s11, {
       /** What opening `href` does, for a link mark's label. */

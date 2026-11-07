@@ -12,6 +12,7 @@ import type { Camera, Diagram } from '../../model/types';
 import { toast } from '../toast';
 import type { CanvasTextPart } from './canvas-text';
 import type { SessionOptions } from '.';
+import type { CameraMover } from './camera';
 
 const LEGACY_KEYS = ['diagram-studio-v4', 'diagram-studio-v3', 'diagram-studio-v2'];
 const HISTORY_LIMIT = 80;
@@ -251,9 +252,16 @@ export function createDocument(s: CanvasTextPart, options: SessionOptions) {
 
   // --- Camera ----------------------------------------------------------------------------------
 
-  function setCamera(camera: Camera) {
+  /**
+   * Move the camera. `by` says who moved it, for `SessionOptions.onCamera`: the host through the
+   * camera part, or the user (and the editor's own fits for them) through everything else.
+   */
+  function setCamera(camera: Camera, by: CameraMover = 'user') {
+    const c = state.doc.camera;
+    if (c.x === camera.x && c.y === camera.y && c.k === camera.k) return;
     state.setDoc('camera', camera);
     persist();
+    options.onCamera?.({ ...camera }, by);
   }
 
   // --- Persistence -----------------------------------------------------------------------------
