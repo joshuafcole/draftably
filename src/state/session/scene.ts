@@ -241,7 +241,7 @@ export function createScene(s: DocumentPart & FileSessionPart) {
   }
 
   /** The frame the viewer draws round the drawing, which the editor's exports draw as well. */
-  function viewerFrame() {
+  const viewerFrame = createMemo(() => {
     const look = resolveAppearance(s.doc.appearance);
     return diagramFrame(
       look,
@@ -252,7 +252,7 @@ export function createScene(s: DocumentPart & FileSessionPart) {
       placeNotes(s.doc, look, sceneRects(), routes()),
       s.doc.appearance.footnotes,
     );
-  }
+  });
   return {
     sculptGeometry,
     setSculptGeometry,
