@@ -24,7 +24,7 @@ import {
 import { FONT_ROLES, type FontRole } from '../model/fonts';
 import { MARKERS, type EndMarker } from '../model/markers';
 import { EDITORS } from '../model/link';
-import { NOTE_SIDES, NOTE_WIDTH } from '../model/note';
+import { NO_STATE, NOTE_SIDES, NOTE_WIDTH } from '../model/note';
 import type { Status } from '../model/status';
 import type {
   ColorKey,
@@ -693,6 +693,10 @@ export function parseModel(source: string | SourceDoc): Model {
           label = args[1]?.quoted ? args[1].value : undefined,
           ids = args.slice(label === undefined ? 1 : 2).map(w => id(w)),
           states = (m.appearance.states ??= []);
+        assert(
+          sid !== NO_STATE,
+          `${NO_STATE} is kept for a note's states=, the drawing with no state; give the state another ID.`,
+        );
         let state = states.find(x => x.id === sid);
         // A long state continues on more lines with the same ID; its label comes from the first.
         if (!state) {
@@ -1316,7 +1320,11 @@ function validateReferences(m: Model) {
       m.noteLines[i],
     );
     for (const x of n.states ?? [])
-      assert(stateIds.has(x), `Unknown state ${x} in a note's states=.`, m.noteLines[i]);
+      assert(
+        x === NO_STATE || stateIds.has(x),
+        `Unknown state ${x} in a note's states=.`,
+        m.noteLines[i],
+      );
     if (!n.near || by.has(n.near)) return;
     if (!messageIds.has(n.near)) return exists(n.near, m.noteLines[i]);
     assert(

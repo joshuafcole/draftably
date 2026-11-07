@@ -8,7 +8,7 @@
  * `hintMoves` compares the drawing with the same file compiled without refinements, so `check
  * --hints` can say how far each refinement moved its target.
  */
-import { placeNotes } from '../model/note';
+import { NO_STATE, placeNotes } from '../model/note';
 import { covers, segments, segmentInside, shrink } from '../model/geometry';
 import { groupHeaderFor } from '../model/labels';
 import { groupTitleInk, labelBoxes, labelTextBoxes, titleLineBoxes } from '../model/label-hits';
@@ -308,7 +308,7 @@ function noteConflicts(
   routes: DrawnRoute[],
 ): Diagnostic[] {
   const notes = doc.appearance.notes ?? [],
-    states = [...new Set(notes.flatMap(n => n.states ?? []))],
+    states = [...new Set(notes.flatMap(n => n.states ?? []))].filter(x => x !== NO_STATE),
     overlapping = new Set<number>();
   for (const drawnState of [undefined, ...states])
     placeNotes({ ...doc, drawnState }, scene.look, rects, routes).forEach((n, i) => {

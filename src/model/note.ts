@@ -47,12 +47,15 @@ export interface PlacedNote {
   leader?: { x1: number; y1: number; x2: number; y2: number };
 }
 
+/** In a note's `states=`, the drawing with no state drawn; no state may take this ID. */
+export const NO_STATE = 'none';
+
 /**
  * Whether `note` shows in `doc` as drawn: always without `states=`, otherwise only while one of
- * the states it lists is drawn (`withState`).
+ * the states it lists is drawn (`withState`), or with no state drawn when it lists `none`.
  */
 export const noteShown = (doc: Pick<Diagram, 'drawnState'>, note: Note) =>
-  !note.states || (doc.drawnState !== undefined && note.states.includes(doc.drawnState));
+  !note.states || note.states.includes(doc.drawnState ?? NO_STATE);
 
 /** The side a note sits on: its `side`, or by default right of a message and below anything else. */
 export const noteSide = (doc: Diagram, note: Note): NoteSide =>

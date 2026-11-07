@@ -115,7 +115,9 @@ connection may have it. A note without one works as before.
 
 `states=a,b` shows a note only while one of those [emphasis states](#emphasis-states) is drawn,
 such as a remark that belongs to one step of a walkthrough. A note without `states=` shows in
-every drawing, as before, and a note with it shows in none when no state is drawn. Like a
+every drawing, as before, and a note with it shows in none when no state is drawn, unless it
+lists `none`: `states=none,step-2` shows the note with no state drawn and in `step-2`, and in no
+other state. No state may take the ID `none`. Like a
 state, it never moves anything: a note that shows everywhere keeps its spot in every state, and a
 state's own notes find clear spots around it. The frame grows only round the notes it shows.
 `--states` panels draw only notes without `states=`. `check` reports a state that the file does

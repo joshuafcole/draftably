@@ -247,6 +247,19 @@ describe('notes per state', () => {
     expect(overlaps(one[0].rect, one[1].rect)).toBe(false);
   });
 
+  it('shows a note listing none with no state drawn, and in its own states only', () => {
+    const shown = (svg: string) => [...svg.matchAll(/data-note="([^"]+)"/g)].map(m => m[1]).sort();
+    const d = () =>
+      projectScene(checkSource(STATED + 'note plain "Plain and one." near=plan states=none,one\n'));
+    expect(shown(renderSvg(d()))).toEqual(['always', 'plain']);
+    expect(shown(renderSvg(withState(d(), 'one')))).toEqual(['always', 'both', 'first', 'plain']);
+    expect(shown(renderSvg(withState(d(), 'two')))).toEqual(['always', 'both']);
+  });
+
+  it('keeps none for notes: no state may take that ID', () => {
+    expect(() => checkSource(SOURCE + 'state none "None" plan\n')).toThrow(/none is kept/);
+  });
+
   it('rejects a state the file does not declare', () => {
     expect(() => checkSource(SOURCE + 'note "x" near=seat states=ghost\n')).toThrow(
       /Unknown state ghost/,
