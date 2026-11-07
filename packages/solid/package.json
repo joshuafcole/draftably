@@ -1,7 +1,7 @@
 {
   "name": "@draftably/solid",
   "version": "0.2.0",
-  "description": "Solid components for Draftably diagrams.",
+  "description": "Solid components for Draftably diagrams, and the compiler and scene for a Solid host's own tree.",
   "license": "MIT",
   "type": "module",
   "files": [
@@ -18,6 +18,11 @@
       "types": "./dist/editor.d.ts",
       "solid": "./dist/editor.jsx",
       "default": "./dist/editor.jsx"
+    },
+    "./host": {
+      "types": "./dist/host/types/src/host.d.ts",
+      "import": "./dist/host/host.js",
+      "default": "./dist/host/host.js"
     },
     "./package.json": "./package.json"
   },

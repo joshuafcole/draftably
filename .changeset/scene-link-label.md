@@ -1,0 +1,6 @@
+---
+'draftably': patch
+'@draftably/editor': patch
+---
+
+A diagram's link marks take their label from the session that draws them, so the scene components load none of the editor's state.
