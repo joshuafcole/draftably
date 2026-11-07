@@ -175,7 +175,8 @@ export function translateEdit(input: EditInput): EditResult {
   });
   if (!same(look(before), look(after))) writeAppearance(source, after.appearance);
   writeRows(source, 'note', before.appearance.notes, after.appearance.notes, (st, n) => {
-    st.args[0] = quoted(n.text);
+    // The text is the last word: `note "text"`, or `note id "text"`, whose ID an edit keeps.
+    st.args[st.args.length - 1] = quoted(n.text);
     setAttr(st, 'near', n.near ? bare(n.near) : undefined);
     setAttr(st, 'side', n.near && n.side ? bare(n.side) : undefined);
   });

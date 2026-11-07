@@ -6,10 +6,11 @@
  */
 import { createEffect, createSignal, on } from 'solid-js';
 import { findEdge, findGroup, findNode } from '../../model/graph';
+import { parseTextId, textId, type CanvasTextPart } from './canvas-text';
 import type { DocumentPart } from './document';
 
-/** What kind of object an id names on the canvas. */
-export type ViewItemKind = 'node' | 'edge' | 'group';
+/** What kind of thing an id names on the canvas: an object, or a note with an ID. */
+export type ViewItemKind = 'node' | 'edge' | 'group' | 'note';
 
 /** An object the user selected, pointed at or opened. */
 export interface ViewItem {
@@ -20,26 +21,40 @@ export interface ViewItem {
 const sameIds = (a: ReadonlySet<string>, b: ReadonlySet<string>) =>
   a.size === b.size && [...a].every(id => b.has(id));
 
-export function createView(s: DocumentPart) {
+export function createView(s: DocumentPart & CanvasTextPart) {
   const { onSelect, onHover, onActivate } = s.options;
   const [hovered, setHoveredSignal] = createSignal<string | null>(null);
 
-  /** The object `id` names, with its kind, or undefined when the drawing has none. */
+  /** Where in the file's notes the note with ID `id` is, or -1. */
+  const noteIndex = (id: string) => (s.doc.appearance.notes ?? []).findIndex(n => n.id === id);
+
+  /** The object or note `id` names, with its kind, or undefined when the drawing has none. */
   function viewItem(id: string): ViewItem | undefined {
     if (findNode(s.doc, id)) return { id, kind: 'node' };
     if (findGroup(s.doc, id)) return { id, kind: 'group' };
     if (findEdge(s.doc, id)) return { id, kind: 'edge' };
+    if (noteIndex(id) >= 0) return { id, kind: 'note' };
     return undefined;
   }
   const viewItems = (ids: Iterable<string>) =>
     [...ids].map(viewItem).filter((item): item is ViewItem => !!item);
+
+  /**
+   * The ids selected, as a host names them: the selected objects, or the selected note when it
+   * has an ID. A note is selected alone, as a click on it selects it.
+   */
+  function selectedIds(): ReadonlySet<string> {
+    const text = parseTextId(s.selectedText()),
+      note = text?.kind === 'note' ? s.doc.appearance.notes?.[Number(text.key)] : undefined;
+    return note?.id ? new Set([note.id]) : s.selection();
+  }
 
   // `onSelect` hears every change of the selection except one the host made through
   // `showSelection`, so a host that mirrors the selection into its own state hears no echo.
   let reported: ReadonlySet<string> = new Set();
   createEffect(
     on(
-      s.selection,
+      selectedIds,
       selection => {
         if (sameIds(selection, reported)) return;
         reported = new Set(selection);
@@ -49,9 +64,19 @@ export function createView(s: DocumentPart) {
     ),
   );
 
-  /** Select `ids` for the host. Ids the drawing does not have are dropped; geometry never moves. */
+  /**
+   * Select `ids` for the host. Ids the drawing does not have are dropped; geometry never moves.
+   * A note's ID selects that note alone, in place of any objects, as a click on it does.
+   */
   function showSelection(ids: Iterable<string>) {
-    reported = new Set([...ids].filter(id => viewItem(id)));
+    const known = [...ids].filter(id => viewItem(id)),
+      note = known.find(id => viewItem(id)!.kind === 'note');
+    if (note) {
+      reported = new Set([note]);
+      s.selectText(textId('note', noteIndex(note)));
+      return;
+    }
+    reported = new Set(known);
     s.setSelection(reported);
   }
 

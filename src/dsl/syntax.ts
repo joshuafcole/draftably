@@ -999,12 +999,17 @@ export function parseModel(source: string | SourceDoc): Model {
         break;
       }
       case 'note': {
-        count(1);
+        // `note "text"`, or `note id "text"` with an ID a host or tool can address it by.
+        count(1, 2);
         allow(['near', 'side', 'width']);
-        assert(args[0].quoted && args[0].value.trim(), 'A note needs its text in quotes.');
+        const body = args[args.length - 1],
+          nid = args.length === 2 ? id(args[0]) : undefined;
+        assert(body.quoted && body.value.trim(), 'A note needs its text in quotes.');
         assert(attrs.has('near') || !attrs.has('side'), 'side= places a note beside near=<id>.');
+        if (nid) once(`note ${nid}`);
         (m.appearance.notes ??= []).push({
-          text: args[0].value,
+          ...(nid ? { id: nid } : {}),
+          text: body.value,
           ...(attrs.has('near') ? { near: id(attrs.get('near')) } : {}),
           ...(attrs.has('side') ? { side: choice('side', 'below', NOTE_SIDES) } : {}),
           ...(attrs.has('width') ? { width: num('width', NOTE_WIDTH, 80, 1200) } : {}),
@@ -1299,6 +1304,11 @@ function validateReferences(m: Model) {
       );
     }
   (m.appearance.notes ?? []).forEach((n, i) => {
+    assert(
+      !n.id || (!by.has(n.id) && !messageIds.has(n.id)),
+      `Note ${n.id} has the ID of an object or connection; give the note its own.`,
+      m.noteLines[i],
+    );
     if (!n.near || by.has(n.near)) return;
     if (!messageIds.has(n.near)) return exists(n.near, m.noteLines[i]);
     assert(

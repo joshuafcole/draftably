@@ -510,6 +510,7 @@ export function normalizeAppearance(input: Raw): DiagramAppearance {
   for (const n of Array.isArray(input.notes) ? input.notes : [])
     if (n && typeof n.text === 'string')
       notes.push({
+        ...(typeof n.id === 'string' ? { id: n.id } : {}),
         text: n.text,
         ...(typeof n.near === 'string' ? { near: n.near } : {}),
         ...(NOTE_SIDES.includes(n.side) ? { side: n.side } : {}),

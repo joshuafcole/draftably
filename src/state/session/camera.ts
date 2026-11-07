@@ -60,12 +60,15 @@ export function createCamera(s: DocumentPart & ScenePart & EditorPart) {
     return { x: -c.x / c.k, y: -c.y / c.k, w: width / c.k, h: height / c.k };
   }
 
-  /** Where an object is drawn: a shape's or container's box, or a connection's path and label. */
+  /**
+   * Where an object is drawn: a shape's or container's box, a connection's path and label, or the
+   * panel of a note with that ID.
+   */
   function rectOf(id: string): Rect | undefined {
     const box = s.sceneRects().get(id);
     if (box) return box;
     const route = s.routesById().get(id);
-    if (!route?.points.length) return undefined;
+    if (!route?.points.length) return s.viewerFrame().notes.find(n => n.note.id === id)?.rect;
     const l = route.label;
     return rectUnion([
       ...route.points.map(p => ({ x: p.x, y: p.y, w: 0, h: 0 })),
@@ -93,8 +96,8 @@ export function createCamera(s: DocumentPart & ScenePart & EditorPart) {
   };
 
   /**
-   * Frame `ids` in the canvas with `margin` screen pixels round them, centred. Ids the drawing
-   * does not have are skipped; with none left nothing moves. Before the canvas has a size the
+   * Frame `ids` (objects, connections, or notes by their ID) in the canvas with `margin` screen
+   * pixels round them, centred. Ids the drawing does not have are skipped; with none left nothing moves. Before the canvas has a size the
    * fit waits for it. Returns whether the camera moved.
    */
   function fitTo(ids: Iterable<string>, margin = 40, options: FitOptions = {}) {

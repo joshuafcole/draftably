@@ -37,9 +37,9 @@ beforeAll(() => {
 });
 afterAll(() => vi.unstubAllGlobals());
 
-async function open(options: Parameters<typeof createDiagramSession>[0] = {}) {
+async function open(options: Parameters<typeof createDiagramSession>[0] = {}, source = SOURCE) {
   const s = createDiagramSession(options);
-  await s.openSource(SOURCE);
+  await s.openSource(source);
   for (let i = 0; i < 40 && s.fileCompiling(); i++) await new Promise(r => setTimeout(r, 0));
   expect(s.doc.graph.nodes.map(n => n.id).sort()).toEqual(['a', 'b']);
   return s;
@@ -96,6 +96,26 @@ describe('view state from the host', () => {
     s.clearSelection();
     expect(selected.at(-1)).toEqual([]);
     expect(selected).toHaveLength(2);
+    s.dispose();
+  });
+
+  it('selects a note by its ID, alone, and reports the user selecting it', async () => {
+    const selected: ViewItem[][] = [];
+    const s = await open(
+      { onSelect: items => selected.push(items) },
+      SOURCE + 'note why "Beta is slow." near=b\nnote "Unnamed."\n',
+    );
+    expect(s.viewItem('why')).toEqual({ id: 'why', kind: 'note' });
+    s.showSelection(['a', 'why']);
+    expect([s.selectedIds(), s.selectedText()]).toEqual([[], '@note:0']);
+    expect(selected).toEqual([]);
+    s.showSelection(['a']);
+    expect([s.selectedIds(), s.selectedText()]).toEqual([['a'], null]);
+    // A click on a note selects its text; one with an ID reports it, one without reports nothing.
+    s.selectText('@note:0');
+    expect(selected.at(-1)).toEqual([{ id: 'why', kind: 'note' }]);
+    s.selectText('@note:1');
+    expect(selected.at(-1)).toEqual([]);
     s.dispose();
   });
 

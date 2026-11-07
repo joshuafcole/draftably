@@ -14,6 +14,8 @@ export const NOTE_SIDES = ['below', 'above', 'left', 'right'] as const;
 export type NoteSide = (typeof NOTE_SIDES)[number];
 
 export interface Note {
+  /** What a host or tool calls the note, from `note id "text"`; notes without one have none. */
+  id?: string;
   text: string;
   /** The node, group or sequence message the note sits beside; the frame when unset. */
   near?: string;
@@ -189,7 +191,7 @@ export function placeNotes(
 
 /**
  * SVG markup for placed notes: a quiet panel with a bar on its left edge, then the text. Links
- * are `<a>` elements with `href` as `write` gives it.
+ * are `<a>` elements with `href` as `write` gives it. A note with an ID carries it as `data-note`.
  */
 export function noteMarkup(
   look: ResolvedAppearance,
@@ -200,7 +202,7 @@ export function noteMarkup(
     panel = swatchFor(look, 'slate', 50, 'group'),
     link = swatchFor(look, 'primary', 700).fill;
   return notes
-    .map(({ rect: r, lines }) => {
+    .map(({ note, rect: r, lines }) => {
       const text = lines
         .map(
           (line, i) =>
@@ -208,7 +210,7 @@ export function noteMarkup(
         )
         .join('');
       return (
-        `<g class="diagram-note">` +
+        `<g class="diagram-note"${note.id ? ` data-note="${esc(note.id)}"` : ''}>` +
         `<rect x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" rx="4" fill="${panel.fill}"/>` +
         `<rect x="${r.x}" y="${r.y}" width="3" height="${r.h}" rx="1.5" fill="${look.muted}"/>` +
         text +

@@ -180,3 +180,39 @@ layout root sequence
     );
   });
 });
+
+describe('note ids', () => {
+  const NOTED = SOURCE + 'note billing "Billed monthly." near=seat\nnote "A plan is one tier."\n';
+
+  it('takes an optional ID before the text, and an old note parses as before', () => {
+    const notes = projectScene(checkSource(NOTED)).appearance.notes!;
+    expect(notes).toEqual([
+      { id: 'billing', text: 'Billed monthly.', near: 'seat' },
+      { text: 'A plan is one tier.' },
+    ]);
+    expect(printSource(readSource(NOTED))).toBe(NOTED);
+  });
+
+  it('rejects a duplicate ID, or one an object or connection has', () => {
+    expect(() => checkSource(SOURCE + 'note n "One."\nnote n "Two."\n')).toThrow(/Duplicate/);
+    expect(() => checkSource(SOURCE + 'note seat "One." near=seat\n')).toThrow(/its own/);
+    expect(() => checkSource(SOURCE + 'note e1 "One."\n')).toThrow(/its own/);
+  });
+
+  it('draws the ID on the note, and a canvas edit keeps it', () => {
+    const scene = checkSource(NOTED),
+      before = projectScene(scene);
+    expect(renderSvg(before)).toContain('<g class="diagram-note" data-note="billing">');
+    const after = clone(before);
+    setTextValue(after, textId('note', 0), 'Billed yearly.');
+    const saved = translateEdit({
+      source: readSource(NOTED),
+      scene,
+      before: normalize(JSON.parse(JSON.stringify(before))),
+      after: normalize(JSON.parse(JSON.stringify(after))),
+      label: 'Edit',
+      selection: [],
+    }).source;
+    expect(printSource(saved)).toContain('note billing "Billed yearly." near=seat\n');
+  });
+});

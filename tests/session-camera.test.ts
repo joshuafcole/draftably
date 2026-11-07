@@ -44,9 +44,9 @@ afterAll(() => vi.unstubAllGlobals());
 
 const STAGE = { width: 800, height: 600 };
 
-async function open(moves: Array<[Camera, CameraMover]> = [], sized = true) {
+async function open(moves: Array<[Camera, CameraMover]> = [], sized = true, source = SOURCE) {
   const s = createDiagramSession({ onCamera: (camera, by) => moves.push([camera, by]) });
-  await s.openSource(SOURCE);
+  await s.openSource(source);
   for (let i = 0; i < 40 && s.fileCompiling(); i++) await new Promise(r => setTimeout(r, 0));
   if (sized) s.setStageSize(STAGE);
   return s;
@@ -127,6 +127,18 @@ describe('the camera on a session', () => {
     expect(within(c, 40)).toBe(true);
     expect(c.x + c.w).toBeCloseTo(STAGE.width - 40, 5);
     expect(c.y + c.h).toBeCloseTo(STAGE.height - 40, 5);
+  });
+
+  it('reveal and fitTo find a note by its ID', async () => {
+    const s = await open([], true, SOURCE + 'note far "Far away." near=c\n');
+    s.moveCamera({ x: 100, y: 100, k: 1 });
+    expect(s.reveal('far')).toBe(true);
+    const r = s.viewerFrame().notes[0].rect,
+      c = s.camera();
+    expect(within({ x: r.x * c.k + c.x, y: r.y * c.k + c.y, w: r.w * c.k, h: r.h * c.k }, 40)).toBe(
+      true,
+    );
+    expect(s.camera().k).toBe(1);
   });
 
   it('reveal zooms out only as far as it must when the object does not fit', async () => {
