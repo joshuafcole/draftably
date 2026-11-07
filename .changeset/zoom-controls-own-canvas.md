@@ -3,4 +3,4 @@
 '@draftably/editor': patch
 ---
 
-A click inside a canvas makes it the active one even with no press before it, as when assistive technology or a script clicks a button. With two editors on a page, the zoom controls' Fit now frames the editor it was clicked in, not the one used last.
+A click activates its canvas even without a pointerdown or focusin before it, so with two editors on a page, Enter on one editor's focused Fit button no longer fits the other.
