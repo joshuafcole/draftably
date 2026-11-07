@@ -3,7 +3,7 @@
  * view state, like the camera: they live in the URL (`?state=write`), never in the file. The frame
  * round the drawing is here too, since the drawn state decides which notes it holds.
  */
-import { createSignal } from 'solid-js';
+import { createMemo, createSignal } from 'solid-js';
 import { resolveAppearance } from '../../model/appearance';
 import { drawingBounds } from '../../model/bounds';
 import { diagramFrame, FRAME_PAD } from '../../model/frame';
@@ -82,9 +82,11 @@ export function createEmphasis(s: DocumentPart & ScenePart) {
   };
   /**
    * The frame the viewer draws round the drawing, which the editor's exports draw as well. It
-   * holds the notes the drawn state shows; a note with `states=` is `hidden` in any other.
+   * holds the notes the drawn state shows; a note with `states=` is `hidden` in any other. One
+   * memo for every reader (the frame, the notes, text hits, a host's overlay): a glide changes the
+   * routes every frame, and each reader placing the notes again cost a frame that much more.
    */
-  function viewerFrame() {
+  const viewerFrame = createMemo(() => {
     const look = resolveAppearance(s.doc.appearance),
       id = activeState();
     return diagramFrame(
@@ -96,7 +98,7 @@ export function createEmphasis(s: DocumentPart & ScenePart) {
       placeNotes(id ? { ...s.doc, drawnState: id } : s.doc, look, s.sceneRects(), s.routes()),
       s.doc.appearance.footnotes,
     );
-  }
+  });
   return {
     panel,
     showPanel,
