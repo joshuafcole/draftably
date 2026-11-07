@@ -28,23 +28,30 @@ export interface CameraEvent {
 }
 
 export interface FitOptions {
-  /** Screen pixels kept clear round the objects. 40 by default. */
+  /** Screen pixels kept clear round the objects. `FIT_MARGIN` by default. */
   margin?: number;
-  /** Zoom no further out than this; the objects may then not all fit. 8% by default. */
+  /** Zoom no further out than this; the objects may then not all fit. `MIN_ZOOM` by default. */
   minZoom?: number;
-  /** Zoom no further in than this. 1 (100%) by default. */
+  /** Zoom no further in than this. `FIT_MAX_ZOOM` by default. */
   maxZoom?: number;
 }
 
 export interface RevealOptions {
-  /** Screen pixels kept clear between the object and the canvas edge after a move. 40 by default. */
+  /** Screen pixels kept clear between the object and the canvas edge after a move. `REVEAL_MARGIN` by default. */
   margin?: number;
-  /** The least zoom a reveal zooms out to when the object can't fit. 0.55 by default. */
+  /** The least zoom a reveal zooms out to when the object can't fit. `REVEAL_MIN_ZOOM` by default. */
   minZoom?: number;
 }
 
-/** The least zoom a reveal zooms out to: below it, titles stop being legible. */
-const LEGIBLE_ZOOM = 0.55;
+// Defaults for `fitTo` and `reveal` when a call doesn't set them.
+/** Screen pixels `fitTo` keeps clear round the objects. */
+export const FIT_MARGIN = 40;
+/** The closest `fitTo` zooms in: 1 is 100%. */
+export const FIT_MAX_ZOOM = 1;
+/** Screen pixels `reveal` keeps between the object and the canvas edge. */
+export const REVEAL_MARGIN = 40;
+/** The least zoom `reveal` zooms out to: below it, titles stop being legible. */
+export const REVEAL_MIN_ZOOM = 0.55;
 
 export function createCamera(s: DocumentPart & ScenePart & EditorPart) {
   /** The camera now: the screen point of the world origin (`x`, `y`) and the zoom (`k`). */
@@ -106,12 +113,12 @@ export function createCamera(s: DocumentPart & ScenePart & EditorPart) {
     if (!rects.length) return false;
     return whenSized(() => {
       const { width: w, height: h } = s.stageSize(),
-        margin = options.margin ?? 40,
+        margin = options.margin ?? FIT_MARGIN,
         b = rectUnion(rects),
         k = clamp(
           Math.min((w - margin * 2) / Math.max(1, b.w), (h - margin * 2) / Math.max(1, b.h)),
           options.minZoom ?? MIN_ZOOM,
-          Math.min(options.maxZoom ?? 1, MAX_ZOOM),
+          Math.min(options.maxZoom ?? FIT_MAX_ZOOM, MAX_ZOOM),
         );
       return move({ x: w / 2 - (b.x + b.w / 2) * k, y: h / 2 - (b.y + b.h / 2) * k, k });
     });
@@ -130,13 +137,13 @@ export function createCamera(s: DocumentPart & ScenePart & EditorPart) {
       if (!r) return false;
       const { width: w, height: h } = s.stageSize(),
         c = s.doc.camera,
-        margin = options.margin ?? 40,
+        margin = options.margin ?? REVEAL_MARGIN,
         left = r.x * c.k + c.x,
         top = r.y * c.k + c.y;
       if (left >= 0 && top >= 0 && left + r.w * c.k <= w && top + r.h * c.k <= h) return false;
       const room = { w: Math.max(1, w - margin * 2), h: Math.max(1, h - margin * 2) },
         fits = Math.min(room.w / Math.max(1, r.w), room.h / Math.max(1, r.h)),
-        k = fits >= c.k ? c.k : Math.max(fits, Math.min(options.minZoom ?? LEGIBLE_ZOOM, c.k));
+        k = fits >= c.k ? c.k : Math.max(fits, Math.min(options.minZoom ?? REVEAL_MIN_ZOOM, c.k));
       // A zoom keeps the canvas centre where it is, then the pan starts from there.
       const next = {
         x: w / 2 - ((w / 2 - c.x) / c.k) * k,

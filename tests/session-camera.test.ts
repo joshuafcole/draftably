@@ -3,6 +3,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 // while the whole suite transforms at once, and a test's timeout should not pay for it.
 import { createDiagramSession, type CameraEvent } from '../src/state/session';
 import type { Rect } from '../src/model/types';
+import { FIT_MARGIN, REVEAL_MARGIN } from '../src/state/session/camera';
 
 // Three boxes far apart, pinned so the test knows where they are.
 const SOURCE = `diagram "Camera" version=1
@@ -127,7 +128,7 @@ describe('the camera on a session', () => {
     expect(moves).toEqual([]);
     s.setStageSize(STAGE);
     await Promise.resolve();
-    expect(within(onScreen(s, 'c'), 40)).toBe(true);
+    expect(within(onScreen(s, 'c'), FIT_MARGIN)).toBe(true);
     expect(moves.at(-1)?.reason).toBe('api');
   });
 
@@ -150,9 +151,9 @@ describe('the camera on a session', () => {
     const c = onScreen(s, 'c');
     expect(s.getCamera().k).toBe(1);
     // The least pan leaves Gamma at the margin on the sides it came in from.
-    expect(within(c, 40)).toBe(true);
-    expect(c.x + c.w).toBeCloseTo(STAGE.width - 40, 5);
-    expect(c.y + c.h).toBeCloseTo(STAGE.height - 40, 5);
+    expect(within(c, REVEAL_MARGIN)).toBe(true);
+    expect(c.x + c.w).toBeCloseTo(STAGE.width - REVEAL_MARGIN, 5);
+    expect(c.y + c.h).toBeCloseTo(STAGE.height - REVEAL_MARGIN, 5);
   });
 
   it('reveal zooms out only as far as it must when the object does not fit', async () => {
