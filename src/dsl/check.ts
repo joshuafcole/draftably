@@ -10,7 +10,7 @@ import { sceneConflicts } from './conflicts';
 import { frameSprawlNotes } from './frame-sprawl';
 import { labelRunNotes } from './label-runs';
 import { portFaceNotes } from './port-faces';
-import { routeBlockedNotes } from './route-blocked';
+import { routeBlockedNotes, routeGaveWayNotes } from './route-blocked';
 import { drawingScore, type DrawingScore } from './score';
 import type { Drawing } from './metrics';
 import type { Fit } from './syntax';
@@ -43,6 +43,7 @@ export function drawingNotes(d: Drawing): Diagnostic[] {
     ...labelRunNotes(d),
     ...portFaceNotes(d),
     ...routeBlockedNotes(d),
+    ...routeGaveWayNotes(d),
     ...frameSprawlNotes(d),
   ];
 }

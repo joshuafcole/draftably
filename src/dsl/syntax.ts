@@ -189,7 +189,7 @@ export function readSource(source: string): SourceDoc {
 
 // --- Formatting --------------------------------------------------------------------------------
 
-const BARE = /^[A-Za-z0-9_.,+-]+$|^->$/;
+const BARE = /^[A-Za-z0-9_.,;+-]+$|^->$/;
 const printWord = (w: Word) =>
   w.quoted || !BARE.test(w.value) ? JSON.stringify(w.value) : w.value;
 
@@ -355,6 +355,29 @@ export type Hint =
 export type Strength = 'prefer' | 'required';
 
 /**
+ * `route id via=x1,y1;x2,y2 strength=soft|required`: points a connection passes through, each
+ * relative to the content area of the container that holds both its ends (the root: the canvas).
+ * A soft route gives way when a point falls inside a box or the router finds no way through it.
+ */
+export interface ModelRoute {
+  id: string;
+  via: Array<{ x: number; y: number }>;
+  strength: 'soft' | 'required';
+  line: number;
+}
+
+/** `label id at=0.4 offset=12`: a connection label's place, a fraction along its line and off it. */
+export interface ModelLabelSpot {
+  id: string;
+  at: number;
+  offset: number;
+  line: number;
+}
+
+/** The most points one `route` may name. */
+export const ROUTE_POINTS = 40;
+
+/**
  * What `near id ref` places against: `ref` itself when it is a sibling of `id`, else the group
  * around `ref` that is `id`'s sibling. Undefined when `ref` is not inside one.
  */
@@ -389,6 +412,10 @@ export interface Model {
   footnoteLines: number[];
   /** Source line of each `bundle`, in order. */
   bundleLines: number[];
+  /** `route` statements: authored bends, by connection. */
+  routes: ModelRoute[];
+  /** `label` statements: authored label places, by connection. */
+  labels: ModelLabelSpot[];
   /** Source line of each ID an emphasis state lists, by `state:id`, or `state:context:id`. */
   stateLines: Map<string, number>;
   /** Sequence diagrams: `phase` statements, each a run of messages drawn as a row band. */
@@ -474,6 +501,7 @@ export const ROUTING_PARAMS: Record<string, Param<keyof RoutingSettings>> = {
   'corner-radius': { key: 'cornerRadius', min: 0, max: 16 },
   standoff: { key: 'standoff', min: 0, max: 40 },
   bundle: { key: 'bundle', min: 2, max: 12 },
+  hops: { key: 'hops', choices: ['off', 'on'] },
 };
 
 /** What to write instead of a layout attribute that a line does not take. */
@@ -527,6 +555,8 @@ export function parseModel(source: string | SourceDoc): Model {
     noteLines: [],
     footnoteLines: [],
     bundleLines: [],
+    routes: [],
+    labels: [],
     stateLines: new Map(),
     phases: [],
     warnings: [],
@@ -1077,6 +1107,47 @@ export function parseModel(source: string | SourceDoc): Model {
         m.bundleLines.push(line);
         break;
       }
+      case 'route': {
+        // `route id via=x1,y1;x2,y2`: the points a line passes through, in its parent's content area.
+        count(1);
+        allow(['via', 'strength']);
+        const rid = id(args[0]);
+        once(`route:${rid}`);
+        const w = attrs.get('via');
+        assert(w && !w.quoted && w.value, 'A route needs via=x1,y1;x2,y2: the points it passes.');
+        const via = w!.value.split(';').map(part => {
+          const xy = part.split(',').map(Number);
+          assert(
+            xy.length === 2 &&
+              xy.every(n => part.trim() && Number.isFinite(n) && Math.abs(n) <= 100_000),
+            `Expected via=x1,y1;x2,y2 with numbers; got ${w!.value}.`,
+          );
+          return { x: xy[0], y: xy[1] };
+        });
+        assert(via.length <= ROUTE_POINTS, `A route passes at most ${ROUTE_POINTS} points.`);
+        m.routes.push({
+          id: rid,
+          via,
+          strength: choice('strength', 'soft', ['soft', 'required'] as const),
+          line,
+        });
+        break;
+      }
+      case 'label': {
+        // `label id at=0.4 offset=12`: a fraction along the line, and a distance off it.
+        count(1);
+        allow(['at', 'offset']);
+        const lid = id(args[0]);
+        once(`label:${lid}`);
+        assert(attrs.has('at'), 'A label needs at=: how far along its line it sits, from 0 to 1.');
+        m.labels.push({
+          id: lid,
+          at: num('at', 0.5, 0, 1),
+          offset: num('offset', 0, -2000, 2000),
+          line,
+        });
+        break;
+      }
       case 'order':
         count(2, 300);
         allow([]);
@@ -1357,6 +1428,15 @@ function validateReferences(m: Model) {
     exists(x.a, m.bundleLines[i]);
     exists(x.b, m.bundleLines[i]);
   });
+  for (const r of [...m.routes, ...m.labels]) {
+    const what = 'via' in r ? 'route' : 'label';
+    assert(messageIds.has(r.id), `Unknown edge ${r.id} in a ${what}.`, r.line);
+    assert(
+      !sequence,
+      `A message is drawn straight between its lifelines, at its row; a ${what} does not move it.`,
+      r.line,
+    );
+  }
   const stateIds = new Set((m.appearance.states ?? []).map(x => x.id));
   (m.appearance.notes ?? []).forEach((n, i) => {
     assert(

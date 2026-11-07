@@ -14,8 +14,9 @@ export interface SourceOperation {
   statement: string;
   /**
    * What the statement is about: a node's, group's or edge's id; the object a placement (`near`,
-   * `stay`, `pin`, `nudge`, `size`) places; a `layout` or `order` line's scope; an `align` line's
-   * ids, comma-separated. Empty for a statement about the whole diagram, such as `theme`.
+   * `stay`, `pin`, `nudge`, `size`) places; the edge a `route` or `label` shapes; a `layout` or
+   * `order` line's scope; an `align` line's ids, comma-separated. Empty for a statement about the
+   * whole diagram, such as `theme`.
    */
   id: string;
   /**
@@ -43,6 +44,8 @@ const SUBJECT_FIRST = new Set([
   'state',
   'phase',
   'was-order',
+  'route',
+  'label',
 ]);
 
 /** What a statement is about (see `SourceOperation.id`). */

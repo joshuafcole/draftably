@@ -224,7 +224,7 @@ describe('translating editor edits', () => {
 
   it('rejects edits the file cannot express', () => {
     expect(() =>
-      edit(checkout, 'Add waypoint', [], d => edits.addWaypoint(d, 'charge', { x: 10, y: 10 })),
+      edit(checkout, 'Set start preference', [], d => edits.setIntent(d, 'start', 'web', 'center')),
     ).toThrow(UnsupportedEdit);
   });
 

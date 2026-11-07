@@ -333,30 +333,53 @@ describe('every gesture that edits reaches the host', () => {
   });
 });
 
-describe('what a file cannot keep snaps back, and the host hears why', () => {
-  it('a bend on a connection is refused', async () => {
+describe('bends and label slides are kept as route and label statements', () => {
+  it('a bend added, dragged and removed is one route statement each time, and a label slide one label', async () => {
     const { s, heard } = await open({ drag: 'stay' });
-    const before = s.currentSource();
-    s.addWaypointAt('go', { x: 10, y: 400 });
-    await settled(s);
-    expect(heard.refused).toEqual(['Connection bends are not saved to diagram files yet.']);
-    expect(heard.edits).toEqual([]);
-    expect(s.currentSource()).toBe(before);
-    expect(s.doc.layout.edges.go?.waypoints ?? []).toEqual([]);
-    // An Alt-drag of its label is refused the same way.
-    drag(
-      s,
-      [200, 200],
-      [260, 260],
-      element({ '[data-kind]': { id: 'go', kind: 'edge' }, '[data-edge-label]': {} }),
-      {
-        altKey: true,
-      },
+    const route = () => s.routesById().get('go')!;
+    // A bend added on the line, where a double click puts it.
+    const on = route().points[0];
+    const add = await oneEdit(s, heard, () =>
+      s.addWaypointAt('go', { x: on.x + 30, y: on.y + 120 }),
     );
-    await settled(s);
-    expect(heard.refused.at(-1)).toBe(
-      'Connection label positions are not saved to diagram files yet.',
+    expect(kinds(add)).toEqual(['add route go']);
+    expect(add.operations[0].fields.via).toMatch(/^-?\d+,-?\d+$/);
+    expect(s.doc.layout.edges.go?.waypoints).toHaveLength(1);
+    // Dragged: the handle moves, and the route's one point with it.
+    const bend = { ...s.doc.layout.edges.go!.waypoints![0] };
+    s.setSelection(['go']);
+    const moved = await oneEdit(s, heard, () =>
+      drag(
+        s,
+        [bend.x, bend.y],
+        [bend.x + 40, bend.y + 20],
+        element({
+          '[data-kind]': { id: 'go', kind: 'edge' },
+          '[data-waypoint]': { waypoint: '0' },
+        }),
+      ),
     );
+    expect(kinds(moved)).toEqual(['set route go']);
+    expect(s.doc.layout.edges.go!.waypoints![0]).toEqual({ x: bend.x + 40, y: bend.y + 20 });
+    // A label slid along its line: a fraction along it and a distance off it.
+    const label = route().label!;
+    s.setSelection(['go']);
+    const slid = await oneEdit(s, heard, () =>
+      drag(
+        s,
+        [label.x, label.y],
+        [label.x + 10, label.y - 12],
+        element({ '[data-kind]': { id: 'go', kind: 'edge' }, '[data-edge-label]': {} }),
+      ),
+    );
+    expect(kinds(slid)).toEqual(['add label go']);
+    expect(Number(slid.operations[0].fields.at)).toBeGreaterThanOrEqual(0);
+    expect(Number(slid.operations[0].fields.at)).toBeLessThanOrEqual(1);
+    // Removed: the route statement goes, and the label's stays.
+    const gone = await oneEdit(s, heard, () => s.removeWaypoint('go', 0));
+    expect(kinds(gone)).toEqual(['remove route go']);
+    expect(s.currentSource()).toMatch(/^label go at=/m);
+    expect(heard.refused).toEqual([]);
   });
 });
 

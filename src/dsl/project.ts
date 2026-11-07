@@ -110,6 +110,14 @@ export function projectScene(scene: Scene, view: ViewState = {}): Diagram {
       ...(flow(e.source, e.target) ? { flow: flow(e.source, e.target) } : {}),
       ...(e.lane ? { lane: e.lane } : {}),
       ...(e.row !== undefined ? { row: e.row } : {}),
+      // An authored route: bends the router passes through; a soft one gives way when blocked.
+      ...(e.route
+        ? {
+            waypoints: e.route.points.map(p => ({ ...p })),
+            ...(e.route.strength === 'soft' ? { softRoute: true } : {}),
+          }
+        : {}),
+      ...(e.labelAt ? { labelAt: { ...e.labelAt } } : {}),
     });
   }
   if (scene.sequence) doc.layout.sequence = clone(scene.sequence);

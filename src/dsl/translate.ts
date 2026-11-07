@@ -11,7 +11,11 @@ import type { BundleName, ColorDefinition, DiagramAppearance } from '../model/ap
 import { findNode, isCell, selectionRoots } from '../model/graph';
 import { groupHeaderFor } from '../model/labels';
 import type { ColorKey, Diagram, DiagramEdge, DiagramNode, PortSide, Rect } from '../model/types';
+import { computeRoutes, type DrawnRoute } from '../model/routes';
+import { placeOf } from '../model/route-marks';
+import { contentOriginOf, routeParent } from './authored-routes';
 import { contentOrigin, layoutView, type Scene } from './compile';
+import { visibleRects } from './project';
 import {
   addRefinement,
   bare,
@@ -138,10 +142,13 @@ function rejectUnsupported(before: Diagram, after: Diagram) {
   for (const e of after.graph.edges) {
     const a = before.layout.edges[e.id] ?? {},
       b = after.layout.edges[e.id] ?? {};
-    if (!same(a.waypoints?.length ? a.waypoints : null, b.waypoints?.length ? b.waypoints : null))
-      throw new UnsupportedEdit('Connection bends are not saved to diagram files yet.');
-    if ((a.labelDx ?? 0) !== (b.labelDx ?? 0) || (a.labelDy ?? 0) !== (b.labelDy ?? 0))
-      throw new UnsupportedEdit('Connection label positions are not saved to diagram files yet.');
+    if (
+      b.row !== undefined &&
+      (!same(a.waypoints ?? null, b.waypoints ?? null) ||
+        (a.labelDx ?? 0) !== (b.labelDx ?? 0) ||
+        (a.labelDy ?? 0) !== (b.labelDy ?? 0))
+    )
+      throw new UnsupportedEdit('A message is drawn straight between its lifelines, at its row.');
     const old = before.graph.edges.find(x => x.id === e.id);
     if (e.emphasis || (old && old.emphasis !== e.emphasis))
       throw new UnsupportedEdit('Emphasized connections are not supported yet.');
@@ -374,6 +381,8 @@ export function translateEdit(input: EditInput): EditResult {
     }
   }
 
+  writeRoutes(input, notes);
+
   const drops: Drop[] = [];
   placeSelection(input, sid, notes, drops);
   return {
@@ -383,6 +392,62 @@ export function translateEdit(input: EditInput): EditResult {
     drops,
     operations: sourceOperations(readSource(original), source),
   };
+}
+
+const bendsOf = (d: Diagram, id: string) => {
+  const w = d.layout.edges[id]?.waypoints;
+  return w?.length ? w : null;
+};
+const nudgeOf = (d: Diagram, id: string) => [
+  d.layout.edges[id]?.labelDx ?? 0,
+  d.layout.edges[id]?.labelDy ?? 0,
+];
+
+/**
+ * A connection's bends as its `route` statement, relative to the content area of the container
+ * that holds both its ends; and a slid label as its `label` statement, the place on the drawn line
+ * nearest where it was let go. Only connections the file already has: a new one has no bends yet.
+ */
+function writeRoutes(input: EditInput, notes: string[]) {
+  const { source, scene, before, after } = input,
+    known = new Map(scene.edges.map(e => [e.id, e]));
+  const find = (command: string, id: string) =>
+    statements(source).find(s => s.command === command && s.args[0]?.value === id);
+  let drawn: Map<string, DrawnRoute> | undefined;
+  for (const e of after.graph.edges) {
+    const edge = known.get(e.id);
+    if (!edge || !before.graph.edges.some(x => x.id === e.id)) continue;
+    const bends = bendsOf(after, e.id);
+    if (!same(bendsOf(before, e.id), bends)) {
+      const st = find('route', e.id);
+      if (!bends) {
+        removeWhere(source, x => x === st);
+        notes.push(`released the route of ${e.id}`);
+      } else {
+        const o = contentOriginOf(scene, routeParent(scene, edge.source, edge.target)),
+          via = bends.map(p => `${Math.round(p.x - o.x)},${Math.round(p.y - o.y)}`).join(';');
+        if (st) setAttr(st, 'via', bare(via));
+        else addRefinement(source, statement('route', [bare(e.id)], [['via', bare(via)]]));
+        notes.push(`routed ${e.id}`);
+      }
+    }
+    if (!e.label || same(nudgeOf(before, e.id), nudgeOf(after, e.id))) continue;
+    if (!drawn) {
+      const { vg, rects } = visibleRects(after);
+      drawn = new Map(computeRoutes(after, vg, rects, { previous: [] }).routes.map(r => [r.id, r]));
+    }
+    const route = drawn.get(e.id);
+    if (!route?.label) continue;
+    const { at, offset } = placeOf(route.points, route.label),
+      attrs: Array<[string, Word]> = [
+        ['at', bare(at)],
+        ['offset', bare(offset)],
+      ],
+      st = find('label', e.id);
+    if (st) st.attrs = [...st.attrs.filter(([k]) => k !== 'at' && k !== 'offset'), ...attrs];
+    else addRefinement(source, statement('label', [bare(e.id)], attrs));
+    notes.push(`placed the label of ${e.id}`);
+  }
 }
 
 function writeShade(s: Statement, shade: number | undefined) {

@@ -2,8 +2,9 @@
  * `check --metrics` findings about where an edge label sits on its own line:
  *
  * - `label-detached`: the label stands clear of its line. Labels are never hidden; when every
- *   spot on and beside a line is taken, the label moves away from it as little as it can, and a
- *   reader can no longer tell which line it names.
+ *   spot on and beside a line is taken, the label moves away from it as little as it can, or a
+ *   `label` statement put it there, and a leader ties it back to its line (`route-marks.ts`), so
+ *   it never floats free. The finding says the leader fired.
  * - `label-overflows-run`: the label's text is wider (or, across an upright run, taller) than
  *   the straight run of line it sits on, so it reaches past a bend or an end.
  */
@@ -58,7 +59,7 @@ export function labelRunNotes(d: Drawing): Diagnostic[] {
       out.push({
         level: 'warning',
         code: 'label-detached',
-        message: `${name} sits ${Math.round(near.gap)}px from its line, so it reads as another line's.${cause.text}`,
+        message: `${name} sits ${Math.round(near.gap)}px from its line, so a leader ties it back to the line.${cause.text}`,
         ...(cause.line ? { line: cause.line } : {}),
         ids: [route.id],
         box,

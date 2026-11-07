@@ -362,7 +362,8 @@ export function createPointer(
       });
       return;
     }
-    if (edgeLabel && e.altKey && objectId) {
+    // A selected line's label slides with a plain drag; any line's with Alt held.
+    if (edgeLabel && objectId && (e.altKey || (s.isSelected(objectId) && !e.shiftKey))) {
       e.preventDefault();
       begin('edge-label', e, canvas, {
         id: objectId,

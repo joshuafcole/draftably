@@ -102,6 +102,17 @@ export interface EdgeLayout {
   labelDx?: number;
   labelDy?: number;
   waypoints?: Point[];
+  /**
+   * The waypoints are a soft `route`: when the router finds no way through them the line is
+   * routed without them and marked `gaveWay`. Without it, waypoints hold as drawn.
+   */
+  softRoute?: boolean;
+  /**
+   * Where the label sits, from a `label` statement: `at` is a fraction of the drawn line's length
+   * from its source, and `offset` a distance off it, positive to the left of its way. Without it
+   * the label takes the clearest spot on its line, plus `labelDx`/`labelDy`.
+   */
+  labelAt?: { at: number; offset: number };
   /** The reading direction of the layout that places both ends; the edge runs along it. */
   flow?: 'right' | 'down';
   /** Set by the compiler for a fold's wrap edge: the line it returns along, between two bands. */
@@ -229,6 +240,11 @@ export interface LayoutSettings {
 }
 
 export interface RoutingSettings {
+  /**
+   * `on` draws a small arc where a level run passes over an upright line it doesn't share an end
+   * with. Drawing only: the routes are unchanged.
+   */
+  hops?: 'on' | 'off';
   clearance: number;
   portGap: number;
   edgeGap: number;

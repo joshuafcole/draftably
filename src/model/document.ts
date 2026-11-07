@@ -368,6 +368,12 @@ export function normalize(input: unknown): Diagram {
       )
         throw Error(e.id + ': invalid connection bends.');
       next.waypoints = cfg.waypoints.map((p: Raw) => ({ x: p.x, y: p.y }));
+      if (cfg.softRoute === true) next.softRoute = true;
+    }
+    if (cfg.labelAt) {
+      if (!finite(cfg.labelAt.at) || !finite(cfg.labelAt.offset))
+        throw Error(e.id + ': invalid label place.');
+      next.labelAt = { at: cfg.labelAt.at, offset: cfg.labelAt.offset };
     }
     if (cfg.lane) {
       const at = 'y' in cfg.lane ? cfg.lane.y : cfg.lane.x;

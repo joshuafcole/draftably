@@ -952,6 +952,7 @@ with the line number, such as `Expected crossing-penalty from 0 to 1200; got 200
 | `fanout-penalty`   | Spread fan-out       | The cost of each extra line on a side that other lines use. Higher values spread branches over more sides. | 50      | 0–160  |
 | `passes`           | Routing passes       | Routing passes: one first pass, then up to four passes that repair crossings and shared segments.          | 3       | 1–5    |
 | `corner-radius`    | Corner radius        | The radius of the rounded corners in pixels. `0` gives square corners.                                     | 6       | 0–16   |
+| `hops`             | —                    | `on` draws a small arc where a level line passes over an upright one it shares no end with. Drawing only.  | `off`   | on/off |
 
 The router adds the costs to the route length in pixels and keeps the cheapest route. So
 `bend-penalty=32` means the router accepts a route up to 32 pixels longer to remove one bend, and
@@ -1050,7 +1051,8 @@ When a crossing remains:
 - Some sets of connections cannot be drawn without a crossing. Keep the result with the fewest.
 - A feedback line, such as a retry back to the start, can pull boxes out of order. Add
   `constraint=false` to its `edge` line so layout ignores it.
-- The file cannot store the bends of one line yet, so a hand-drawn route is not kept.
+- A `route` line draws one line through the points you choose (see [Refinements](#refinements)).
+  Use it last: it does not adapt as the drawing changes, though a soft one gives way.
 
 ### Portals and bundles
 
@@ -1101,18 +1103,37 @@ The `order` line puts Users above Orders. The `near` line keeps Cache to the rig
 **Try it:** change `side=right` to `side=above`. Cache moves above Users, and the drawing gets
 narrower. Remove the `order` line, and Orders goes back above Users.
 
-| Statement                                | Strength | Meaning                                                                                                                                                                                                                                                                                                                                                                    |
-| ---------------------------------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `near id ref side=right gap=28 offset=0` | soft     | Place next to a sibling, or next to something inside a sibling group: then beside that group, lined up with `ref`. `side=right\|left\|above\|below`, `gap=` 0–2000. `strength=required` enforces side and gap.                                                                                                                                                             |
-| `nudge id dx=0 dy=0`                     | soft     | Offset from the automatic position.                                                                                                                                                                                                                                                                                                                                        |
-| `stay id x= y= weight=8`                 | soft     | Prefer this position; resists movement when content changes. `weight=` 1–100. Layout tools write these.                                                                                                                                                                                                                                                                    |
-| `pin id x= y=`                           | hard     | Exactly this position. Automatic layout never moves it.                                                                                                                                                                                                                                                                                                                    |
-| `size id width= height=`                 | —        | Exact node size: `width=` 40–1200, `height=` 24–1200. A title that does not fit is reported, not grown. A diamond stays square at the larger side. `height=auto` fits the title at that width, so the line survives label edits; `min-height=` (24–1200, with `height=auto` only) is a floor under that height, for a host that draws more than the title inside the node. |
-| `order scope id...`                      | soft     | Preferred order of a scope's children.                                                                                                                                                                                                                                                                                                                                     |
-| `align x\|y id...`                       | soft     | Align centers of siblings. `strength=required` locks them.                                                                                                                                                                                                                                                                                                                 |
+| Statement                                | Strength | Meaning                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| ---------------------------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `near id ref side=right gap=28 offset=0` | soft     | Place next to a sibling, or next to something inside a sibling group: then beside that group, lined up with `ref`. `side=right\|left\|above\|below`, `gap=` 0–2000. `strength=required` enforces side and gap.                                                                                                                                                                                                                                                  |
+| `nudge id dx=0 dy=0`                     | soft     | Offset from the automatic position.                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `stay id x= y= weight=8`                 | soft     | Prefer this position; resists movement when content changes. `weight=` 1–100. Layout tools write these.                                                                                                                                                                                                                                                                                                                                                         |
+| `pin id x= y=`                           | hard     | Exactly this position. Automatic layout never moves it.                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `size id width= height=`                 | —        | Exact node size: `width=` 40–1200, `height=` 24–1200. A title that does not fit is reported, not grown. A diamond stays square at the larger side. `height=auto` fits the title at that width, so the line survives label edits; `min-height=` (24–1200, with `height=auto` only) is a floor under that height, for a host that draws more than the title inside the node.                                                                                      |
+| `order scope id...`                      | soft     | Preferred order of a scope's children.                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `align x\|y id...`                       | soft     | Align centers of siblings. `strength=required` locks them.                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `route id via=x1,y1;x2,y2`               | soft     | The points an edge's line passes through, in order, relative to the content area of the container that holds both its ends (the canvas for the root). Up to 40 points. A soft route gives way when a point lands inside a box or a group the line does not enter, or the router finds no way through it: the line is routed as if it had none, and `check` reports `route-gave-way` with the line. `strength=required` keeps the points whatever is in the way. |
+| `label id at=0.4 offset=12`              | —        | Where an edge's label sits: `at` is a fraction of the drawn line's length from its source (0–1), `offset` a distance off the line (−2000–2000, default 0), positive to the left of the line's way (above a line running right). Other labels keep clear of it. A label more than half its height off its line takes a dotted leader back to it, and `check` reports `label-detached`.                                                                           |
 
 Soft rules give way to keep siblings from overlapping. When one does, `check` reports it with its
 line. Pins never move; conflicting pins are reported as errors.
+
+In the Editor, double-clicking a line adds a bend, dragging a bend moves it, and double-clicking
+a bend removes it; each writes the edge's `route` line, and **Reset bends** removes it. Dragging
+a selected line's label (or any label with Alt held) writes its `label` line: the spot on the line
+nearest where it was let go.
+
+```draft
+group svc "Services"
+node api "API" in=svc
+node db "Store" in=svc
+node web "Web"
+edge read api -> db "reads"
+edge call web -> api "calls"
+route read via=112,80
+label call at=0.3 offset=-12
+routing hops=on
+```
 
 ## Command line
 
@@ -1337,12 +1358,13 @@ crossings, bends, total line length and warnings. It also warns on how the drawi
 | `detour`              | A route is over 2.5 times, and 300px more than, the distance between its ends.                                                                                                                                                                                                                                                                                                                                                          |
 | `stranded`            | A node is over 480px from every node it connects to.                                                                                                                                                                                                                                                                                                                                                                                    |
 | `aspect`              | Wider than 2:1 and wider than 960px, so it shrinks in a page column; taller than 3:1; or with `--fit <shape>`, more than 1.5 times off that shape's aspect.                                                                                                                                                                                                                                                                             |
-| `label-detached`      | An edge label stands more than half its height clear of its own line, so it reads as another line's. Labels are never hidden; this is where one went when no spot on its line was free.                                                                                                                                                                                                                                                 |
+| `label-detached`      | An edge label stands more than half its height clear of its own line: no spot on its line was free, or a `label` line put it there. Labels are never hidden, and a dotted leader ties this one back to its line.                                                                                                                                                                                                                        |
 | `label-overflows-run` | An edge label's text is wider (across an upright run, taller) than the straight run it sits on, by more than 7px (an eighth of a node's height, about a character), so it reaches past a bend.                                                                                                                                                                                                                                          |
 | `faces-away`          | A line leaves by its left or top toward something wholly the other way, or arrives on a right or bottom side from something wholly the other way, so it loops round ("never arrive from below"). Leaving right or bottom and arriving left or top is how lines read, even round a loop, so those sides are never reported. Needs no layout direction; a line `backward-side` names is skipped, and so is a side set with `from=`/`to=`. |
 | `arrow-room`          | The last run into an arrowhead or other end mark is under 11px (a fifth of a node's height), so the mark sits on a bend.                                                                                                                                                                                                                                                                                                                |
 | `frame-sprawl`        | The drawing covers more than 8 times the summed area of its boxes: groups, gaps and long lines take most of it. Half the example and corpus files are under 4.4 and nine in ten under 7.4. A sequence diagram is not measured.                                                                                                                                                                                                          |
 | `route-blocked`       | The router found no clear way for a line, so it is drawn as a plain elbow over what is in its way. The editor draws it red and dashed; an export draws it like any other line.                                                                                                                                                                                                                                                          |
+| `route-gave-way`      | A soft `route` line gave way: one of its points is inside a box or a group the line does not enter, or the router found no way through them, so the line is drawn as if it had no route. The finding names the `route` line.                                                                                                                                                                                                            |
 
 `inspect --json --metrics` adds the same numbers as a `metrics` object, so a script can compare
 two versions of a file without drawing an image, and a `findings` list: every diagnostic
@@ -1453,24 +1475,26 @@ for Cache. Undo returns the file to its earlier version.
 
 Edits made in the Editor are written back to the file as readable statements:
 
-| In the Editor                          | In the file                                                         |
-| -------------------------------------- | ------------------------------------------------------------------- |
-| Drag an object                         | `near` the closest sibling it does not overlap; `nudge` if none.    |
-| Drag a soft group's tint               | A `stay` for each member at its new place; the group gets none.     |
-| Pin or unpin (**P**)                   | `pin` at its position; unpinning leaves a soft `stay`.              |
-| Resize a shape or container            | `size`, or `min-width`/`min-height` on the container's `layout`.    |
-| Drag a cell among its group's cells    | The group's `order` line. **Span** in Inspector writes `span=`.     |
-| Add, rename, connect, delete, recolor  | `node`, `group` and `edge` declarations, with IDs from the label.   |
-| Color family or shade in Inspector     | `color=` and `shade=` on the declaration.                           |
-| Theme or padding in **Appearance**     | The `theme` line; preset changes drop built-in `theme-color` lines. |
-| Double-click the title or subtitle     | The `diagram` title and the `subtitle` line.                        |
-| Drag the frame's right edge            | `width=` on the `diagram` line; back to its content removes it.     |
-| Wrap in a container or ungroup         | A `group` and the members' `in=`.                                   |
-| Clear manual markers                   | Removes the object's soft position refinements.                     |
-| Direction or Format in **Arrange**     | `direction=` or `fit=` on the scope's `layout` line.                |
-| Rebuild, or Apply in Compare           | `layout scope engine=…` for the diagram or the selected container.  |
-| Tidy, a timeline step, the brush       | `stay` for each object that moved, plus anchors around them.        |
-| Connections in **Arrange**, or Compare | The `routing` line.                                                 |
+| In the Editor                          | In the file                                                               |
+| -------------------------------------- | ------------------------------------------------------------------------- |
+| Drag an object                         | `near` the closest sibling it does not overlap; `nudge` if none.          |
+| Drag a soft group's tint               | A `stay` for each member at its new place; the group gets none.           |
+| Pin or unpin (**P**)                   | `pin` at its position; unpinning leaves a soft `stay`.                    |
+| Resize a shape or container            | `size`, or `min-width`/`min-height` on the container's `layout`.          |
+| Drag a cell among its group's cells    | The group's `order` line. **Span** in Inspector writes `span=`.           |
+| Add, rename, connect, delete, recolor  | `node`, `group` and `edge` declarations, with IDs from the label.         |
+| Color family or shade in Inspector     | `color=` and `shade=` on the declaration.                                 |
+| Theme or padding in **Appearance**     | The `theme` line; preset changes drop built-in `theme-color` lines.       |
+| Double-click the title or subtitle     | The `diagram` title and the `subtitle` line.                              |
+| Drag the frame's right edge            | `width=` on the `diagram` line; back to its content removes it.           |
+| Wrap in a container or ungroup         | A `group` and the members' `in=`.                                         |
+| Clear manual markers                   | Removes the object's soft position refinements.                           |
+| Direction or Format in **Arrange**     | `direction=` or `fit=` on the scope's `layout` line.                      |
+| Rebuild, or Apply in Compare           | `layout scope engine=…` for the diagram or the selected container.        |
+| Tidy, a timeline step, the brush       | `stay` for each object that moved, plus anchors around them.              |
+| Connections in **Arrange**, or Compare | The `routing` line.                                                       |
+| Add, drag or remove a line's bend      | The edge's `route` line; **Reset bends** removes it.                      |
+| Drag a selected line's label           | The edge's `label` line: a fraction along the line and a distance off it. |
 
 An accepted move or pin also writes soft `stay` anchors for the objects around it: every
 top-level object, and the siblings of the edited object and of its containers. A resize writes only

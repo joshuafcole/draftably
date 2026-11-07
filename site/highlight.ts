@@ -31,6 +31,8 @@ export const COMMANDS = [
   'stay',
   'pin',
   'size',
+  'route',
+  'label',
   'view',
   'snapshot',
   'box',

@@ -179,6 +179,22 @@ export function EdgeView(props: EdgeViewProps) {
         marker-end={headOf(edge()) === 'none' ? undefined : `url(#${markerId()})`}
         marker-start={tailOf(edge()) === 'none' ? undefined : `url(#${tailId()})`}
       />
+      <Show when={props.route.leader}>
+        {l => (
+          <line
+            class="edge-label-leader"
+            x1={l().x1}
+            y1={l().y1}
+            x2={l().x2}
+            y2={l().y2}
+            stroke={stroke()}
+            stroke-width={1}
+            stroke-dasharray="2 3"
+            stroke-linecap="round"
+            pointer-events="none"
+          />
+        )}
+      </Show>
       <Show when={props.route.label}>
         {label => (
           <g data-edge-label>

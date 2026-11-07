@@ -29,3 +29,25 @@ export function routeBlockedNotes(d: Drawing): Diagnostic[] {
     ];
   });
 }
+
+/**
+ * `route-gave-way`, once routed: a soft `route` the router found no way through, so the line is
+ * drawn as if it had none. A point inside a box gives way at compile time and is reported there;
+ * this is the rest, such as bends a moved box now walls in.
+ */
+export function routeGaveWayNotes(d: Drawing): Diagnostic[] {
+  return d.routes.flatMap(route => {
+    if (!route.gaveWay) return [];
+    const line = d.scene.model.routes.find(r => r.id === route.id)?.line;
+    return [
+      {
+        level: 'warning' as const,
+        code: 'route-gave-way',
+        message: `The route of ${route.id} (${route.from} -> ${route.to}) gave way: the router found no clear way through its points, so the line is routed afresh. Move its points clear, or remove the route.`,
+        ...(line ? { line } : {}),
+        ids: [route.id],
+        box: rectUnion(route.points.map(p => ({ ...p, w: 0, h: 0 }))),
+      },
+    ];
+  });
+}

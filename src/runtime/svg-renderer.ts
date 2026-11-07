@@ -338,7 +338,12 @@ function sceneMarkup(
     const l = route.label,
       message = doc.layout.edges[route.id]?.row !== undefined,
       type = edgeLabelType(look, message),
-      lines = edgeLabelLines(edge.label, look, message);
+      lines = edgeLabelLines(edge.label, look, message),
+      k = route.leader;
+    if (k)
+      out.push(
+        `<line class="edge-label-leader" x1="${k.x1}" y1="${k.y1}" x2="${k.x2}" y2="${k.y2}" stroke="${ink}" stroke-width="1" stroke-dasharray="2 3" stroke-linecap="round"/>`,
+      );
     if (l)
       out.push(
         ...paintSurface(

@@ -9,6 +9,7 @@ import { resolveAppearance, type ResolvedAppearance } from './appearance';
 import { measureText } from './fonts';
 import { edgeLabelLines, edgeLabelSize, groupTitleLines, SELF_LOOP } from './labels';
 import { hasMarkers, markerRects, stoppedPoints } from './markers';
+import { hoppedPath, hopsOf, labelLeader, placeAlong, type Leader } from './route-marks';
 import {
   ancestors,
   findEdge,
@@ -369,6 +370,10 @@ export interface DrawnRoute extends Route {
    * across other cells to that cell's edge. It is drawn over the cells, with a dot at the edge.
    */
   cross?: [Point, Point];
+  /** A label standing clear of its line: the leader that ties it back (`route-marks.ts`). */
+  leader?: Leader;
+  /** A soft `route` the router found no way through, so the line was routed without it. */
+  gaveWay?: boolean;
 }
 
 export interface SceneRoutes {
@@ -550,6 +555,40 @@ function cellEnds(doc: Diagram, vg: VisibleGraph, rects: Map<string, Rect>) {
   return { sides, crosses };
 }
 
+/** What the router reads of an edge's layout: not where its label sits, nor how soft its bends are. */
+function routingCfg(cfg: EdgeLayout | undefined): EdgeLayout {
+  if (!cfg) return {};
+  const { labelAt: _at, softRoute: _soft, ...rest } = cfg;
+  return rest;
+}
+
+/**
+ * A soft `route` the router found no way through gives way: those lines are routed again
+ * without their bends, and their new routes replace the blocked ones. Others keep theirs.
+ */
+function givenWay(doc: Diagram, vg: VisibleGraph, rects: Map<string, Rect>, result: RoutingResult) {
+  const soft = result.routes.filter(
+    r =>
+      r.blocked && doc.layout.edges[r.id]?.softRoute && doc.layout.edges[r.id]?.waypoints?.length,
+  );
+  if (!soft.length) return { result, gave: new Set<string>() };
+  const gave = new Set(soft.map(r => r.id)),
+    edges = { ...doc.layout.edges };
+  for (const id of gave) edges[id] = { ...edges[id], waypoints: undefined, softRoute: undefined };
+  const bare = { ...doc, layout: { ...doc.layout, edges } },
+    { input, settings, key } = routingKey(bare, vg, rects, {}),
+    again = recent.get(key) ?? RouteLab.compute(input, settings);
+  keep(key, again);
+  const by = new Map(again.routes.map(r => [r.id, r]));
+  return {
+    result: {
+      ...result,
+      routes: result.routes.map(r => (gave.has(r.id) ? (by.get(r.id) ?? r) : r)),
+    },
+    gave,
+  };
+}
+
 export function routeInput(doc: Diagram, vg: VisibleGraph, all: Map<string, Rect>) {
   const look = resolveAppearance(doc.appearance),
     { sides, crosses } = cellEnds(doc, vg, all);
@@ -624,7 +663,7 @@ export function routeInput(doc: Diagram, vg: VisibleGraph, all: Map<string, Rect
           to,
           cfg: laneBends(
             {
-              ...doc.layout.edges[e.id],
+              ...routingCfg(doc.layout.edges[e.id]),
               ...(side?.from ? { fromSide: side.from } : {}),
               ...(side?.to ? { toSide: side.to } : {}),
             },
@@ -746,6 +785,8 @@ export function drawRoutes(
     radius = doc.settings.routing?.cornerRadius ?? 6,
     { crosses } = cellEnds(doc, vg, rects);
   const message = (route: Route) => doc.layout.edges[route.id]?.row !== undefined;
+  const gave = givenWay(doc, vg, rects, result);
+  result = gave.result;
   // A line to a cell with no free side runs on from its stub across the cells to that cell.
   result = {
     ...result,
@@ -807,8 +848,20 @@ export function drawRoutes(
     const up = new Set(ancestors(doc, e.b));
     return open.get(ancestors(doc, e.a).find(g => up.has(g) && open.has(g)) ?? '');
   };
+  // An authored label sits where its `label` statement puts it, and the others keep clear of it.
+  const placed = new Map<Route, EdgeLabelBox>();
+  for (const route of result.routes) {
+    const label = byEdge.get(route.id)!.label,
+      cfg = doc.layout.edges[route.id] || {};
+    if (!label || message(route) || !cfg.labelAt) continue;
+    const { w, h } = edgeLabelSize(label, look),
+      at = placeAlong(route.points, cfg.labelAt.at, cfg.labelAt.offset);
+    placed.set(route, { x: at.x + (cfg.labelDx || 0), y: at.y + (cfg.labelDy || 0), w, h });
+  }
   // Labels are placed together once every route exists, so none sits on a line drawn after it.
-  const labelled = result.routes.filter(route => byEdge.get(route.id)!.label && !message(route)),
+  const labelled = result.routes.filter(
+      route => byEdge.get(route.id)!.label && !message(route) && !placed.has(route),
+    ),
     boxes = placeEdgeLabels(
       labelled.map(route => {
         const cfg = doc.layout.edges[route.id] || {};
@@ -827,8 +880,9 @@ export function drawRoutes(
       }),
       obstacles,
       look,
+      [...placed.values()].map(b => ({ x: b.x - b.w / 2, y: b.y - b.h / 2, w: b.w, h: b.h })),
     ),
-    labels = new Map(labelled.map((route, i) => [route, boxes[i]]));
+    labels = new Map([...placed, ...labelled.map((route, i) => [route, boxes[i]] as const)]);
   // A sequence message's label sits just above its line, centred between the two lifelines, or
   // beside a self-message's loop, so it never hides the arrow and every row reads the same way.
   for (const route of result.routes) {
@@ -857,13 +911,37 @@ export function drawRoutes(
       return { points: r.points, marks: edge ? markerRects(r.points, edge) : [] };
     }),
   );
+  // `routing hops=on`: an arc where a level run passes over a line it shares no end with.
+  const hops =
+    doc.settings.routing?.hops === 'on'
+      ? hopsOf(
+          result.routes.map(r => {
+            const e = findEdge(doc, r.id);
+            return { points: r.points, ends: [e?.from ?? r.from, e?.to ?? r.to] as const };
+          }),
+        )
+      : null;
   const drawn = result.routes.map((route, i) => {
     const c = crosses.get(route.id),
-      edge = findEdge(doc, route.id);
+      edge = findEdge(doc, route.id),
+      label = labels.get(route) ?? null,
+      // A label clear of its own line is tied back to it, never left floating.
+      leader =
+        label && !message(route)
+          ? labelLeader(route.points, {
+              x: label.x - label.w / 2,
+              y: label.y - label.h / 2,
+              w: label.w,
+              h: label.h,
+            })
+          : undefined,
+      ends = edge ? stoppedPoints(route.points, edge) : route.points;
     return {
       ...route,
-      label: labels.get(route) ?? null,
-      path: roundedPath(edge ? stoppedPoints(route.points, edge) : route.points, radius),
+      label,
+      ...(leader ? { leader } : {}),
+      ...(gave.gave.has(route.id) ? { gaveWay: true } : {}),
+      path: hops?.[i].length ? hoppedPath(ends, radius, hops[i]) : roundedPath(ends, radius),
       halo: haloPath(
         route.points,
         result.routes

@@ -66,7 +66,7 @@ export function insertAfter(doc: SourceDoc, s: Statement, near: (s: Statement) =
   doc.lines.splice(at + 1, 0, s);
 }
 
-const REFINEMENTS = ['near', 'nudge', 'stay', 'pin', 'size', 'order', 'align'];
+const REFINEMENTS = ['near', 'nudge', 'stay', 'pin', 'size', 'order', 'align', 'route', 'label'];
 
 /** Add a refinement statement to the refinements section, starting one when there is none. */
 export function addRefinement(doc: SourceDoc, s: Statement) {
@@ -142,7 +142,7 @@ function unanchorNotes(doc: SourceDoc, id: string) {
  * own.
  */
 export function removeEdge(doc: SourceDoc, id: string) {
-  removeWhere(doc, s => s.command === 'edge' && s.args[0]?.value === id);
+  removeWhere(doc, s => ['edge', 'route', 'label'].includes(s.command) && s.args[0]?.value === id);
   removeFromStates(doc, id);
   unanchorNotes(doc, id);
   for (const s of statements(doc))

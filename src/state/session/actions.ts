@@ -467,7 +467,7 @@ export function createActions(s: EditorPart & DocumentPart & ScenePart & LayoutP
       toast('Place a waypoint outside a node.');
       return;
     }
-    s.transact('Add waypoint', d => edits.addWaypoint(d, edgeId, p));
+    s.transact('Add waypoint', d => edits.addWaypoint(d, edgeId, p, route.points));
     s.setSelection([edgeId]);
   }
 

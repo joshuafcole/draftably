@@ -5,6 +5,7 @@
 import { LayoutLab } from '../engines/layout-engine.js';
 import { clamp, clone, center, inside, overlaps, rectUnion, rounded } from './geometry';
 import { emptyDiagram, normalize, uid } from './document';
+import { placeOf } from './route-marks';
 import {
   ancestors,
   CONTAINER_HEADER,
@@ -693,9 +694,19 @@ export function useAutomaticPorts(doc: Diagram, edgeIds: string[]) {
 export const bendInsideShape = (doc: Diagram, p: Point) =>
   doc.graph.nodes.some(n => inside(p, doc.layout.nodes[n.id], 4));
 
-export function addWaypoint(doc: Diagram, id: string, p: Point) {
-  const cfg = (doc.layout.edges[id] ||= {});
-  (cfg.waypoints ||= []).push({ x: rounded(p.x), y: rounded(p.y) });
+/**
+ * Add a bend at `p`. Given the line as drawn, the bend goes between the bends either side of where
+ * `p` falls along it, so the line still runs through them in order; otherwise it goes last.
+ */
+export function addWaypoint(doc: Diagram, id: string, p: Point, drawn?: readonly Point[]) {
+  const cfg = (doc.layout.edges[id] ||= {}),
+    list = (cfg.waypoints ||= []),
+    bend = { x: rounded(p.x), y: rounded(p.y) };
+  if (!drawn || drawn.length < 2 || !list.length) return void list.push(bend);
+  const along = (q: Point) => placeOf(drawn, q).at,
+    at = along(bend),
+    index = list.findIndex(w => along(w) > at);
+  list.splice(index < 0 ? list.length : index, 0, bend);
 }
 
 export function removeWaypoint(doc: Diagram, id: string, index: number) {

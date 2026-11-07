@@ -530,7 +530,13 @@ function RecipeControls() {
   );
 }
 
-type RouteField = [Exclude<keyof RoutingSettings, 'bundle'>, string, number, number, string?];
+type RouteField = [
+  Exclude<keyof RoutingSettings, 'bundle' | 'hops'>,
+  string,
+  number,
+  number,
+  string?,
+];
 
 const ROUTE_SPACING: RouteField[] = [
   ['clearance', 'Around shapes', 4, 30],

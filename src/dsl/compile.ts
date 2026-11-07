@@ -27,7 +27,16 @@ import {
 import { cellsBandFor, layoutCells, layoutUnits } from './cells';
 import { marginNotes } from '../model/note';
 import { defaultShapeSize } from '../model/styles';
-import type { CellsChrome, Diagram, Direction, Lane, Rect, SequenceLayout } from '../model/types';
+import type {
+  CellsChrome,
+  Diagram,
+  Direction,
+  Lane,
+  Point,
+  Rect,
+  SequenceLayout,
+} from '../model/types';
+import { withAuthoredRoutes } from './authored-routes';
 import { planChannels, trimChannels, type Channel } from './channels';
 import { returnLanes, type FlowScope } from './lanes';
 import {
@@ -106,6 +115,10 @@ export interface SceneEdge extends ModelEdge {
   lane?: Lane;
   /** A sequence message: the height of its row; it is drawn straight between lifelines there. */
   row?: number;
+  /** From `route`: the points it passes, made absolute (`authored-routes.ts`). */
+  route?: { points: Point[]; strength: 'soft' | 'required' };
+  /** From `label`: where its label sits, a fraction along the line and a distance off it. */
+  labelAt?: { at: number; offset: number };
 }
 
 export interface Scene {
@@ -176,10 +189,12 @@ function compileModel(full: Model) {
     flat = dissolved(m),
     room = widestLabels(flat);
   return engineArrangement(room).then(arranged =>
-    withPortals(
-      withOldOrder(sequenced(withSoftGroups(ownLabels(layoutModel(room, arranged), flat), m))),
-      full,
-      split,
+    withAuthoredRoutes(
+      withPortals(
+        withOldOrder(sequenced(withSoftGroups(ownLabels(layoutModel(room, arranged), flat), m))),
+        full,
+        split,
+      ),
     ),
   );
 }
@@ -262,10 +277,12 @@ export function checkSource(source: string): Scene {
     split = splitPortals(full),
     m = split?.inner ?? full;
   const flat = dissolved(m);
-  return withPortals(
-    withOldOrder(sequenced(withSoftGroups(ownLabels(layoutModel(widestLabels(flat)), flat), m))),
-    full,
-    split,
+  return withAuthoredRoutes(
+    withPortals(
+      withOldOrder(sequenced(withSoftGroups(ownLabels(layoutModel(widestLabels(flat)), flat), m))),
+      full,
+      split,
+    ),
   );
 }
 
