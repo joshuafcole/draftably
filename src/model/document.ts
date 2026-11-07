@@ -270,7 +270,12 @@ export function normalize(input: unknown): Diagram {
       };
     }
     const style = data.styles?.[n.id] || {};
-    if (style.shape !== undefined && !SHAPES.includes(style.shape) && style.shape !== 'marker')
+    if (
+      style.shape !== undefined &&
+      !SHAPES.includes(style.shape) &&
+      style.shape !== 'marker' &&
+      style.shape !== 'portal'
+    )
       throw Error(n.id + ': unknown shape.');
     if (
       style.color !== undefined &&

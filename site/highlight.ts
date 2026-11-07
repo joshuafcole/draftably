@@ -22,6 +22,7 @@ export const COMMANDS = [
   'legend',
   'note',
   'footnote',
+  'bundle',
   'routing',
   'order',
   'align',

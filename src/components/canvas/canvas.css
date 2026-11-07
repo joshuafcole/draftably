@@ -854,3 +854,40 @@
 .stage.read-only :is(.node, .group-bg, .edge-hit) {
   cursor: pointer;
 }
+
+/* A bundle's trunk (model/bundles.ts): one line for several, spread into its lanes when held. */
+.bundle-room {
+  fill: none;
+  stroke: transparent;
+  pointer-events: stroke;
+  outline: none;
+  cursor: pointer;
+}
+
+.bundle-trunk {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
+.bundle-room:focus-visible + .bundle-trunk {
+  stroke: var(--accent);
+}
+
+.bundle-label {
+  cursor: pointer;
+}
+
+.bundle-name-input {
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  font: inherit;
+  font-size: 12px;
+  padding: 0 8px;
+  border: 1px solid var(--accent);
+  border-radius: 14px;
+  background: var(--surface);
+  color: inherit;
+}

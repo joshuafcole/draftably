@@ -42,7 +42,7 @@ and groups. References may point to later lines.
 | `compare "before" "after"`         | Draw the change marks as two aligned panels. `direction=auto\|right\|down`, `aspect=` (0.25–8). At most one. See [Side by side](#side-by-side).                                                                                                                                                                                                                                                                                       |
 | `was-order m2 m1`                  | The older message order of a sequence diagram. At most one. See [Side by side](#side-by-side).                                                                                                                                                                                                                                                                                                                                        |
 | `subtitle "text"`                  | One short line under the title: the takeaway in about 10 words. At most one. A longer one wraps.                                                                                                                                                                                                                                                                                                                                      |
-| `node id "label"`                  | A shape. `in=group`, `color=`, `shade=`, `shape=box\|pill\|circle\|diamond\|text\|marker`, `href=`, `count=`.                                                                                                                                                                                                                                                                                                                         |
+| `node id "label"`                  | A shape. `in=group`, `color=`, `shade=`, `shape=box\|pill\|circle\|diamond\|text\|marker\|portal`, `href=`, `count=`.                                                                                                                                                                                                                                                                                                                 |
 | `group id "label"`                 | A container. `in=group`, `color=`, `shade=`, `frame=box\|soft\|none`, `fold=never`. See [Soft groups](#soft-groups).                                                                                                                                                                                                                                                                                                                  |
 | `theme name`                       | The diagram's theme and diagram-wide overrides. See [Themes and colors](#themes-and-colors).                                                                                                                                                                                                                                                                                                                                          |
 | `theme-color family`               | One shade of a color family. See [Themes and colors](#themes-and-colors).                                                                                                                                                                                                                                                                                                                                                             |
@@ -1051,6 +1051,33 @@ When a crossing remains:
 - A feedback line, such as a retry back to the start, can pull boxes out of order. Add
   `constraint=false` to its `edge` line so layout ignores it.
 - The file cannot store the bends of one line yet, so a hand-drawn route is not kept.
+
+### Portals and bundles
+
+A node with `shape=portal` stands for something outside the drawing, such as a system a line leads
+to that the diagram does not draw. Layout leaves it out, as it leaves out a `constraint=false` line,
+so it never pulls a box out of place. Once the drawing is laid out, each portal sits just outside
+its frame, on the side facing what it connects to, with room for its lines' labels; its lines are
+routed with the rest. It is drawn with a broken outline. A portal sits at the top level of a flow,
+and `near`, `stay`, `pin`, `nudge`, `order` and `align` do not move it (`check` says so as
+`portal-placed`); `size` sets its size.
+
+`routing bundle=3` runs three or more lines between one pair of ends as one trunk, labelled with
+how many it carries (`3 flows`). `bundle a b "name"` names the trunk between `a` and `b`, and bundles
+that pair whenever it has two or more lines, whatever `bundle=` says. The router routes every line
+on its own; the trunk is the middle lane's route. In the viewer, pointing at, focusing or pressing a
+trunk spreads it into those lanes, so each line can be selected; a selected line stands out of the
+trunk. Double-clicking the trunk's label names it, which writes the `bundle` statement.
+
+```draft
+node crawler "Crawler"
+node offsite "Offsite" shape=portal
+edge a crawler -> offsite "warm fetch"
+edge b crawler -> offsite "purge"
+edge c offsite -> crawler "origin pull"
+routing bundle=3
+bundle crawler offsite "Edge sync"
+```
 
 ## Refinements
 

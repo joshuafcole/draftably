@@ -18,7 +18,9 @@ export type ShapeKind =
   | 'icon'
   | 'image'
   /** A seam between two cells of a `cells` group. */
-  | 'marker';
+  | 'marker'
+  /** Something outside the drawing, set at its frame after layout (`dsl/portals.ts`). */
+  | 'portal';
 /** A color family: a built-in one, one the file defines, or `auto` for the theme's surface. */
 export type ColorKey = string;
 export type LabelMode = 'center' | 'top' | 'bottom' | 'left' | 'right' | 'detached';
@@ -239,6 +241,11 @@ export interface RoutingSettings {
   passes: number;
   cornerRadius: number;
   standoff: number;
+  /**
+   * Run this many or more lines between one pair of ends as one trunk (`model/bundles.ts`);
+   * unset or 0 draws every line on its own. Read after routing, never by the router.
+   */
+  bundle?: number;
 }
 
 export interface DiagramSettings extends LayoutSettings {

@@ -23,6 +23,7 @@ import {
   type DrawnRoute,
 } from '../../model/routes';
 import type { NodeGeometry, NodeLayout, Rect } from '../../model/types';
+import { findBundles, type DrawnBundle } from '../../model/bundles';
 import type { DocumentPart } from './document';
 import type { FileSessionPart } from './file-session';
 
@@ -236,6 +237,12 @@ export function createScene(s: DocumentPart & FileSessionPart) {
   s.setRouteSink({ adopt: setAdoptedRoutes, quick: setQuickRouting, awaiting: state.setAwaiting });
 
   const routes = () => routing().routes;
+  /** Lines run as one trunk between a pair of ends, found after routing (`model/bundles.ts`). */
+  const bundles = createMemo<DrawnBundle[]>(() => findBundles(s.doc, visibleScene(), routes()));
+  /** Each bundled line's bundle. */
+  const bundleOf = createMemo(
+    () => new Map(bundles().flatMap(b => b.members.map(id => [id, b] as const))),
+  );
   const routingReport = () => routing().result.report;
   const blockedRouteIds = () =>
     routes()
@@ -271,6 +278,8 @@ export function createScene(s: DocumentPart & FileSessionPart) {
     resetRoutes,
     routeInputFor,
     routes,
+    bundles,
+    bundleOf,
     routingReport,
     blockedRouteIds,
     sceneBounds,

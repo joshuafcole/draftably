@@ -3,6 +3,7 @@ import { setActiveSession } from '../../state/active-session';
 import { BrushDock } from '../sculpt/BrushDock';
 import { TimelineDeck } from '../sculpt/TimelineDeck';
 import { CrossingView, EdgeView } from '../scene/EdgeView';
+import { BundleView } from '../scene/BundleView';
 import { GroupView } from '../scene/GroupView';
 import { NodeView } from '../scene/NodeView';
 import { Lifelines, SequenceBackdrop } from '../scene/Lifelines';
@@ -73,6 +74,13 @@ export function Canvas(props: CanvasProps) {
   });
   const keep = (ids: string[]) => (s.panel() ? ids.filter(id => kept().has(id)) : ids);
   const isSelected = (id: string) => s.selection().has(id);
+  /** The bundle the pointer or focus holds, and the one a press picked: each draws spread. */
+  const [heldBundle, setHeldBundle] = createSignal<string | null>(null);
+  const [pickedBundle, setPickedBundle] = createSignal<string | null>(null);
+  const bundleIds = createMemo(() => s.bundles().map(b => b.id), [], {
+    equals: (a, b) => a.length === b.length && a.every((id, i) => id === b[i]),
+  });
+  const bundleById = createMemo(() => new Map(s.bundles().map(b => [b.id, b])));
   const empty = () => !s.nodeIds().length && !s.groupIds().length;
 
   const onPointerUp = (e: PointerEvent) => {
@@ -182,7 +190,7 @@ export function Canvas(props: CanvasProps) {
           <SequenceBackdrop doc={shown()} part="phases" />
           <Lifelines doc={s.doc} ids={s.nodeIds()} rect={id => s.sceneRects().get(id)} />
           <g>
-            <For each={keep(s.routeIds())}>
+            <For each={keep(s.routeIds()).filter(id => !s.bundleOf().has(id))}>
               {id => (
                 <Show when={s.routesById().get(id)}>
                   {route => (
@@ -192,6 +200,31 @@ export function Canvas(props: CanvasProps) {
                       selected={isSelected(id)}
                       hovered={s.hoveredId() === id}
                       editing={s.inlineEditId() === id}
+                      interactive
+                    />
+                  )}
+                </Show>
+              )}
+            </For>
+            <For each={bundleIds()}>
+              {id => (
+                <Show when={bundleById().get(id)}>
+                  {bundle => (
+                    <BundleView
+                      doc={shown()}
+                      bundle={bundle()}
+                      route={member => s.routesById().get(member)}
+                      selected={isSelected}
+                      hovered={member => s.hoveredId() === member}
+                      editing={member => s.inlineEditId() === member}
+                      spread={heldBundle() === id || pickedBundle() === id}
+                      onHold={held => setHeldBundle(now => (held ? id : now === id ? null : now))}
+                      onPick={() => setPickedBundle(now => (now === id ? null : id))}
+                      onName={
+                        s.readOnly()
+                          ? undefined
+                          : name => s.nameBundle(bundle().a, bundle().b, name)
+                      }
                       interactive
                     />
                   )}

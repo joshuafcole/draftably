@@ -55,6 +55,9 @@ function subject(s: Statement): string {
   if (s.command === 'theme-color')
     return `${s.args[0]?.value ?? ''}:${s.attrs.find(([k]) => k === 'shade')?.[1].value ?? 500}`;
   if (s.command === 'note' && s.args.length > 1) return s.args[0].value;
+  // A bundle is about its pair of ends, in either order.
+  if (s.command === 'bundle')
+    return [s.args[0]?.value ?? '', s.args[1]?.value ?? ''].sort().join(',');
   return SUBJECT_FIRST.has(s.command) ? (s.args[0]?.value ?? '') : '';
 }
 
@@ -86,6 +89,12 @@ function fieldsOf(s: Statement): Record<string, string> {
     case 'order':
     case 'was-order':
       out.members = words.slice(1).join(',');
+      rest = [];
+      break;
+    case 'bundle':
+      out.a = words[0] ?? '';
+      out.b = words[1] ?? '';
+      if (words[2] !== undefined) out.name = words[2];
       rest = [];
       break;
     case 'align':

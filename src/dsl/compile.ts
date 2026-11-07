@@ -40,6 +40,7 @@ import {
   contentOrigin,
 } from './frame';
 import { projectScene } from './project';
+import { placePortals, splitPortals, type PortalSplit } from './portals';
 import { legendNotes } from './legend-notes';
 import {
   DslError,
@@ -168,11 +169,30 @@ export async function compile(source: string): Promise<Scene> {
   return best.scene;
 }
 
-function compileModel(m: Model) {
-  const flat = dissolved(m),
+function compileModel(full: Model) {
+  // Portals are set aside for layout and placed at the frame once it is laid out (portals.ts).
+  const split = splitPortals(full),
+    m = split?.inner ?? full,
+    flat = dissolved(m),
     room = widestLabels(flat);
   return engineArrangement(room).then(arranged =>
-    withOldOrder(sequenced(withSoftGroups(ownLabels(layoutModel(room, arranged), flat), m))),
+    withPortals(
+      withOldOrder(sequenced(withSoftGroups(ownLabels(layoutModel(room, arranged), flat), m))),
+      full,
+      split,
+    ),
+  );
+}
+
+/** The scene with its portals placed at the frame, sized as nodes are. */
+function withPortals(scene: Scene, full: Model, split: PortalSplit | undefined) {
+  if (!split) return scene;
+  return placePortals(
+    scene,
+    full,
+    split,
+    (o, hint) => leafSize(o, hint, scene.look),
+    text => edgeLabelSize(text, scene.look).w,
   );
 }
 
@@ -238,10 +258,14 @@ function fitVariants(root: ModelLayout) {
  * (they never add errors). Engine-governed scopes keep their built-in recipe in the result.
  */
 export function checkSource(source: string): Scene {
-  const m = parseModel(source);
+  const full = parseModel(source),
+    split = splitPortals(full),
+    m = split?.inner ?? full;
   const flat = dissolved(m);
-  return withOldOrder(
-    sequenced(withSoftGroups(ownLabels(layoutModel(widestLabels(flat)), flat), m)),
+  return withPortals(
+    withOldOrder(sequenced(withSoftGroups(ownLabels(layoutModel(widestLabels(flat)), flat), m))),
+    full,
+    split,
   );
 }
 

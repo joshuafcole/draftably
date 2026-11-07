@@ -387,6 +387,8 @@ export interface Model {
   noteLines: number[];
   /** Source line of each `footnote`, in order. */
   footnoteLines: number[];
+  /** Source line of each `bundle`, in order. */
+  bundleLines: number[];
   /** Source line of each ID an emphasis state lists, by `state:id`, or `state:context:id`. */
   stateLines: Map<string, number>;
   /** Sequence diagrams: `phase` statements, each a run of messages drawn as a row band. */
@@ -471,6 +473,7 @@ export const ROUTING_PARAMS: Record<string, Param<keyof RoutingSettings>> = {
   passes: { key: 'passes', min: 1, max: 5 },
   'corner-radius': { key: 'cornerRadius', min: 0, max: 16 },
   standoff: { key: 'standoff', min: 0, max: 40 },
+  bundle: { key: 'bundle', min: 2, max: 12 },
 };
 
 /** What to write instead of a layout attribute that a line does not take. */
@@ -491,9 +494,17 @@ export const isIdentifier = (s: string) => ID.test(s);
 
 export const COLORS: DslColor[] = ['auto', ...BUILT_IN_FAMILIES];
 const FAMILY = /^[A-Za-z_][A-Za-z0-9_-]*$/;
-export const DSL_SHAPES: DslShape[] = ['box', 'pill', 'circle', 'diamond', 'text', 'marker'];
+export const DSL_SHAPES: DslShape[] = [
+  'box',
+  'pill',
+  'circle',
+  'diamond',
+  'text',
+  'marker',
+  'portal',
+];
 /** Shapes a node's box can draw as it was: a marker's box is a thin cut, so it has no other shape. */
-export const PAST_SHAPES = DSL_SHAPES.filter(s => s !== 'marker');
+export const PAST_SHAPES = DSL_SHAPES.filter(s => s !== 'marker' && s !== 'portal');
 const FRAMES = ['box', 'soft', 'none'] as const;
 /** A `count=` symbol for an unknown number: a letter or a short word, such as `N` or `many`. */
 const COUNT_SYMBOL = /^[A-Za-z]{1,8}$/;
@@ -515,6 +526,7 @@ export function parseModel(source: string | SourceDoc): Model {
     legendLines: [],
     noteLines: [],
     footnoteLines: [],
+    bundleLines: [],
     stateLines: new Map(),
     phases: [],
     warnings: [],
@@ -1051,6 +1063,20 @@ export function parseModel(source: string | SourceDoc): Model {
         once('routing');
         m.routing = readParams(ROUTING_PARAMS);
         break;
+      case 'bundle': {
+        // `bundle a b "name"`: the lines between a and b run as one trunk, under that name.
+        count(2, 3);
+        allow([]);
+        const [a, b] = [id(args[0]), id(args[1])],
+          name = args[2] === undefined ? undefined : text(args[2]);
+        assert(a !== b, 'A bundle runs between two different ends: bundle a b "name".');
+        assert(args[2] === undefined || args[2].quoted, 'A bundle name goes in quotes.');
+        assert(name === undefined || name.trim(), 'A bundle name needs some text, or none at all.');
+        once(`bundle:${[a, b].sort().join(' ')}`);
+        (m.appearance.bundles ??= []).push({ a, b, ...(name ? { name } : {}) });
+        m.bundleLines.push(line);
+        break;
+      }
       case 'order':
         count(2, 300);
         allow([]);
@@ -1212,6 +1238,21 @@ function validateReferences(m: Model) {
       assert(seen.size <= 12, 'Limit: 12 nesting levels.', o.line);
     }
   }
+  // A portal stands for something outside the drawing, so it sits at the top level of a flow.
+  const rootRecipe = m.layouts.find(l => l.scope === 'root')?.algorithm ?? 'flow';
+  for (const o of m.objects) {
+    if (o.shape !== 'portal') continue;
+    assert(
+      o.parent === 'root',
+      `${o.id} is a portal, which sits at the drawing's edge; remove in=${o.parent}.`,
+      o.line,
+    );
+    assert(
+      rootRecipe === 'flow' || rootRecipe === 'row' || rootRecipe === 'column',
+      `${o.id} is a portal, which a ${rootRecipe} diagram has no edge for; use another shape.`,
+      o.line,
+    );
+  }
   // Lanes: every top-level object is a boxed group, so every node sits in a lane.
   if (m.layouts.some(l => l.scope === 'root' && l.algorithm === 'lanes'))
     for (const o of m.objects) {
@@ -1312,6 +1353,10 @@ function validateReferences(m: Model) {
         e.line,
       );
     }
+  (m.appearance.bundles ?? []).forEach((x, i) => {
+    exists(x.a, m.bundleLines[i]);
+    exists(x.b, m.bundleLines[i]);
+  });
   const stateIds = new Set((m.appearance.states ?? []).map(x => x.id));
   (m.appearance.notes ?? []).forEach((n, i) => {
     assert(

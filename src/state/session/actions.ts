@@ -583,7 +583,28 @@ export function createActions(s: EditorPart & DocumentPart & ScenePart & LayoutP
       onConfirm: load,
     });
   }
+  /**
+   * Name the trunk between `a` and `b` (a `bundle` statement), or with an empty name let the
+   * count label it again. The pair is kept either way, so it stays a trunk.
+   */
+  function nameBundle(a: string, b: string, name: string) {
+    if (s.readOnly()) return;
+    const text = name.trim(),
+      same = (x: { a: string; b: string }) => (x.a === a && x.b === b) || (x.a === b && x.b === a),
+      now = s.doc.appearance.bundles?.find(same);
+    if ((now?.name ?? '') === text && now) return;
+    s.transact(text ? 'Name bundle' : 'Unname bundle', d => {
+      const list = (d.appearance.bundles ??= []),
+        at = list.findIndex(same);
+      const row = { a: at >= 0 ? list[at].a : a, b: at >= 0 ? list[at].b : b };
+      const next = text ? { ...row, name: text } : row;
+      if (at >= 0) list[at] = next;
+      else list.push(next);
+    });
+  }
+
   return {
+    nameBundle,
     inlineDraft,
     setInlineDraft,
     setToolInterceptor,

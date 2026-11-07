@@ -7,7 +7,7 @@
  * write snaps back when the source is reprojected, so nothing unsaved looks saved. Changes the
  * file cannot express are rejected outright.
  */
-import type { ColorDefinition, DiagramAppearance } from '../model/appearance';
+import type { BundleName, ColorDefinition, DiagramAppearance } from '../model/appearance';
 import { findNode, isCell, selectionRoots } from '../model/graph';
 import { groupHeaderFor } from '../model/labels';
 import type { ColorKey, Diagram, DiagramEdge, DiagramNode, PortSide, Rect } from '../model/types';
@@ -218,6 +218,7 @@ export function translateEdit(input: EditInput): EditResult {
     notes: undefined,
     footnotes: undefined,
     legend: undefined,
+    bundles: undefined,
   });
   if (!same(look(before), look(after))) writeAppearance(source, after.appearance);
   writeRows(source, 'note', before.appearance.notes, after.appearance.notes, (st, n) => {
@@ -239,6 +240,7 @@ export function translateEdit(input: EditInput): EditResult {
   writeRows(source, 'legend', before.appearance.legend, after.appearance.legend, (st, e) => {
     st.args[st.args.length - 1] = quoted(e.label);
   });
+  writeBundles(source, before.appearance.bundles, after.appearance.bundles);
   // A phase's label is in its `phase` line; its messages never change on the canvas.
   const phases = new Map(before.layout.sequence?.phases.map(p => [p.id, p.label]));
   for (const p of after.layout.sequence?.phases ?? []) {
@@ -410,6 +412,43 @@ function writeRows<T>(
   after.forEach((row, i) => {
     if (rows[i] && !same(old[i], row)) write(rows[i], row);
   });
+}
+
+const pairOf = (a: string, b: string) => [a, b].sort().join(' ');
+
+/**
+ * Rewrite the `bundle` statements whose pair was named, renamed or let go: matched by their pair
+ * of ends in either order, so a statement's own order of ends and its comments stay.
+ */
+function writeBundles(
+  source: SourceDoc,
+  before: readonly BundleName[] = [],
+  after: readonly BundleName[] = [],
+) {
+  const find = (x: BundleName) =>
+    statements(source).find(
+      s =>
+        s.command === 'bundle' &&
+        pairOf(s.args[0]?.value ?? '', s.args[1]?.value ?? '') === pairOf(x.a, x.b),
+    );
+  const kept = new Set(after.map(x => pairOf(x.a, x.b)));
+  for (const x of before)
+    if (!kept.has(pairOf(x.a, x.b))) {
+      const gone = find(x);
+      removeWhere(source, s => s === gone);
+    }
+  const was = new Map(before.map(x => [pairOf(x.a, x.b), x.name]));
+  for (const x of after) {
+    const st = find(x);
+    if (!st) {
+      insertAfter(
+        source,
+        statement('bundle', [bare(x.a), bare(x.b), ...(x.name ? [quoted(x.name)] : [])]),
+        s => s.command === 'bundle' || s.command === 'edge',
+      );
+    } else if (was.get(pairOf(x.a, x.b)) !== x.name)
+      st.args = [st.args[0], st.args[1], ...(x.name ? [quoted(x.name)] : [])];
+  }
 }
 
 const colorKey = (s: Statement) => `${s.args[0]?.value}:${getAttr(s, 'shade')?.value ?? 500}`;

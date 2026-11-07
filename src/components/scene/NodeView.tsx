@@ -1,3 +1,4 @@
+import { PORTAL_DASH } from '../../model/styles';
 import { createMemo, For, Match, Show, Switch } from 'solid-js';
 import { findNode, isCell, isOpenCell, styleOf } from '../../model/graph';
 import { brokenRectPath } from '../../model/geometry';
@@ -348,6 +349,16 @@ function ShapeOutline(props: {
       </Match>
       <Match when={props.shape === 'marker'}>
         <rect width={w()} height={h()} rx={2} fill={props.ink} stroke="none" />
+      </Match>
+      {/* A portal stands for something outside the drawing: its outline is broken. */}
+      <Match when={props.shape === 'portal'}>
+        <rect
+          width={w()}
+          height={h()}
+          rx={props.radius}
+          {...props.attrs}
+          stroke-dasharray={PORTAL_DASH}
+        />
       </Match>
     </Switch>
   );

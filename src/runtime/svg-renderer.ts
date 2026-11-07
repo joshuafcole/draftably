@@ -2,6 +2,7 @@
  * A standalone SVG of a projected diagram for terminal and agent inspection. It draws with the
  * same appearance, shapes and title wrapping as the canvas and embeds the fonts it uses.
  */
+import { PORTAL_DASH } from '../model/styles';
 import { resolveAppearance, swatchFor, type ResolvedAppearance } from '../model/appearance';
 import { oldDoc, panelDoc, withoutMargins } from '../model/panels';
 import { countText, STACK_OFFSETS } from '../model/stack';
@@ -30,6 +31,7 @@ import {
   type EndMarker,
 } from '../model/markers';
 import { computeRoutes, HALO_WIDTH } from '../model/routes';
+import { findBundles } from '../model/bundles';
 import {
   drawnLegend,
   edgeInk,
@@ -135,6 +137,8 @@ function outline(shape: string, r: Rect, radius: number, paint: string, ink = ''
   if (shape === 'text') return '';
   if (shape === 'marker')
     return `<rect x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" rx="2" fill="${ink}"/>`;
+  if (shape === 'portal')
+    return `<rect x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" rx="${radius}" stroke-dasharray="${PORTAL_DASH}" ${paint}/>`;
   const rx = shape === 'pill' ? r.h / 2 : radius;
   return `<rect x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" rx="${rx}" ${paint}/>`;
 }
@@ -295,7 +299,25 @@ function sceneMarkup(
     );
   }
   const under = surfaces(doc, look);
+  // Lines a bundle carries are drawn as its trunk (model/bundles.ts).
+  const bundles = shared ? [] : findBundles(doc, vg, routes),
+    bundled = new Set(bundles.flatMap(b => b.members));
+  for (const b of bundles) {
+    const edge = doc.graph.edges.find(e => e.id === b.members[0])!,
+      ink = edgeInk(look, edge, diff),
+      type = edgeLabelType(look, false),
+      l = b.label,
+      arrow = marker('arrow', ink);
+    out.push(
+      `<g data-bundle="${esc(b.id)}">`,
+      `<path d="${b.path}" fill="none" stroke="${ink}" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"${b.toB ? ` marker-end="url(#${arrow})"` : ''}${b.toA ? ` marker-start="url(#${marker('arrow', ink, true)})"` : ''}/>`,
+      `<rect x="${l.x - l.w / 2}" y="${l.y - l.h / 2}" width="${l.w}" height="${l.h}" rx="${l.h / 2}" fill="${look.canvas}" stroke="${ink}" stroke-width="1"/>`,
+      `<text x="${l.x}" y="${l.y}" text-anchor="middle" dominant-baseline="central" ${font(type)} fill="${ink}">${esc(b.text)}</text>`,
+      '</g>',
+    );
+  }
   for (const route of routes) {
+    if (bundled.has(route.id)) continue;
     const edge = doc.graph.edges.find(e => e.id === route.id)!,
       p = statusPaint(look, edge.status, edge.spot),
       ink = edgeInk(look, edge, diff),

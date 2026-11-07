@@ -1,5 +1,8 @@
 import type { NodeStyle, ShapeKind } from './types';
 
+/** A portal's broken outline (`dsl/portals.ts`). */
+export const PORTAL_DASH = '5 3';
+
 export const SHAPES: ShapeKind[] = ['box', 'pill', 'circle', 'diamond', 'text', 'icon', 'image'];
 
 export const SHAPE_LABELS: Record<ShapeKind, string> = {
@@ -11,6 +14,7 @@ export const SHAPE_LABELS: Record<ShapeKind, string> = {
   icon: 'Icon',
   image: 'Image',
   marker: 'Marker',
+  portal: 'Portal',
 };
 
 /** Icons offered in the inspector for a shape. */

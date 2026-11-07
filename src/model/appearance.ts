@@ -73,6 +73,13 @@ export interface AppearanceOverrides {
   connection?: string;
 }
 
+/** A `bundle a b "name"` statement: the pair of ends, in either order, and the trunk's name. */
+export interface BundleName {
+  a: string;
+  b: string;
+  name?: string;
+}
+
 export interface DiagramAppearance {
   theme: ThemeId;
   overrides: AppearanceOverrides;
@@ -98,6 +105,11 @@ export interface DiagramAppearance {
   };
   /** File settings from `config` statements. */
   config?: FileConfig;
+  /**
+   * Trunks between a pair of ends, from `bundle` statements: each pair's lines run as one trunk
+   * whatever their number, under its name when it has one (`model/bundles.ts`).
+   */
+  bundles?: BundleName[];
   /** Named emphasis states from `state` statements, in file order. */
   states?: EmphasisState[];
   /**
