@@ -240,8 +240,12 @@ export function createScene(s: DocumentPart & FileSessionPart) {
     return drawingBounds(s.doc, visibleScene(), sceneRects(), routes());
   }
 
-  /** The frame the viewer draws round the drawing, which the editor's exports draw as well. */
-  function viewerFrame() {
+  /**
+   * The frame the viewer draws round the drawing, which the editor's exports draw as well. One memo
+   * for every reader: a glide moves the routes on each frame, and each reader would place the
+   * notes again.
+   */
+  const viewerFrame = createMemo(() => {
     const look = resolveAppearance(s.doc.appearance);
     return diagramFrame(
       look,
@@ -252,7 +256,7 @@ export function createScene(s: DocumentPart & FileSessionPart) {
       placeNotes(s.doc, look, sceneRects(), routes()),
       s.doc.appearance.footnotes,
     );
-  }
+  });
   return {
     sculptGeometry,
     setSculptGeometry,
