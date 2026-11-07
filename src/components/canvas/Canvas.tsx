@@ -68,11 +68,16 @@ export function Canvas(props: CanvasProps) {
     const activate = () => setActiveSession(s);
     stage.addEventListener('pointerdown', activate, true);
     stage.addEventListener('focusin', activate, true);
+    // A click with no press before it (assistive tech, a host's script) acts on this session too:
+    // the zoom controls run on the active session, and none, or a closed map's, is a Fit that
+    // frames nothing.
+    stage.addEventListener('click', activate, true);
     onCleanup(() => {
       observer.disconnect();
       svg.removeEventListener('wheel', s.onWheel);
       stage.removeEventListener('pointerdown', activate, true);
       stage.removeEventListener('focusin', activate, true);
+      stage.removeEventListener('click', activate, true);
     });
   });
 
