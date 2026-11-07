@@ -1013,11 +1013,11 @@ function fitWidth(o: ModelObject, base: { w: number; h: number }, look: Resolved
 /**
  * Size of a node: its requested size, or the default width with a height that fits the title in
  * the theme's type and padding. A requested size is kept exactly; `overflow` reports a title that
- * no longer fits in it.
+ * no longer fits in it. With `height=auto`, a `min-height` is a floor under the title's height.
  */
 export function leafSize(
   o: ModelObject,
-  size: { width: number; height?: number } | undefined,
+  size: { width: number; height?: number; minHeight?: number } | undefined,
   look: ResolvedAppearance,
 ) {
   const base = defaultShapeSize(o.shape);
@@ -1029,7 +1029,10 @@ export function leafSize(
     return { w, h: size.height, overflow: lines * look.title.lineHeight > area.maxHeight + 0.5 };
   return {
     w,
-    h: titleHeight(o.shape, lines, o.shape === 'circle' ? base.h : 0, look),
+    h: Math.max(
+      titleHeight(o.shape, lines, o.shape === 'circle' ? base.h : 0, look),
+      size?.minHeight ?? 0,
+    ),
     overflow: false,
   };
 }
@@ -3171,7 +3174,9 @@ function layoutPass(
             label: o.label,
             marker: o.shape === 'marker',
             ...(typeof o.span === 'number' ? { span: o.span } : {}),
-            ...(hint?.type === 'size' ? { size: { width: hint.width, height: hint.height } } : {}),
+            ...(hint?.type === 'size'
+              ? { size: { width: hint.width, height: hint.height, minHeight: hint.minHeight } }
+              : {}),
           };
         }),
         {

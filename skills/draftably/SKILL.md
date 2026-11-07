@@ -281,7 +281,7 @@ content area.
 | `near id ref side=right\|left\|above\|below gap=28` | Place beside a sibling, or beside the sibling group holding `ref`, lined up with `ref`. `strength=required` enforces it. |
 | `order scope id1 id2 ...`                           | Preferred order of a scope's children.                                                                                   |
 | `align x\|y id1 id2 ...`                            | Align sibling centers. `strength=required` locks them.                                                                   |
-| `size id width=164 height=56`                       | Requested node size; `height=auto` fits the title; a diamond stays square.                                               |
+| `size id width=164 height=56`                       | Requested node size; `height=auto` fits the title, `min-height=` sets a floor under it; a diamond stays square.          |
 | `nudge id dx= dy=`                                  | Offset from the automatic position.                                                                                      |
 | `pin id x= y=`                                      | Exact position; layout never moves it. Use sparingly.                                                                    |
 | `stay id x= y= weight=8`                            | Soft position. The viewer's tools write these; leave them.                                                               |

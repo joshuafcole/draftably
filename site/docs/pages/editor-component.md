@@ -70,14 +70,41 @@ editor.source(); // the text the editor holds now
 editor.destroy(); // when the host is removed
 ```
 
-| Option       | Effect                                                                     |
-| ------------ | -------------------------------------------------------------------------- |
-| `source`     | The `.draft` text to edit.                                                 |
-| `onChange`   | Receives the new text after every kept edit, undo and redo.                |
-| `storageKey` | Keeps the diagram in browser storage under this key, so a reload keeps it. |
-| `openLink`   | Opens an object's link. Without it, a URL opens in a new tab.              |
-| `confirm`    | Asks before an action that replaces the diagram.                           |
-| `onInteract` | Called when the user starts a gesture, so you can close your own menus.    |
+| Option        | Effect                                                                     |
+| ------------- | -------------------------------------------------------------------------- |
+| `source`      | The `.draft` text to edit.                                                 |
+| `onChange`    | Receives the new text after every kept edit, undo and redo.                |
+| `storageKey`  | Keeps the diagram in browser storage under this key, so a reload keeps it. |
+| `openLink`    | Opens an object's link. Without it, a URL opens in a new tab.              |
+| `confirm`     | Asks before an action that replaces the diagram.                           |
+| `onInteract`  | Called when the user starts a gesture, so you can close your own menus.    |
+| `nodeContent` | Draws some nodes' bodies yourself: see below.                              |
+
+## Draw a node's body yourself
+
+`nodeContent` puts your own drawing inside some nodes, in place of their titles. `draws(id)` says
+which nodes; `Body` returns the DOM to show in each. The body fills the node, sits over its shape
+and under its ports and handles, and takes no pointer events, so the pointer still selects and
+edits the node.
+
+```ts
+mountEditor(host, {
+  source: 'node api "API"\nsize api width=200 height=auto min-height=120',
+  nodeContent: {
+    draws: id => id === 'api',
+    Body: ({ id, width, height }) => {
+      const body = document.createElement('div');
+      body.textContent = `${id}: ${width}×${height}`;
+      return body;
+    },
+  },
+});
+```
+
+Layout never measures the body. Give the node the room it needs in the source with
+`size id width= height=auto min-height=`: the height fits the title, and never goes below
+`min-height`. Because the room is in the source, the CLI, exports and an editor without
+`nodeContent` lay the node out the same way; they draw the title instead of the body.
 
 [Using the Editor](#editing-in-the-viewer) and [Shortcuts](#shortcuts) describe what your users can
 do in it.

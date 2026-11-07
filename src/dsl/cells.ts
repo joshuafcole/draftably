@@ -26,7 +26,7 @@ export interface CellInput {
   /** Columns the cell covers in a grid. */
   span?: number;
   /** From a `size` line. */
-  size?: { width: number; height?: number };
+  size?: { width: number; height?: number; minHeight?: number };
 }
 
 export interface CellBox {
@@ -43,7 +43,10 @@ export function cellSize(c: CellInput, look: ResolvedAppearance) {
     const lines = wrapTitle(c.label, c.size.width - 2 * look.paddingX, look).length;
     return {
       w: c.size.width,
-      h: lines * look.title.lineHeight + 2 * Math.min(look.paddingY, CELL_PAD_Y),
+      h: Math.max(
+        lines * look.title.lineHeight + 2 * Math.min(look.paddingY, CELL_PAD_Y),
+        c.size.minHeight ?? 0,
+      ),
     };
   }
   const pad = 2 * look.paddingX,
