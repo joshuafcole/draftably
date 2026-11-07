@@ -50,6 +50,8 @@ export interface EdgeGeometry {
   label?: Rect;
   /** Everything: the route's bounds and the label. */
   rect: Rect;
+  /** The bundle whose trunk this is, when the ID is a bundle's or a line it carries. */
+  bundle?: string;
 }
 
 export interface ClearSpotOptions {
@@ -80,18 +82,35 @@ const labelRect = (l: { x: number; y: number; w: number; h: number }): Rect => (
 });
 
 /**
+ * A connection's line as drawn: its own route, or, for a bundle's ID or a line a bundle carries,
+ * the bundle's trunk. A carried line has no element of its own until its trunk is spread, and the
+ * spread is the canvas's (held, focused or picked), so an overlay anchored to it sits on the trunk.
+ */
+function drawnLine(
+  s: Parts,
+  id: string,
+): { points: Point[]; label?: Rect; bundle?: string } | undefined {
+  const bundle = s.bundles().find(b => b.id === id) ?? s.bundleOf().get(id);
+  if (bundle?.points.length)
+    return { points: bundle.points, label: labelRect(bundle.label), bundle: bundle.id };
+  const route = s.routesById().get(id);
+  if (!route?.points.length) return undefined;
+  return { points: route.points, ...(route.label ? { label: labelRect(route.label) } : {}) };
+}
+
+/**
  * Where an object is drawn, in the drawing's units: a shape's or container's box, a connection's
- * route with its label, or the panel of a note with that ID while the drawn state shows it.
+ * route with its label (a bundled one's trunk), or the panel of a note with that ID while the
+ * drawn state shows it.
  */
 export function drawnRect(s: Parts, id: string): Rect | undefined {
   const box = s.sceneRects().get(id);
   if (box) return box;
-  const route = s.routesById().get(id);
-  if (!route?.points.length)
-    return s.viewerFrame().notes.find(n => n.note.id === id && !n.hidden)?.rect;
+  const line = drawnLine(s, id);
+  if (!line) return s.viewerFrame().notes.find(n => n.note.id === id && !n.hidden)?.rect;
   return rectUnion([
-    ...route.points.map(p => ({ x: p.x, y: p.y, w: 0, h: 0 })),
-    ...(route.label ? [labelRect(route.label)] : []),
+    ...line.points.map(p => ({ x: p.x, y: p.y, w: 0, h: 0 })),
+    ...(line.label ? [line.label] : []),
   ]);
 }
 
@@ -123,14 +142,17 @@ export function createOverlay(s: Parts) {
     return inSpace(drawnRect(s, id), space);
   }
 
-  /** A connection's route and label as drawn, or undefined when there is no such connection. */
+  /**
+   * A connection's route and label as drawn (a bundle's, or a carried line's, is the trunk), or
+   * undefined when there is no such connection.
+   */
   function edgeOf(id: string, space: OverlaySpace = 'stage'): EdgeGeometry | undefined {
-    const route = s.routesById().get(id);
-    if (!route?.points.length) return undefined;
-    const label = route.label ? labelRect(route.label) : undefined;
+    const line = drawnLine(s, id);
+    if (!line) return undefined;
     return {
-      route: route.points.map(p => pointIn(p, space)),
-      ...(label ? { label: inSpace(label, space)! } : {}),
+      route: line.points.map(p => pointIn(p, space)),
+      ...(line.label ? { label: inSpace(line.label, space)! } : {}),
+      ...(line.bundle ? { bundle: line.bundle } : {}),
       rect: rectOf(id, space)!,
     };
   }

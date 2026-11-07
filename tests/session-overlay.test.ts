@@ -42,9 +42,9 @@ afterAll(() => vi.unstubAllGlobals());
 
 const STAGE = { width: 800, height: 600 };
 
-async function open() {
+async function open(source = SOURCE) {
   const s = createDiagramSession();
-  await s.openSource(SOURCE);
+  await s.openSource(source);
   for (let i = 0; i < 40 && s.fileCompiling(); i++) await new Promise(r => setTimeout(r, 0));
   s.setStageSize(STAGE);
   return s;
@@ -214,5 +214,34 @@ describe('the geometry notice', () => {
     // At rest, where the arrangement put it.
     expect(s.rectOf('a')).toEqual({ ...a0, x: a0.x + dx, y: a0.y + dy });
     expect(heard.at(-1)!.cause).not.toBe('motion');
+  });
+
+  it('anchors a line a bundle carries, and the bundle itself, to the trunk the canvas draws', async () => {
+    const s = await open(
+      [
+        'diagram "Crawl" version=1',
+        'node crawler "Crawler"',
+        'node offsite "Offsite"',
+        'edge a crawler -> offsite "warm fetch"',
+        'edge b crawler -> offsite "purge"',
+        'edge c offsite -> crawler "origin pull"',
+        'routing bundle=3',
+      ].join('\n'),
+    );
+    const [bundle] = s.bundles();
+    expect(bundle).toBeDefined();
+    expect(bundle!.members.sort()).toEqual(['a', 'b', 'c']);
+    const trunk = s.edgeOf(bundle!.id)!;
+    expect(trunk.bundle).toBe(bundle!.id);
+    expect(trunk.route).toEqual(bundle!.points);
+    for (const id of bundle!.members) {
+      const line = s.edgeOf(id)!;
+      expect(line.bundle).toBe(bundle!.id);
+      expect(line.route).toEqual(trunk.route);
+      expect(s.rectOf(id)).toEqual(trunk.rect);
+    }
+    // On the canvas as on the drawing.
+    s.moveCamera({ x: 12, y: 34, k: 2 });
+    expect(s.rectOf('a', 'screen')).toEqual(screenOf(trunk.rect, s.camera()));
   });
 });
