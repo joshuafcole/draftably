@@ -8,6 +8,15 @@ import { createDiagramSession, type DiagramSession, type SessionOptions } from '
 import { Editor } from './Editor';
 import '../styles/app.css';
 
+export type { Camera } from '../model/types';
+export type {
+  CameraEvent,
+  CameraReason,
+  DiagramSession,
+  FitOptions,
+  RevealOptions,
+} from '../state/session';
+
 /**
  * Shortcuts act on the session the user last pointed at. Clicking a shape leaves focus on the
  * page, so they listen on the document, once for all editors, and skip keys meant for the host's
@@ -35,6 +44,10 @@ export interface MountOptions extends SessionOptions {
 }
 
 export interface MountedEditor {
+  /**
+   * The editor's session. A host drives the camera through it: `getCamera()`, `setCamera()`,
+   * `fitTo(ids)` and `reveal(id)`; `onCamera` hears every move.
+   */
   session: DiagramSession;
   /** The text as the editor holds it now. */
   source(): string;

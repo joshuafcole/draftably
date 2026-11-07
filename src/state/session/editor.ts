@@ -133,12 +133,12 @@ export function createEditor(s: DocumentPart & ScenePart) {
       c = s.doc.camera,
       world = { x: (x - c.x) / c.k, y: (y - c.y) / c.k },
       k = clamp(c.k * factor, MIN_ZOOM, MAX_ZOOM);
-    s.setCamera({ x: x - world.x * k, y: y - world.y * k, k });
+    s.setCamera({ x: x - world.x * k, y: y - world.y * k, k }, 'user');
   }
 
   function panBy(dx: number, dy: number) {
     const c = s.doc.camera;
-    s.setCamera({ ...c, x: c.x + dx, y: c.y + dy });
+    s.setCamera({ ...c, x: c.x + dx, y: c.y + dy }, 'user');
   }
 
   /** A fit asked for before the canvas had a size, run on its first real size. */
@@ -170,11 +170,14 @@ export function createEditor(s: DocumentPart & ScenePart) {
         MIN_ZOOM,
         1,
       );
-    s.setCamera({
-      x: (w - b.w * k) / 2 - b.x * k,
-      y: (h - bottom + pad - b.h * k) / 2 - b.y * k,
-      k,
-    });
+    s.setCamera(
+      {
+        x: (w - b.w * k) / 2 - b.x * k,
+        y: (h - bottom + pad - b.h * k) / 2 - b.y * k,
+        k,
+      },
+      'user',
+    );
   }
 
   /** Some of the diagram lies outside the canvas, or under the zoom controls. */
@@ -193,7 +196,7 @@ export function createEditor(s: DocumentPart & ScenePart) {
       { width: w } = stageSize(),
       h = stageSize().height - reservedBottom,
       k = clamp(Math.min(w / b.w, h / b.h), MIN_ZOOM, 1.2);
-    s.setCamera({ x: (w - b.w * k) / 2 - b.x * k, y: (h - b.h * k) / 2 - b.y * k, k });
+    s.setCamera({ x: (w - b.w * k) / 2 - b.x * k, y: (h - b.h * k) / 2 - b.y * k, k }, 'user');
   }
 
   /** Pan just enough to bring an object fully into view. */
@@ -206,7 +209,7 @@ export function createEditor(s: DocumentPart & ScenePart) {
     if ((r.x + r.w) * c.k + c.x > w - pad) c.x = w - pad - (r.x + r.w) * c.k;
     if (r.y * c.k + c.y < pad) c.y = pad - r.y * c.k;
     if ((r.y + r.h) * c.k + c.y > h - pad) c.y = h - pad - (r.y + r.h) * c.k;
-    s.setCamera(c);
+    s.setCamera(c, 'user');
   }
 
   /** Center the selected objects without changing the zoom. */
@@ -219,7 +222,10 @@ export function createEditor(s: DocumentPart & ScenePart) {
     const b = rectUnion(rects),
       c = s.doc.camera,
       { width: w, height: h } = stageSize();
-    s.setCamera({ ...c, x: w / 2 - (b.x + b.w / 2) * c.k, y: h / 2 - (b.y + b.h / 2) * c.k });
+    s.setCamera(
+      { ...c, x: w / 2 - (b.x + b.w / 2) * c.k, y: h / 2 - (b.y + b.h / 2) * c.k },
+      'user',
+    );
   }
   return {
     tool,

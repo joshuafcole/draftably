@@ -1,6 +1,7 @@
 /**
  * `<draft-editor>`: the editor as a custom element, for any framework or plain HTML. Its `source`
- * attribute or property sets the text; every kept edit fires `draft-change` with the new text.
+ * attribute or property sets the text; every kept edit fires `draft-change` with the new text, and
+ * every camera move fires `draft-camera` with `{ camera, reason }`.
  * It mounts when added to the page and stops its session when removed.
  */
 import { mountEditor, type MountedEditor } from './mount';
@@ -52,6 +53,7 @@ if (typeof customElements !== 'undefined' && !customElements.get('draft-editor')
             this.last = source;
             this.dispatchEvent(new CustomEvent('draft-change', { detail: source, bubbles: true }));
           },
+          onCamera: detail => this.dispatchEvent(new CustomEvent('draft-camera', { detail })),
         });
       }
 

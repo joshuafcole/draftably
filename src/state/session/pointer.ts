@@ -186,7 +186,7 @@ export function createPointer(
         MIN_ZOOM,
         MAX_ZOOM,
       );
-    s.setDoc('camera', { x: mid.x - pinch.world.x * k, y: mid.y - pinch.world.y * k, k });
+    s.setCamera({ x: mid.x - pinch.world.x * k, y: mid.y - pinch.world.y * k, k }, 'user');
     return true;
   }
 
@@ -221,7 +221,7 @@ export function createPointer(
         // Browsers turn Shift + a vertical wheel into a horizontal delta.
         dx = e.deltaX || 0,
         dy = e.deltaX ? 0 : e.deltaY;
-      s.setCamera({ ...c, x: c.x - dx * unit, y: c.y - dy * unit });
+      s.setCamera({ ...c, x: c.x - dx * unit, y: c.y - dy * unit }, 'user');
       return;
     }
     const canvas = e.currentTarget as Element,
@@ -230,7 +230,7 @@ export function createPointer(
       x = e.clientX - r.left,
       y = e.clientY - r.top,
       k = clamp(c.k * wheelZoomFactor(e, unit), MIN_ZOOM, MAX_ZOOM);
-    s.setCamera({ x: x - ((x - c.x) / c.k) * k, y: y - ((y - c.y) / c.k) * k, k });
+    s.setCamera({ x: x - ((x - c.x) / c.k) * k, y: y - ((y - c.y) / c.k) * k, k }, 'user');
   }
 
   function onPointerDown(e: PointerEvent) {
@@ -466,19 +466,25 @@ export function createPointer(
           MAX_ZOOM,
         ),
         r = canvas.getBoundingClientRect();
-      s.setDoc('camera', {
-        x: g.startClient.x - r.left - g.start.x * k,
-        y: g.startClient.y - r.top - g.start.y * k,
-        k,
-      });
+      s.setCamera(
+        {
+          x: g.startClient.x - r.left - g.start.x * k,
+          y: g.startClient.y - r.top - g.start.y * k,
+          k,
+        },
+        'user',
+      );
       return;
     }
     if (g.kind === 'pan') {
-      s.setDoc('camera', {
-        ...g.camera,
-        x: g.camera.x + e.clientX - g.startClient.x,
-        y: g.camera.y + e.clientY - g.startClient.y,
-      });
+      s.setCamera(
+        {
+          ...g.camera,
+          x: g.camera.x + e.clientX - g.startClient.x,
+          y: g.camera.y + e.clientY - g.startClient.y,
+        },
+        'user',
+      );
       return;
     }
     if (g.kind === 'connect') return;
