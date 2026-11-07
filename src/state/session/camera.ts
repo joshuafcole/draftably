@@ -1,13 +1,4 @@
-/**
- * The camera as a host drives it: read it (`getCamera`), set it (`setCamera`, on the document
- * part), frame some objects (`fitTo`) or bring one into view (`reveal`), and hear every move
- * through `SessionOptions.onCamera` with its reason. When and how close to frame stays the host's
- * choice; these are the moves.
- *
- * `reveal` keeps to the defaults an automatic move owes the reader: nothing moves if the object is
- * already in view; otherwise the smallest pan; the zoom changes only when the object can't fit at
- * the current zoom, and then only outward, never below `minZoom`.
- */
+/** The camera as a host drives it: read it, frame some objects, or bring one into view. */
 import { createEffect, on } from 'solid-js';
 import { clamp, rectUnion } from '../../model/geometry';
 import type { Camera, Rect } from '../../model/types';
@@ -15,55 +6,43 @@ import type { DocumentPart } from './document';
 import { MAX_ZOOM, MIN_ZOOM, type EditorPart } from './editor';
 import type { ScenePart } from './scene';
 
-/**
- * Why the camera moved, in the words of the viewer's `camera` event: `api` for the host's calls
- * (`setCamera`, `fitTo`, `reveal`), `user` for everything else, the editor's own fits included.
- */
+/** `api` for the host's calls, `user` for everything else, as in the viewer's `camera` event. */
 export type CameraReason = 'user' | 'api';
 
 export interface CameraEvent {
-  /** The screen point of the world origin (`x`, `y`) and the zoom (`k`). */
   camera: Camera;
   reason: CameraReason;
 }
 
 export interface FitOptions {
-  /** Screen pixels kept clear round the objects. `FIT_MARGIN` by default. */
+  /** Screen pixels kept clear round the objects. */
   margin?: number;
-  /** Zoom no further out than this; the objects may then not all fit. `MIN_ZOOM` by default. */
   minZoom?: number;
-  /** Zoom no further in than this. `FIT_MAX_ZOOM` by default. */
   maxZoom?: number;
 }
 
 export interface RevealOptions {
-  /** Screen pixels kept clear between the object and the canvas edge after a move. `REVEAL_MARGIN` by default. */
+  /** Screen pixels kept clear round the object. */
   margin?: number;
-  /** The least zoom a reveal zooms out to when the object can't fit. `REVEAL_MIN_ZOOM` by default. */
+  /** The least zoom a reveal zooms out to. */
   minZoom?: number;
 }
 
-// Defaults for `fitTo` and `reveal` when a call doesn't set them.
-/** Screen pixels `fitTo` keeps clear round the objects. */
 export const FIT_MARGIN = 40;
-/** The closest `fitTo` zooms in: 1 is 100%. */
 export const FIT_MAX_ZOOM = 1;
-/** Screen pixels `reveal` keeps between the object and the canvas edge. */
 export const REVEAL_MARGIN = 40;
-/** The least zoom `reveal` zooms out to: below it, titles stop being legible. */
+/** Below this, titles stop being legible. */
 export const REVEAL_MIN_ZOOM = 0.55;
 
 export function createCamera(s: DocumentPart & ScenePart & EditorPart) {
-  /** The camera now: the screen point of the world origin (`x`, `y`) and the zoom (`k`). */
   const getCamera = (): Camera => ({ ...s.doc.camera });
 
-  /** The canvas size, or undefined before it has been laid out. */
   const stage = () => {
     const size = s.stageSize();
     return size.width > 1 && size.height > 1 ? size : undefined;
   };
 
-  /** Where an object is drawn: a shape's or group's box, or a connection's path and label. */
+  /** A shape's or group's box, or a connection's path and label. */
   function rectOf(id: string): Rect | undefined {
     const box = s.sceneRects().get(id);
     if (box) return box;
@@ -76,7 +55,6 @@ export function createCamera(s: DocumentPart & ScenePart & EditorPart) {
     ]);
   }
 
-  /** Move for the host; returns whether the camera moved. */
   function move(next: Camera) {
     const c = s.doc.camera;
     if (next.x === c.x && next.y === c.y && next.k === c.k) return false;
@@ -84,7 +62,7 @@ export function createCamera(s: DocumentPart & ScenePart & EditorPart) {
     return true;
   }
 
-  // A move asked for before the canvas had a size runs on its first real size.
+  // A move asked for before the canvas has a size runs once it has one.
   let pending: (() => void) | undefined;
   createEffect(
     on(s.measuredStageSize, () => {
@@ -103,11 +81,7 @@ export function createCamera(s: DocumentPart & ScenePart & EditorPart) {
     return false;
   };
 
-  /**
-   * Frame `ids` (shapes, groups or connections) in the canvas, centred, with `margin` screen
-   * pixels round them. Ids the drawing does not have are skipped; with none left nothing moves.
-   * Before the canvas has a size the fit waits for it. Returns whether the camera moved.
-   */
+  /** Frame `ids`, centred. Returns whether the camera moved. */
   function fitTo(ids: Iterable<string>, options: FitOptions = {}) {
     const rects = [...ids].map(rectOf).filter((r): r is Rect => !!r);
     if (!rects.length) return false;
@@ -124,12 +98,7 @@ export function createCamera(s: DocumentPart & ScenePart & EditorPart) {
     });
   }
 
-  /**
-   * Bring `id` into view. Nothing moves if it is wholly on the canvas already. Otherwise the
-   * camera pans the least that leaves `margin` round it, zooming out first only if it can't fit
-   * at the current zoom, and never below `minZoom` (or the current zoom, when that is lower).
-   * Returns whether the camera moved.
-   */
+  /** Bring `id` into view with the least pan, zooming out only if it can't fit. */
   function reveal(id: string, options: RevealOptions = {}) {
     if (!rectOf(id)) return false;
     return whenSized(() => {
@@ -144,7 +113,6 @@ export function createCamera(s: DocumentPart & ScenePart & EditorPart) {
       const room = { w: Math.max(1, w - margin * 2), h: Math.max(1, h - margin * 2) },
         fits = Math.min(room.w / Math.max(1, r.w), room.h / Math.max(1, r.h)),
         k = fits >= c.k ? c.k : Math.max(fits, Math.min(options.minZoom ?? REVEAL_MIN_ZOOM, c.k));
-      // A zoom keeps the canvas centre where it is, then the pan starts from there.
       const next = {
         x: w / 2 - ((w / 2 - c.x) / c.k) * k,
         y: h / 2 - ((h / 2 - c.y) / c.k) * k,

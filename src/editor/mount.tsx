@@ -44,10 +44,6 @@ export interface MountOptions extends SessionOptions {
 }
 
 export interface MountedEditor {
-  /**
-   * The editor's session. A host drives the camera through it: `getCamera()`, `setCamera()`,
-   * `fitTo(ids)` and `reveal(id)`; `onCamera` hears every move.
-   */
   session: DiagramSession;
   /** The text as the editor holds it now. */
   source(): string;

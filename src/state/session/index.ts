@@ -39,11 +39,7 @@ export interface SessionOptions {
   openLink?: (href: string) => void;
   /** The user started a gesture or a tool on the canvas; a host closes its menus here. */
   onInteract?: () => void;
-  /**
-   * The camera moved. `reason` is `api` when the host moved it (`setCamera`, `fitTo`, `reveal`)
-   * and `user` for everything else, the editor's own fits included. A call that leaves the camera
-   * where it was reports nothing.
-   */
+  /** The camera moved: `api` for the host's calls, `user` for everything else. */
   onCamera?: (event: CameraEvent) => void;
 }
 

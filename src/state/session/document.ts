@@ -207,7 +207,7 @@ export function createDocument(s: CanvasTextPart, options: SessionOptions) {
       if (keepCamera) state.setDoc('camera', camera);
       state.setRevision(r => r + 1);
     });
-    // Undo, a cancelled gesture and a restore from storage bring their own camera back.
+    // Undo and restores bring their own camera back.
     const c = state.doc.camera;
     if (c.x !== camera.x || c.y !== camera.y || c.k !== camera.k)
       options.onCamera?.({ camera: { ...c }, reason: 'user' });
@@ -249,11 +249,7 @@ export function createDocument(s: CanvasTextPart, options: SessionOptions) {
 
   // --- Camera ----------------------------------------------------------------------------------
 
-  /**
-   * Move the camera, and report it to `SessionOptions.onCamera` with `reason`. A host calling
-   * this gets `api`; the editor's own moves (gestures, zoom, its fits) pass `user`. A camera
-   * that is already where it was reports nothing.
-   */
+  /** The editor's own moves pass `user`. */
   function setCamera(camera: Camera, reason: CameraReason = 'api') {
     const c = state.doc.camera;
     if (c.x === camera.x && c.y === camera.y && c.k === camera.k) return;
