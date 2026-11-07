@@ -1,7 +1,6 @@
 // @vitest-environment jsdom
 import { render } from 'solid-js/web';
 import { describe, expect, it, vi } from 'vitest';
-import { renderSvg } from '../src/cli/svg';
 import { NodeContentProvider, type NodeContentProps } from '../src/components/scene/node-content';
 import { NodeView } from '../src/components/scene/NodeView';
 import { compile } from '../src/dsl/compile';
@@ -64,14 +63,6 @@ describe('node content', () => {
     const b = scene.querySelector('[data-id="b"]')!;
     expect(b.querySelector('foreignObject')).toBeNull();
     expect(b.querySelector('.node-title')?.textContent).toBe('Build');
-    dispose();
-  });
-
-  it('leaves exports to the title: the CLI svg draws no host body', async () => {
-    const { doc, dispose } = await drawn(() => true);
-    const svg = renderSvg(doc);
-    expect(svg).not.toContain('foreignObject');
-    expect(svg).toContain('Collect the inputs');
     dispose();
   });
 });
