@@ -273,4 +273,14 @@ describe('the geometry notice', () => {
     expect(s.rectOf('crowded')).toEqual(crowded[0]!.rect);
     expect(s.crowdedNotes().map(n => n.id)).toEqual(['crowded']);
   });
+
+  it('a label set clear of its line takes a leader and is not also a crowded note', async () => {
+    const s = await open(`${SOURCE}label go at=0.5 offset=90\n`);
+    const go = s.routes().find(r => r.id === 'go')!;
+    expect(go.leader).toBeDefined();
+    // `crowdedNotes` is the notes' own (`note-overlap`); a route's label is never one, so a
+    // detached label is raised once, by its leader, and never handed to the host as a note.
+    expect(s.crowdedNotes().map(n => n.id)).not.toContain('go');
+    expect(s.crowdedNotes().every(n => n.id === 'n1')).toBe(true);
+  });
 });
