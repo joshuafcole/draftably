@@ -33,6 +33,7 @@ import { noteAnchor, noteSide } from '../../model/note';
 import { parseTextId } from './canvas-text';
 import { toast } from '../toast';
 import type { EditorPart } from './editor';
+import type { EmphasisPart } from './emphasis';
 import type { DocumentPart } from './document';
 import type { ScenePart } from './scene';
 import type { SculptPart } from './sculpt';
@@ -95,7 +96,14 @@ const targetData = (t: Element, selector: string) =>
   (t.closest(selector) as SVGElement | null)?.dataset;
 
 export function createPointer(
-  s: EditorPart & DocumentPart & ScenePart & SculptPart & ActionsPart & LayoutPart & ViewPart,
+  s: EditorPart &
+    DocumentPart &
+    ScenePart &
+    EmphasisPart &
+    SculptPart &
+    ActionsPart &
+    LayoutPart &
+    ViewPart,
 ) {
   let gesture: Gesture | null = null;
   let lastClick: { id: string; index?: number; time: number; x: number; y: number } | null = null;

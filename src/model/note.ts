@@ -23,11 +23,15 @@ export interface Note {
   side?: NoteSide;
   /** Wrap width; `NOTE_WIDTH` when unset. */
   width?: number;
+  /** The emphasis states the note shows in, from `states=`; every drawing when unset. */
+  states?: string[];
 }
 
 /**
  * A note with its box and wrapped lines. `inFrame` notes sit under the subtitle; `overlaps` is set
- * on an anchored note when no clear spot was found.
+ * on an anchored note when no clear spot was found. A `hidden` note is not in the drawn state: it
+ * keeps its place in the list, so a note's index still names it, but takes no room and draws
+ * nothing.
  */
 export interface PlacedNote {
   note: Note;
@@ -36,7 +40,15 @@ export interface PlacedNote {
   lines: Run[][];
   inFrame?: boolean;
   overlaps?: boolean;
+  hidden?: boolean;
 }
+
+/**
+ * Whether `note` shows in `doc` as drawn: always without `states=`, otherwise only while one of
+ * the states it lists is drawn (`withState`).
+ */
+export const noteShown = (doc: Pick<Diagram, 'drawnState'>, note: Note) =>
+  !note.states || (doc.drawnState !== undefined && note.states.includes(doc.drawnState));
 
 /** The side a note sits on: its `side`, or by default right of a message and below anything else. */
 export const noteSide = (doc: Diagram, note: Note): NoteSide =>
@@ -117,7 +129,9 @@ function rowSpots(row: Rect, lanes: Rect, side: NoteSide, w: number, h: number):
 /**
  * Place every anchored note beside its object or message, clear of shapes, group borders, lines
  * and earlier notes when a nearby spot allows it. Frame notes, and notes whose object is not drawn,
- * come back `inFrame` at 0,0 for `diagramFrame` to place.
+ * come back `inFrame` at 0,0 for `diagramFrame` to place. Notes the drawn state leaves out come
+ * back `hidden`. Notes shown in every drawing are placed first, so a state's own notes never push
+ * one of them to another spot. The result is in file order.
  */
 export function placeNotes(
   doc: Diagram,
@@ -142,7 +156,10 @@ export function placeNotes(
     seq = doc.layout.sequence,
     // A sequence's labels sit on their rows, in the way of a note; elsewhere nothing changes.
     labels = routes.flatMap(r => (seq && r.label ? [labelBox(r.label)] : [])),
-    margins = doc.appearance.notes?.flatMap((_, i) => seq?.notes?.[i] ?? []) ?? [],
+    // A sequence keeps a margin spot for every note, shown or not, so no state moves a lane.
+    margins =
+      doc.appearance.notes?.flatMap((n, i) => (noteShown(doc, n) ? (seq?.notes?.[i] ?? []) : [])) ??
+      [],
     placed: Rect[] = [...margins];
   const clear = (r: Rect) =>
     !shapes.some(s => overlaps(s, r, 4)) &&
@@ -151,7 +168,7 @@ export function placeNotes(
     !placed.some(s => overlaps(s, r, 8)) &&
     // A note may sit inside a group, but not across its border.
     frames.every(g => !overlaps(g, r) || contains(g, r));
-  return (doc.appearance.notes ?? []).map((note, i) => {
+  const place = (note: Note, i: number): PlacedNote => {
     const box = noteBox(look, note),
       at = note.near ? rects.get(note.near) : undefined,
       message = at ? undefined : routes.find(r => r.id === note.near);
@@ -186,7 +203,19 @@ export function placeNotes(
     const spot = spots.find(clear);
     placed.push(spot ?? spots[0]);
     return { ...box, rect: spot ?? spots[0], ...(spot ? {} : { overlaps: true }) };
-  });
+  };
+  const notes = doc.appearance.notes ?? [],
+    out: PlacedNote[] = notes.map(note => ({
+      note,
+      rect: { x: 0, y: 0, w: 0, h: 0 },
+      lines: [],
+      hidden: true,
+    }));
+  for (const always of [true, false])
+    notes.forEach((note, i) => {
+      if (!note.states === always && noteShown(doc, note)) out[i] = place(note, i);
+    });
+  return out;
 }
 
 /**
@@ -202,6 +231,7 @@ export function noteMarkup(
     panel = swatchFor(look, 'slate', 50, 'group'),
     link = swatchFor(look, 'primary', 700).fill;
   return notes
+    .filter(n => !n.hidden)
     .map(({ note, rect: r, lines }) => {
       const text = lines
         .map(

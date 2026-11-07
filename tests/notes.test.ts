@@ -13,6 +13,7 @@ import { normalize } from '../src/model/document';
 import type { Diagram } from '../src/model/types';
 import { setTextValue, textId } from '../src/state/session/canvas-text';
 import { computeRoutes } from '../src/model/routes';
+import { withState } from '../src/model/status';
 
 const SOURCE = `diagram "Plans" version=1
 node ws "Workspace"
@@ -214,5 +215,41 @@ describe('note ids', () => {
       selection: [],
     }).source;
     expect(printSource(saved)).toContain('note billing "Billed yearly." near=seat\n');
+  });
+});
+
+describe('notes per state', () => {
+  const STATED =
+    SOURCE +
+    'state one "One" plan\nstate two "Two" seat\n' +
+    'note first "Only in one." near=seat states=one\n' +
+    'note always "In every drawing." near=seat\n' +
+    'note both "In one and two." near=plan states=one,two\n';
+  const doc = () => projectScene(checkSource(STATED));
+
+  it('shows a note only in the states it lists, and one without states= everywhere', () => {
+    const shown = (svg: string) => [...svg.matchAll(/data-note="([^"]+)"/g)].map(m => m[1]).sort();
+    expect(shown(renderSvg(doc()))).toEqual(['always']);
+    expect(shown(renderSvg(withState(doc(), 'one')))).toEqual(['always', 'both', 'first']);
+    expect(shown(renderSvg(withState(doc(), 'two')))).toEqual(['always', 'both']);
+  });
+
+  it('never moves a note that shows everywhere, though a state note comes first in the file', () => {
+    const scene = checkSource(STATED),
+      { rects } = visibleRects(projectScene(scene)),
+      at = (state?: string) =>
+        placeNotes({ ...projectScene(scene), drawnState: state }, scene.look, rects, []);
+    const plain = at(),
+      one = at('one');
+    expect(plain.map(n => !!n.hidden)).toEqual([true, false, true]);
+    expect(one.map(n => !!n.hidden)).toEqual([false, false, false]);
+    expect(one[1].rect).toEqual(plain[1].rect);
+    expect(overlaps(one[0].rect, one[1].rect)).toBe(false);
+  });
+
+  it('rejects a state the file does not declare', () => {
+    expect(() => checkSource(SOURCE + 'note "x" near=seat states=ghost\n')).toThrow(
+      /Unknown state ghost/,
+    );
   });
 });

@@ -11,6 +11,7 @@ import { createEffect, on } from 'solid-js';
 import { clamp, rectUnion } from '../../model/geometry';
 import type { Camera, Rect } from '../../model/types';
 import type { DocumentPart } from './document';
+import type { EmphasisPart } from './emphasis';
 import { MAX_ZOOM, MIN_ZOOM, type EditorPart } from './editor';
 import type { ScenePart } from './scene';
 
@@ -36,7 +37,7 @@ export const LEGIBLE_ZOOM = 0.55;
 
 const sameCamera = (a: Camera, b: Camera) => a.x === b.x && a.y === b.y && a.k === b.k;
 
-export function createCamera(s: DocumentPart & ScenePart & EditorPart) {
+export function createCamera(s: DocumentPart & ScenePart & EmphasisPart & EditorPart) {
   /** The camera now: the screen point of the world origin (`x`, `y`) and the zoom (`k`). */
   const camera = (): Camera => ({ ...s.doc.camera });
 
@@ -62,13 +63,14 @@ export function createCamera(s: DocumentPart & ScenePart & EditorPart) {
 
   /**
    * Where an object is drawn: a shape's or container's box, a connection's path and label, or the
-   * panel of a note with that ID.
+   * panel of a note with that ID, while the drawn state shows it.
    */
   function rectOf(id: string): Rect | undefined {
     const box = s.sceneRects().get(id);
     if (box) return box;
     const route = s.routesById().get(id);
-    if (!route?.points.length) return s.viewerFrame().notes.find(n => n.note.id === id)?.rect;
+    if (!route?.points.length)
+      return s.viewerFrame().notes.find(n => n.note.id === id && !n.hidden)?.rect;
     const l = route.label;
     return rectUnion([
       ...route.points.map(p => ({ x: p.x, y: p.y, w: 0, h: 0 })),

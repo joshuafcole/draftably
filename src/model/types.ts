@@ -275,6 +275,11 @@ export interface Diagram {
   theme: Theme;
   /** Diagram theme, overrides and color definitions. Saved with the diagram. */
   appearance: DiagramAppearance;
+  /**
+   * The emphasis state this document is drawn in, set by `withState` and never saved. Notes read
+   * it: a note with `states=` shows only in the states it lists.
+   */
+  drawnState?: string;
 }
 
 export type NodeGeometry = Record<string, NodeLayout>;

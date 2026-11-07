@@ -297,22 +297,32 @@ export function sceneConflicts(scene: Scene): Diagnostic[] {
   ];
 }
 
-/** An anchored note with no clear spot beside its object, so it covers part of the drawing. */
+/**
+ * An anchored note with no clear spot beside its object, so it covers part of the drawing. A note
+ * with `states=` is placed in each state it lists, among that state's notes, and reported once.
+ */
 function noteConflicts(
   scene: Scene,
   doc: Diagram,
   rects: Map<string, Rect>,
   routes: DrawnRoute[],
 ): Diagnostic[] {
-  return placeNotes(doc, scene.look, rects, routes).flatMap((n, i) =>
-    n.overlaps
+  const notes = doc.appearance.notes ?? [],
+    states = [...new Set(notes.flatMap(n => n.states ?? []))],
+    overlapping = new Set<number>();
+  for (const drawnState of [undefined, ...states])
+    placeNotes({ ...doc, drawnState }, scene.look, rects, routes).forEach((n, i) => {
+      if (n.overlaps) overlapping.add(i);
+    });
+  return notes.flatMap((note, i) =>
+    overlapping.has(i)
       ? [
           {
             level: 'warning' as const,
             code: 'note-overlap',
-            message: `The note beside ${n.note.near} covers part of the drawing. Try another side=, a smaller width=, or a note without near= in the frame.`,
+            message: `The note beside ${note.near} covers part of the drawing. Try another side=, a smaller width=, or a note without near= in the frame.`,
             line: scene.model.noteLines[i],
-            ids: [n.note.near!],
+            ids: [note.near!],
           },
         ]
       : [],

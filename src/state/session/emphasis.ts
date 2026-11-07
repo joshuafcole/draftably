@@ -1,13 +1,19 @@
 /**
  * Which emphasis state the viewer draws, and whether it shows all of them as a grid. Both are
- * view state, like the camera: they live in the URL (`?state=write`), never in the file.
+ * view state, like the camera: they live in the URL (`?state=write`), never in the file. The frame
+ * round the drawing is here too, since the drawn state decides which notes it holds.
  */
 import { createSignal } from 'solid-js';
+import { resolveAppearance } from '../../model/appearance';
+import { drawingBounds } from '../../model/bounds';
+import { diagramFrame, FRAME_PAD } from '../../model/frame';
+import { placeNotes } from '../../model/note';
 import { panelDoc, type PanelSide } from '../../model/panels';
-import { listedStates, withState } from '../../model/status';
+import { drawnLegend, listedStates, usedStatuses, withState } from '../../model/status';
 import type { DocumentPart } from './document';
+import type { ScenePart } from './scene';
 
-export function createEmphasis(s: DocumentPart) {
+export function createEmphasis(s: DocumentPart & ScenePart) {
   const state = (() => {
     const [active, setActive] = createSignal<string | null>(
       s.options.urlState ? new URLSearchParams(location.search).get('state') : null,
@@ -74,9 +80,27 @@ export function createEmphasis(s: DocumentPart) {
       side = panel();
     return side ? panelDoc(doc, side) : doc;
   };
+  /**
+   * The frame the viewer draws round the drawing, which the editor's exports draw as well. It
+   * holds the notes the drawn state shows; a note with `states=` is `hidden` in any other.
+   */
+  function viewerFrame() {
+    const look = resolveAppearance(s.doc.appearance),
+      id = activeState();
+    return diagramFrame(
+      look,
+      s.doc.appearance.heading,
+      drawnLegend(s.doc),
+      usedStatuses(s.doc),
+      drawingBounds(s.doc, s.visibleScene(), s.sceneRects(), s.routes(), FRAME_PAD),
+      placeNotes(id ? { ...s.doc, drawnState: id } : s.doc, look, s.sceneRects(), s.routes()),
+      s.doc.appearance.footnotes,
+    );
+  }
   return {
     panel,
     showPanel,
+    viewerFrame,
     states,
     activeState,
     gridOpen,

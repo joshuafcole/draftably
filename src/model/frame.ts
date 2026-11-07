@@ -37,9 +37,9 @@ export function diagramFrame(
   notes: readonly PlacedNote[] = [],
   footnotes: readonly Footnote[] = [],
 ) {
-  const anchored = notes.filter(n => !n.inFrame).map(n => n.rect),
+  const anchored = notes.filter(n => !n.inFrame && !n.hidden).map(n => n.rect),
     area = anchored.length ? rectUnion([drawing, rectUnion(anchored, FRAME_PAD)]) : drawing,
-    inFrame = notes.filter(n => n.inFrame),
+    inFrame = notes.filter(n => n.inFrame && !n.hidden),
     // The subtitle wraps to the drawing, or to the frame a `width=` sets.
     wrap = subtitleMeasure(look, (heading?.width ?? area.w) - FRAME_PAD * 2),
     lines = headingSize(look, heading, wrap),
@@ -59,7 +59,7 @@ export function diagramFrame(
   // Frame notes start under the title and subtitle, which take the heading's height less its gap.
   let top = y + 28 + (lines.h ? lines.h - 20 + NOTE_GAP : 0);
   const placed = notes.map(n => {
-    if (!n.inFrame) return n;
+    if (!n.inFrame || n.hidden) return n;
     const rect = { ...n.rect, x: left, y: top };
     top += n.rect.h + NOTE_GAP;
     return { ...n, rect };
@@ -77,7 +77,7 @@ export function diagramFrame(
     legend: { x: left, y: area.y + area.h - 12 + foot.h },
     /** The footnote block's top-left corner and layout. */
     foot: { ...foot, x: left, y: area.y + area.h - 12 },
-    /** Every note, placed. */
+    /** Every note, placed, in file order; a `hidden` one takes no room. */
     notes: placed,
   };
 }

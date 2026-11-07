@@ -113,6 +113,14 @@ host page can address it: an SVG marks the note `data-note="billing"`, and an em
 select it or bring it into view by that ID. The ID is the note's own: no other note, object or
 connection may have it. A note without one works as before.
 
+`states=a,b` shows a note only while one of those [emphasis states](#emphasis-states) is drawn,
+such as a remark that belongs to one step of a walkthrough. A note without `states=` shows in
+every drawing, as before, and a note with it shows in none when no state is drawn. Like a
+state, it never moves anything: a note that shows everywhere keeps its spot in every state, and a
+state's own notes find clear spots around it. The frame grows only round the notes it shows.
+`--states` panels draw only notes without `states=`. `check` reports a state that the file does
+not declare.
+
 ```text
 note "Seats are billed monthly." near=seat side=below width=220
 ```

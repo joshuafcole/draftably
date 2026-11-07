@@ -6,10 +6,6 @@ import { createMemo, createSignal } from 'solid-js';
 import type { PriorRoute, RoutingResult } from '../../engines/routing-engine.js';
 import { routingFingerprint } from '../../model/document';
 import { drawingBounds } from '../../model/bounds';
-import { resolveAppearance } from '../../model/appearance';
-import { diagramFrame, FRAME_PAD } from '../../model/frame';
-import { placeNotes } from '../../model/note';
-import { drawnLegend, usedStatuses } from '../../model/status';
 import {
   frameRect,
   makeGeometry,
@@ -240,19 +236,6 @@ export function createScene(s: DocumentPart & FileSessionPart) {
     return drawingBounds(s.doc, visibleScene(), sceneRects(), routes());
   }
 
-  /** The frame the viewer draws round the drawing, which the editor's exports draw as well. */
-  function viewerFrame() {
-    const look = resolveAppearance(s.doc.appearance);
-    return diagramFrame(
-      look,
-      s.doc.appearance.heading,
-      drawnLegend(s.doc),
-      usedStatuses(s.doc),
-      drawingBounds(s.doc, visibleScene(), sceneRects(), routes(), FRAME_PAD),
-      placeNotes(s.doc, look, sceneRects(), routes()),
-      s.doc.appearance.footnotes,
-    );
-  }
   return {
     sculptGeometry,
     setSculptGeometry,
@@ -278,7 +261,6 @@ export function createScene(s: DocumentPart & FileSessionPart) {
     routingReport,
     blockedRouteIds,
     sceneBounds,
-    viewerFrame,
   };
 }
 

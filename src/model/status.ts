@@ -193,7 +193,8 @@ export const listedStates = (doc: Diagram) => (doc.appearance.states ?? []).filt
  * `rest=dim`, everything else fades, except the containers that hold something in focus, so the
  * context still reads, and the state's `context=`, which draws as usual: so does a connection
  * whose ends are both in focus or context. With `rest=plain` nothing fades, so focus also takes an
- * accent ring. Nothing moves.
+ * accent ring. Nothing moves. The document remembers the state as
+ * `drawnState`, so a note shows only in the states it lists.
  */
 export function withState(doc: Diagram, id: string): Diagram {
   const state = doc.appearance.states?.find(s => s.id === id);
@@ -235,7 +236,7 @@ export function withState(doc: Diagram, id: string): Diagram {
           : rest;
     return spot ? { ...e, spot } : e;
   });
-  return { ...doc, styles, graph: { ...doc.graph, edges } };
+  return { ...doc, styles, graph: { ...doc.graph, edges }, drawnState: id };
 }
 
 /**

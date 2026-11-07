@@ -38,7 +38,9 @@ export function textBoxes(doc: Diagram, frame: DiagramFrame): TextBox[] {
     type = look.annotation,
     panel = swatchFor(look, 'slate', 50, 'group').fill,
     out: TextBox[] = [];
-  frame.notes.forEach((n, i) =>
+  // A note the drawn state leaves out can't be clicked; the others keep their index as their id.
+  frame.notes.forEach((n, i) => {
+    if (n.hidden) return;
     out.push({
       id: textId('note', i),
       rect: n.rect,
@@ -46,8 +48,8 @@ export function textBoxes(doc: Diagram, frame: DiagramFrame): TextBox[] {
       fill: panel,
       ink: look.text,
       links: linkBoxes(n.lines, n.rect.x + NOTE_PAD.x, n.rect.y + NOTE_PAD.y, type.lineHeight),
-    }),
-  );
+    });
+  });
   const foot = frame.foot;
   foot.items.forEach((item, i) => {
     const top = foot.y + item.y,

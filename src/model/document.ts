@@ -515,6 +515,9 @@ export function normalizeAppearance(input: Raw): DiagramAppearance {
         ...(typeof n.near === 'string' ? { near: n.near } : {}),
         ...(NOTE_SIDES.includes(n.side) ? { side: n.side } : {}),
         ...(typeof n.width === 'number' && n.width > 0 ? { width: n.width } : {}),
+        ...(Array.isArray(n.states)
+          ? { states: n.states.filter((x: unknown) => typeof x === 'string') }
+          : {}),
       });
   if (notes.length) out.notes = notes;
   const footnotes: Footnote[] = [];

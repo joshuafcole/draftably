@@ -8,6 +8,7 @@ import { findNode, objectRect } from '../../model/graph';
 import type { NodeGeometry, Point, PortSide, Rect } from '../../model/types';
 import type { DocumentPart } from './document';
 import type { ScenePart } from './scene';
+import type { EmphasisPart } from './emphasis';
 
 export type Tool =
   'select' | 'pan' | 'box' | 'diamond' | 'circle' | 'text' | 'container' | 'connect' | 'brush';
@@ -42,7 +43,7 @@ export const MAX_ZOOM = 4;
 const FIT_SHARE = 0.92;
 export { NodeGeometry };
 
-export function createEditor(s: DocumentPart & ScenePart) {
+export function createEditor(s: DocumentPart & ScenePart & EmphasisPart) {
   const state = (() => {
     const [tool, setTool] = createSignal<Tool>('select');
     const [connectFrom, setConnectFrom] = createSignal<{ id: string; side: PortSide } | null>(null);

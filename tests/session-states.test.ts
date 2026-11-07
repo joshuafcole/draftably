@@ -71,3 +71,35 @@ describe('states hidden from the chips', () => {
     expect(s.stepState(1)).toBe(false);
   });
 });
+
+describe('notes per state on the canvas', () => {
+  const NOTED =
+    STATES +
+    'note always "Everywhere." near=a\n' +
+    'note s1 "Step one only." near=a states=step1\n' +
+    'note w "Write only." near=c states=write\n';
+  const shown = (s: Awaited<ReturnType<typeof open>>) =>
+    s
+      .viewerFrame()
+      .notes.filter(n => !n.hidden)
+      .map(n => n.note.id);
+
+  it('frames only the notes the drawn state shows, hidden states included', async () => {
+    const s = await open(NOTED);
+    expect(shown(s)).toEqual(['always']);
+    s.showState('step1');
+    expect(shown(s)).toEqual(['always', 's1']);
+    s.showState('write');
+    expect(shown(s)).toEqual(['always', 'w']);
+    expect(s.drawnDoc().drawnState).toBe('write');
+  });
+
+  it('reveals a note only while it is shown', async () => {
+    const s = await open(NOTED);
+    s.setStageSize({ width: 800, height: 600 });
+    expect(s.reveal('s1')).toBe(false);
+    s.showState('step1');
+    s.moveCamera({ x: 5000, y: 5000, k: 1 });
+    expect(s.reveal('s1')).toBe(true);
+  });
+});
