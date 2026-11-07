@@ -12,6 +12,9 @@ export const manhattan = (a: Point, b: Point) => Math.abs(a.x - b.x) + Math.abs(
 export const inside = (p: Point, r: Rect, pad = 0) =>
   p.x >= r.x - pad && p.x <= r.x + r.w + pad && p.y >= r.y - pad && p.y <= r.y + r.h + pad;
 
+export const sameRect = (a: Rect, b: Rect) =>
+  a.x === b.x && a.y === b.y && a.w === b.w && a.h === b.h;
+
 export const contains = (outer: Rect, inner: Rect) =>
   inside({ x: inner.x, y: inner.y }, outer) &&
   inside({ x: inner.x + inner.w, y: inner.y + inner.h }, outer);

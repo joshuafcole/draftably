@@ -550,13 +550,35 @@ can draw:
 ~edge dispatch gate -> web "create" was="start"
 ```
 
-| Word         | Goes on                    | Records                                                |
-| ------------ | -------------------------- | ------------------------------------------------------ |
-| `was="old"`  | `~node`, `~group`, `~edge` | The label before the change.                           |
-| `was-shape=` | `~node`                    | The shape before the change. Any shape but `marker`.   |
-| `was-count=` | `~node`                    | The count before the change. `was-count=1` is one box. |
+| Word           | Goes on                    | Records                                                                                          |
+| -------------- | -------------------------- | ------------------------------------------------------------------------------------------------ |
+| `was="old"`    | `~node`, `~group`, `~edge` | The label before the change.                                                                     |
+| `was-shape=`   | `~node`                    | The shape before the change. Any shape but `marker`.                                             |
+| `was-count=`   | `~node`                    | The count before the change. `was-count=1` is one box.                                           |
+| `was-at=x,y`   | `~node`, `~group`          | The top-left corner before the change, in the parent's content area as `pin` and `stay` give it. |
+| `was-size=w,h` | `~node`                    | The width and height before the change.                                                          |
 
 `check` refuses these words on a line with no `~` mark. `compare` writes them for you.
+
+`was-at=` and `was-size=` draw on the merged drawing itself, in the changed mark's amber, as a
+dotted ghost of the old box. The ghost of a box that moved clear of where it was takes one
+hairline, from the ghost to a dot on the box; a resize, or a ghost that overlaps its box, takes
+none, since the pairing is already plain. An old corner outside the drawing's frame draws no
+ghost: a dot on the box's side that faces it, a line straight out to the frame's edge, and a tick
+there. The legend counts these as `moved` and `resized`, beside `changed`, which counts them
+too. Like the other marks they move nothing, and the ghosts sit outside the drawing's bounds.
+
+```draft
+~node api "API" was-at=0,0
+pin api x=320 y=0
+~node db "Orders DB" was-size=164,56
+size db width=240 height=80
+```
+
+`compare` writes `was-at=` when the older file has a `pin` or `stay` line for an object and the
+newer one moved or dropped it, and `was-size=` when the older file has a `size` line with both
+numbers that the newer one changed or dropped. A place only the newer file gives, or a
+`height=auto` size, is on the `compare` report instead.
 
 `compare` reports everything else with no old version on stderr, such as
 `Changes with no old version to draw: a (color), layout root, participant order.` That list covers

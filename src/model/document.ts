@@ -72,6 +72,14 @@ export function emptyDiagram(title = 'Untitled diagram'): Diagram {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Raw = any;
 
+/** A changed object's old corner and size, where both numbers of each are finite. */
+const pastBox = (o: Raw) => ({
+  ...(finite(o.wasAt?.x) && finite(o.wasAt?.y) ? { wasAt: { x: o.wasAt.x, y: o.wasAt.y } } : {}),
+  ...(finite(o.wasSize?.w) && finite(o.wasSize?.h) && o.wasSize.w > 0 && o.wasSize.h > 0
+    ? { wasSize: { w: o.wasSize.w, h: o.wasSize.h } }
+    : {}),
+});
+
 /**
  * Import the active view of a version 1 file. The obsolete view-management data is dropped;
  * hidden objects are removed together with their descendants.
@@ -170,6 +178,7 @@ export function normalize(input: unknown): Diagram {
       ...(Number.isInteger(n.wasCount) || typeof n.wasCount === 'string'
         ? { wasCount: n.wasCount }
         : {}),
+      ...pastBox(n),
       ...(typeof n.href === 'string' ? { href: n.href } : {}),
       ...((Number.isInteger(n.count) && n.count > 1) || typeof n.count === 'string'
         ? { count: n.count }
@@ -186,6 +195,7 @@ export function normalize(input: unknown): Diagram {
       id: g.id,
       title: g.title,
       ...(typeof g.was === 'string' ? { was: g.was } : {}),
+      ...pastBox({ wasAt: g.wasAt }),
       ...(typeof g.href === 'string' ? { href: g.href } : {}),
       ...(g.parentId ? { parentId: g.parentId } : {}),
       ...(g.frame === 'soft' || g.frame === 'none' ? { frame: g.frame } : {}),

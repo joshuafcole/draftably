@@ -11,6 +11,7 @@ import {
   printSource,
   quoted,
   readSource,
+  type Hint,
   type Model,
   type ModelEdge,
   type ModelObject,
@@ -65,6 +66,42 @@ const pastNode = (old: ModelObject, now: ModelObject) => {
   if (boxed && old.shape !== now.shape) words.push(['was-shape', bare(old.shape)]);
   if ((old.count ?? 1) !== (now.count ?? 1)) words.push(['was-count', bare(old.count ?? 1)]);
   return { words, drawn: boxed ? ['shape', 'count'] : ['count'] };
+};
+
+/** Where an object sits in one version, from its `pin` (or else `stay`) line, and how big it is. */
+const placeOf = (m: Model, id: string) => {
+  const hint = <T extends Hint['type']>(type: T) =>
+      m.hints.find(
+        (h): h is Extract<Hint, { type: T }> => h.type === type && 'id' in h && h.id === id,
+      ),
+    at = hint('pin') ?? hint('stay'),
+    size = hint('size');
+  return {
+    at,
+    // `height=auto` is the title's height, which only a layout knows.
+    size: size?.height !== undefined ? { w: size.width, h: size.height } : undefined,
+  };
+};
+
+/**
+ * A changed object's old corner and size as `was-at` and `was-size` words, where the older file
+ * gives them and the newer one moved or resized it, and the lines those words carry, which then
+ * need no other report. A newer file that drops the line draws a laid-out box; a Before panel
+ * compares the old numbers with that box.
+ */
+const pastPlace = (old: Model, now: Model, id: string, node: boolean) => {
+  const [was, is] = [placeOf(old, id), placeOf(now, id)],
+    words: [string, Word][] = [],
+    carried: string[] = [];
+  if (was.at && (!is.at || was.at.x !== is.at.x || was.at.y !== is.at.y)) {
+    words.push(['was-at', bare(`${was.at.x},${was.at.y}`)]);
+    carried.push(`${was.at.type} ${id}`, ...(is.at ? [`${is.at.type} ${id}`] : []));
+  }
+  if (node && was.size && (!is.size || was.size.w !== is.size.w || was.size.h !== is.size.h)) {
+    words.push(['was-size', bare(`${was.size.w},${was.size.h}`)]);
+    carried.push(`size ${id}`);
+  }
+  return { words, carried };
 };
 
 /** Whether what both lists hold comes in the same order in each. */
@@ -149,15 +186,24 @@ export function compareDetailed(before: string, after: string) {
   };
 
   const out: SourceLine[] = [],
-    unshown: string[] = [];
+    unshown: string[] = [],
+    carried: string[] = [];
   for (const line of docs[1].lines) {
     if (line.kind !== 'statement' || !DECLARATIONS.includes(line.command)) {
       out.push(line);
       continue;
     }
     const prior = was.get(keyOf(line));
-    if (!prior || split.has(keyOf(line))) out.push({ ...line, mark: '+' });
-    else if (meaning(prior) !== meaning(now.get(keyOf(line))!)) {
+    if (!prior || split.has(keyOf(line))) {
+      out.push({ ...line, mark: '+' });
+      continue;
+    }
+    const place =
+      'shape' in prior
+        ? pastPlace(old, next, prior.id, prior.type === 'node')
+        : { words: [], carried: [] };
+    carried.push(...place.carried);
+    if (meaning(prior) !== meaning(now.get(keyOf(line))!) || place.words.length) {
       const label = line.args[line.command === 'edge' ? 4 : 1]?.value ?? '',
         { words, drawn } =
           'shape' in prior
@@ -180,6 +226,7 @@ export function compareDetailed(before: string, after: string) {
           ...line.attrs,
           ...(label !== prior.label ? [['was', quoted(prior.label)] as [string, Word]] : []),
           ...words,
+          ...place.words,
         ],
       });
     } else out.push(line);
@@ -218,7 +265,7 @@ export function compareDetailed(before: string, after: string) {
   }
   const [gone, kept] = [undeclared(docs[0].lines), undeclared(out)];
   for (const [text, name] of [...gone, ...kept])
-    if (!gone.has(text) || !kept.has(text)) unshown.push(name);
+    if ((!gone.has(text) || !kept.has(text)) && !carried.includes(name)) unshown.push(name);
   let reordered = false;
   if (isSequence(old) && isSequence(next)) {
     if (!sameOrder(nodesOf(old), nodesOf(next))) unshown.push('participant order');

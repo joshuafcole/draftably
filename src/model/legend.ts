@@ -1,7 +1,15 @@
 /** The color key drawn under an exported diagram, shared by `inspect --svg` and the editor's export. */
 import { NODE_SHADE, swatchFor, type LegendEntry, type ResolvedAppearance } from './appearance';
 import { measureText } from './fonts';
-import { MARKER, statusLabel, statusPaint, statusSwatch, type StatusCount } from './status';
+import { GHOST_DASH } from './position-marks';
+import {
+  MARKER,
+  statusLabel,
+  statusPaint,
+  statusSwatch,
+  type Status,
+  type StatusCount,
+} from './status';
 
 const esc = (s: string) =>
   s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -69,9 +77,19 @@ export function legendMarkup(look: ResolvedAppearance, key: LegendLayout, x: num
       } else if (e.legend) {
         const c = swatchFor(look, e.legend.family!, e.legend.shade ?? NODE_SHADE, 'node');
         swatch = box(left, top, row, `fill="${c.fill}" stroke="${c.stroke}"`);
+      } else if (e.status!.status === 'moved' || e.status!.status === 'resized') {
+        // A ghost where the box was; a move also takes its hairline to a dot.
+        const ink = statusPaint(look, 'changed').stroke!,
+          ghost = `fill="none" stroke="${ink}" stroke-width="1.4" stroke-dasharray="${GHOST_DASH}"`;
+        swatch =
+          e.status!.status === 'resized'
+            ? box(left, top, row, ghost)
+            : `<rect x="${left}" y="${mid - 4}" width="8" height="8" rx="2" ${ghost}/>` +
+              `<line x1="${left + 8}" y1="${mid}" x2="${left + 14}" y2="${mid}" stroke="${ink}" stroke-width="1"/>` +
+              `<circle cx="${left + 14}" cy="${mid}" r="2" fill="${ink}"/>`;
       } else {
         // A change entry draws a box with that mark's fill, border, dash, fade and marker.
-        const s = e.status!.status,
+        const s = e.status!.status as Status,
           p = statusPaint(look, s),
           c = statusSwatch(look, s, 'node');
         swatch =

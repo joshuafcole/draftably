@@ -16,7 +16,7 @@ import {
   type Shade,
   type Swatch,
 } from './appearance';
-import { descendants, styleOf } from './graph';
+import { descendants, pastRect, styleOf } from './graph';
 import type { Diagram, DiagramEdge } from './types';
 
 export type Status = 'same' | 'added' | 'removed' | 'changed' | 'context';
@@ -29,16 +29,24 @@ export type Status = 'same' | 'added' | 'removed' | 'changed' | 'context';
 export type Spot = 'focus' | 'ring' | 'dim';
 export const STATUSES: Status[] = ['same', 'added', 'removed', 'changed', 'context'];
 
+/**
+ * A changed object drawn with a ghost where it was (`was-at=`) or at its old size (`was-size=`).
+ * The legend counts these apart from `changed`, which counts them too.
+ */
+export type PlaceChange = 'moved' | 'resized';
+
 /** Legend order and wording, after a count; `same` needs no entry. */
-export const STATUS_LABELS: Partial<Record<Status, string>> = {
+export const STATUS_LABELS: Partial<Record<Status | PlaceChange, string>> = {
   added: 'added',
   changed: 'changed',
+  moved: 'moved',
+  resized: 'resized',
   removed: 'removed',
   context: 'shown for context',
 };
 
 export interface StatusCount {
-  status: Status;
+  status: Status | PlaceChange;
   /** Objects with the mark. */
   count: number;
   /** Connections with the mark. */
@@ -217,13 +225,30 @@ export function usedStatuses(doc: Diagram): StatusCount[] {
     marks = Object.entries(doc.styles)
       .filter(([id]) => ids.has(id))
       .map(([, s]) => s.status);
-  return (Object.keys(STATUS_LABELS) as Status[])
+  const places = placeChanges(doc);
+  return (Object.keys(STATUS_LABELS) as (Status | PlaceChange)[])
     .map(status => ({
       status,
-      count: marks.filter(m => m === status).length,
+      count:
+        status === 'moved' || status === 'resized'
+          ? places[status]
+          : marks.filter(m => m === status).length,
       lines: doc.graph.edges.filter(e => e.status === status).length,
     }))
     .filter(c => c.count || c.lines);
+}
+
+/** How many objects the drawing shows a ghost for at another place, and at another size only. */
+export function placeChanges(doc: Diagram): Record<PlaceChange, number> {
+  const out = { moved: 0, resized: 0 };
+  for (const o of [...doc.graph.nodes, ...doc.graph.groups]) {
+    const now = doc.layout.nodes[o.id],
+      was = now && pastRect(doc, o.id, now);
+    if (!was) continue;
+    if (was.x !== now.x || was.y !== now.y) out.moved++;
+    else if (was.w !== now.w || was.h !== now.h) out.resized++;
+  }
+  return out;
 }
 
 /** The color key's rows: a diff draws no family colors, so it lists only its statuses. */

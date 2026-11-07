@@ -30,6 +30,7 @@ import type {
   ColorKey,
   LayoutAlgorithmId,
   LayoutSettings,
+  Point,
   PortSide,
   RoutingSettings,
   ShapeKind,
@@ -188,7 +189,7 @@ export function readSource(source: string): SourceDoc {
 
 // --- Formatting --------------------------------------------------------------------------------
 
-const BARE = /^[A-Za-z0-9_.+-]+$|^->$/;
+const BARE = /^[A-Za-z0-9_.,+-]+$|^->$/;
 const printWord = (w: Word) =>
   w.quoted || !BARE.test(w.value) ? JSON.stringify(w.value) : w.value;
 
@@ -243,6 +244,13 @@ export interface ModelObject {
   wasShape?: DslShape;
   /** With `~`, nodes only: the count before the change; 1 means a single box. */
   wasCount?: number | string;
+  /**
+   * With `~`: the top-left corner before the change, relative to the parent's content area as
+   * `pin` and `stay` give it.
+   */
+  wasAt?: Point;
+  /** With `~`, nodes only: the width and height before the change. */
+  wasSize?: { w: number; h: number };
   /** A link to open from exported drawings, such as a source file or URL. */
   href?: string;
   /**
@@ -586,10 +594,26 @@ export function parseModel(source: string | SourceDoc): Model {
       !s.mark || ['node', 'group', 'edge'].includes(command),
       `Only node, group and edge lines take a ${s.mark} mark.`,
     );
+    /** Two numbers in one word, `x,y`, each within `min` and `max`. */
+    const pair = (key: string, min: number, max: number): [number, number] => {
+      const w = attrs.get(key)!,
+        parts = w.value.split(',').map(Number);
+      assert(
+        !w.quoted &&
+          parts.length === 2 &&
+          parts.every(n => Number.isFinite(n) && n >= min && n <= max),
+        `Expected ${key}=a,b with numbers from ${min} to ${max}; got ${w.value}.`,
+      );
+      return parts as [number, number];
+    };
     const was = () => {
-      for (const key of ['was', 'was-shape', 'was-count'])
+      for (const key of ['was', 'was-shape', 'was-count', 'was-at', 'was-size'])
         assert(!attrs.has(key) || s.mark === '~', `${key}= belongs on a changed (~) line.`);
+      const at = attrs.has('was-at') ? pair('was-at', -100_000, 100_000) : undefined,
+        size = attrs.has('was-size') ? pair('was-size', 1, 100_000) : undefined;
       return {
+        ...(at ? { wasAt: { x: at[0], y: at[1] } } : {}),
+        ...(size ? { wasSize: { w: size[0], h: size[1] } } : {}),
         ...(attrs.has('was') ? { was: attrs.get('was')!.value } : {}),
         ...(attrs.has('was-shape')
           ? { wasShape: choice('was-shape', 'box', PAST_SHAPES) as DslShape }
@@ -714,11 +738,13 @@ export function parseModel(source: string | SourceDoc): Model {
                 'was',
                 'was-shape',
                 'was-count',
+                'was-at',
+                'was-size',
                 'href',
                 'count',
                 'span',
               ]
-            : ['in', 'color', 'shade', 'was', 'href', 'frame', 'fold'],
+            : ['in', 'color', 'shade', 'was', 'was-at', 'href', 'frame', 'fold'],
         );
         const oid = id(args[0]);
         assert(oid !== 'root', 'root is reserved for the outer layout scope.');
