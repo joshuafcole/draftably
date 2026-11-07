@@ -28,6 +28,7 @@ import {
   translateEdit,
   UnsupportedEdit,
 } from '../../dsl/translate';
+import { sourceOperations, type SourceOperation } from '../../dsl/operations';
 import {
   setLayoutRecipe,
   setLayoutShape,
@@ -58,6 +59,31 @@ export interface FileSessionInfo {
   example?: string;
   /** The file's path relative to the served folder (files only). */
   file?: string;
+}
+
+/**
+ * One kept edit, for a host that stores the diagram itself (`SessionOptions.onEdit`): the source
+ * before and after it, and the statements it changed.
+ */
+export interface SessionEdit {
+  /** What the edit was, as the editor names it: `Move objects`, `Add connection`, … */
+  label: string;
+  /** The source the edit was made on. */
+  previous: string;
+  /** The source with the edit. */
+  source: string;
+  /** The statements the edit added, removed and changed (`dsl/operations.ts`). */
+  operations: SourceOperation[];
+  /** Short descriptions of what was saved, such as `anchored 4 nearby`. */
+  notes: string[];
+  /** Editor ids of new objects and connections, mapped to their ids in the source. */
+  ids: Record<string, string>;
+  /**
+   * The edit completes the one before it rather than being a step of its own: a drop kept at its
+   * exact point, or more text typed in the same focus of the Source panel. A host that keeps
+   * history folds it into the previous step.
+   */
+  amends: boolean;
 }
 
 export type FileStatus = 'saved' | 'saving' | 'invalid' | 'conflict' | 'failed' | 'offline';
@@ -499,6 +525,7 @@ export function createFileSession(s: DocumentPart & CanvasTextPart) {
       else if (top.before === next) state.setUndoStack(stack => stack.slice(0, -1));
       else state.setUndoStack(stack => [...stack.slice(0, -1), { ...top, after: next }]);
       state.setRedoStack([]);
+      announce(localSource, next, 'Edit source', { amends: top?.burst === burst });
       setLocal(next);
       setDraft(null);
       if (state.status() === 'invalid') state.setStatus('saved');
@@ -514,7 +541,36 @@ export function createFileSession(s: DocumentPart & CanvasTextPart) {
   function snapBack(message: string) {
     void showSource(localSource);
     toast(message);
+    s.options.onRefused?.(message);
     return false;
+  }
+
+  /** Tell the host about a kept edit (`SessionOptions.onEdit`). */
+  function announce(
+    previous: string,
+    source: string,
+    label: string,
+    {
+      operations,
+      notes = [],
+      ids = new Map<string, string>(),
+      amends = false,
+    }: {
+      operations?: SourceOperation[];
+      notes?: string[];
+      ids?: Map<string, string>;
+      amends?: boolean;
+    } = {},
+  ) {
+    s.options.onEdit?.({
+      label,
+      previous,
+      source,
+      operations: operations ?? sourceOperations(readSource(previous), readSource(source)),
+      notes,
+      ids: Object.fromEntries(ids),
+      amends,
+    });
   }
 
   /** A drawing from a layout pass, timeline step or brush stroke, as positions in the source. */
@@ -531,6 +587,7 @@ export function createFileSession(s: DocumentPart & CanvasTextPart) {
       ids: new Map<string, string>(),
       notes: [label, ...notes],
       drops: [] as Drop[],
+      operations: sourceOperations(readSource(localSource), source),
     };
   }
 
@@ -564,6 +621,8 @@ export function createFileSession(s: DocumentPart & CanvasTextPart) {
               after: renamePending(normalize(JSON.parse(after))),
               label,
               selection: renamePending(s.selectedIds()),
+              drag: s.options.drag,
+              newId: s.options.newId,
             });
     } catch (error) {
       if (error instanceof UnsupportedEdit) return snapBack(error.message);
@@ -584,7 +643,13 @@ export function createFileSession(s: DocumentPart & CanvasTextPart) {
       );
       state.setRedoStack([]);
     });
+    const previous = localSource;
     setLocal(next);
+    announce(previous, next, label, {
+      operations: result.operations,
+      notes: result.notes,
+      ids: result.ids,
+    });
     for (const [id, sourceId] of result.ids) pendingIds.set(id, sourceId);
     const mapId = (id: string) => result.ids.get(id) ?? id,
       { drops } = result;
@@ -626,6 +691,10 @@ export function createFileSession(s: DocumentPart & CanvasTextPart) {
     const next = exactSource(off);
     state.setUndoStack(stack => [...stack.slice(0, -1), { ...stack.at(-1)!, after: next }]);
     setLocal(next);
+    announce(source, next, 'Keep exact position', {
+      notes: [`kept ${off.map(d => d.id).join(', ')} where dropped`],
+      amends: true,
+    });
     savedMessage = `${keptLabel()} · kept ${off.map(d => d.id).join(', ')} where dropped`;
     savedAction = undefined;
     void showSource(next);
@@ -657,7 +726,9 @@ export function createFileSession(s: DocumentPart & CanvasTextPart) {
       );
       state.setRedoStack([]);
     });
+    const previous = localSource;
     setLocal(next);
+    announce(previous, next, label, { notes: [message] });
     savedMessage = `${keptLabel()} · ${message}`;
     savedAction = undefined;
     void save();
@@ -890,12 +961,18 @@ export function createFileSession(s: DocumentPart & CanvasTextPart) {
     exampleOriginal = info.example ? info.source : '';
     s.disableBrowserStorage();
     s.setCommitHandler(handleEdit);
-    s.setHistoryHandler({
-      undo: () => historyStep('undo'),
-      redo: () => historyStep('redo'),
-      canUndo: () => state.undoStack().length > 0,
-      canRedo: () => state.redoStack().length > 0,
-    });
+    // A host that keeps the history itself answers undo and redo; `false` turns them off.
+    const host = s.options.history;
+    s.setHistoryHandler(
+      host === false
+        ? { undo() {}, redo() {}, canUndo: () => false, canRedo: () => false }
+        : (host ?? {
+            undo: () => historyStep('undo'),
+            redo: () => historyStep('redo'),
+            canUndo: () => state.undoStack().length > 0,
+            canRedo: () => state.redoStack().length > 0,
+          }),
+    );
     state.setInfo(info);
     return acceptDisk(info.source, info.revision);
   }

@@ -21,6 +21,9 @@ export {
   type Statement,
 } from './dsl/syntax';
 
+// What an edit did to a source, statement by statement.
+export { sourceOperations, type SourceOperation } from './dsl/operations';
+
 // Compile a source to a laid-out scene; its source diagnostics are on `scene.diagnostics`.
 export {
   checkSource,

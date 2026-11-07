@@ -24,8 +24,15 @@ import { createScene } from './scene';
 import { createSculpt } from './sculpt';
 import { createView, type ViewItem } from './view';
 import type { Camera } from '../../model/types';
+import type { DragTranslation, NewIdRequest } from '../../dsl/translate';
+import type { HistoryHandler } from './document';
+import type { SessionEdit } from './file-session';
 
 export type { ViewItem, ViewItemKind } from './view';
+export type { DragTranslation, NewIdRequest } from '../../dsl/translate';
+export type { SourceOperation } from '../../dsl/operations';
+export type { HistoryHandler } from './document';
+export type { SessionEdit } from './file-session';
 export type { PanelSide } from '../../model/panels';
 export { LEGIBLE_ZOOM, type CameraMover, type FitOptions, type RevealOptions } from './camera';
 
@@ -79,6 +86,26 @@ export interface SessionOptions {
    * added, `after` without what was removed, both on the merge's layout.
    */
   panel?: PanelSide;
+  /**
+   * Every kept edit of a source the host opened (`openSource`), with the statements it changed:
+   * for a host that stores the diagram as its own records rather than as text. Called before the
+   * edit is redrawn; `openSource`'s `onChange` still receives the text.
+   */
+  onEdit?: (edit: SessionEdit) => void;
+  /**
+   * An edit the source cannot take was undone, with the reason the editor shows (for example
+   * that connection bends are not saved). The drawing is already back as it was.
+   */
+  onRefused?: (message: string) => void;
+  /**
+   * Who keeps the undo history of an opened source: the session (the default), the host (undo
+   * and redo, from the keys or a menu, call it), or nobody (`false`).
+   */
+  history?: HistoryHandler | false;
+  /** How a drag is kept in the source: `near` a neighbour (the default) or a `stay` where dropped. */
+  drag?: DragTranslation;
+  /** Give each new object and connection its id; without it ids are made from labels. */
+  newId?: (request: NewIdRequest) => string;
 }
 
 export function createDiagramSession(options: SessionOptions = {}) {

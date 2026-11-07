@@ -11,6 +11,11 @@ export {
   type RevealOptions,
   type ConfirmRequest,
   type DiagramSession,
+  type DragTranslation,
+  type HistoryHandler,
+  type NewIdRequest,
+  type SessionEdit,
+  type SourceOperation,
   type SessionOptions,
   type ViewItem,
   type ViewItemKind,
@@ -33,6 +38,7 @@ export type { Camera } from '../model/types';
 // What `mountEditor` sets up around the canvas, for a host that mounts `Editor` in its own tree:
 // the bundled faces text is measured in, and the shortcuts for the active session.
 export { registerFonts } from '../lib/font-data';
-export { handleCanvasKey, handleKeyUp } from '../state/canvas-keyboard';
+// The clipboard, for a host that listens for `copy` and `paste` itself (`mountEditor` does).
+export { copyShapes, handleCanvasKey, handleKeyUp, pasteShapes } from '../state/canvas-keyboard';
 export { Editor } from './Editor';
 export { mountEditor, type MountedEditor, type MountOptions } from './mount';

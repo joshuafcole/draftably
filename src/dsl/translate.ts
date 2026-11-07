@@ -30,9 +30,13 @@ import {
   statement,
   statements,
 } from './source-edits';
+import { sourceOperations, type SourceOperation } from './operations';
 import {
   DSL_SHAPES,
+  isIdentifier,
   POSITION_HINTS,
+  printSource,
+  readSource,
   THEME_ATTRS,
   type NearSide,
   type SourceDoc,
@@ -50,6 +54,31 @@ export interface EditInput {
   label: string;
   /** Selected ids when the edit was committed; moves and resizes apply to these. */
   selection: string[];
+  /**
+   * How a moved object is kept: `near` (the default) places it relative to the neighbour it was
+   * dropped by, or nudges it; `stay` keeps it exactly where it was dropped, as a soft `stay`.
+   * Either way its neighbours are anchored, and a pinned object moves its pin.
+   */
+  drag?: DragTranslation;
+  /**
+   * Give a new object or connection its id. Without it ids are made from labels; with it they
+   * never are. The id must be an identifier that `taken` does not report.
+   */
+  newId?: (request: NewIdRequest) => string;
+}
+
+export type DragTranslation = 'stay' | 'near';
+
+/** A new object or connection that needs an id in the source. */
+export interface NewIdRequest {
+  kind: 'node' | 'group' | 'edge';
+  /** A node's or group's title, or a connection's label (often empty). */
+  label: string;
+  /** A connection's ends, as source ids. */
+  from?: string;
+  to?: string;
+  /** Whether an id is already used in the source, or by an earlier new object in this edit. */
+  taken: (id: string) => boolean;
 }
 
 export interface EditResult {
@@ -60,6 +89,11 @@ export interface EditResult {
   notes: string[];
   /** Objects a move placed `near` a neighbour, with where they were dropped. */
   drops: Drop[];
+  /**
+   * The statements the edit added, removed and changed, for a host that keeps the diagram as its
+   * own records. A file save ignores them: `source` is the whole result.
+   */
+  operations: SourceOperation[];
 }
 
 /** A dropped object: where it was let go in the drawing, and that point in its parent. */
@@ -128,10 +162,22 @@ function rejectUnsupported(before: Diagram, after: Diagram) {
 export function translateEdit(input: EditInput): EditResult {
   const { source, scene, before, after } = input;
   rejectUnsupported(before, after);
+  const original = printSource(source);
   const ids = new Map<string, string>(),
     notes: string[] = [],
     taken = new Set([...scene.objects.map(o => o.id), ...scene.edges.map(e => e.id), 'root']);
-  const fresh = (text: string, fallback: string) => {
+  const fresh = (
+    text: string,
+    fallback: 'node' | 'group' | 'edge',
+    ends?: { from: string; to: string },
+  ) => {
+    if (input.newId) {
+      const id = input.newId({ kind: fallback, label: text, ...ends, taken: x => taken.has(x) });
+      if (!isIdentifier(id) || taken.has(id))
+        throw new UnsupportedEdit(`The host gave a new ${fallback} an unusable id: ${id}.`);
+      taken.add(id);
+      return id;
+    }
     const base = slug(text, fallback);
     let id = base;
     for (let i = 2; taken.has(id); i++) id = `${base}-${i}`;
@@ -311,7 +357,9 @@ export function translateEdit(input: EditInput): EditResult {
   for (const e of after.graph.edges) {
     const old = beforeEdges.get(e.id);
     if (!old) {
-      const id = fresh(`${sid(e.from)}-${sid(e.to)}`, 'edge');
+      const id = input.newId
+        ? fresh(e.label ?? '', 'edge', { from: sid(e.from), to: sid(e.to) })
+        : fresh(`${sid(e.from)}-${sid(e.to)}`, 'edge');
       ids.set(e.id, id);
       const s = statement('edge', [bare(id)]);
       writeEdge(e, s);
@@ -326,7 +374,13 @@ export function translateEdit(input: EditInput): EditResult {
 
   const drops: Drop[] = [];
   placeSelection(input, sid, notes, drops);
-  return { source, ids, notes, drops };
+  return {
+    source,
+    ids,
+    notes,
+    drops,
+    operations: sourceOperations(readSource(original), source),
+  };
 }
 
 function writeShade(s: Statement, shade: number | undefined) {
@@ -673,7 +727,7 @@ function placeSelection(
           ),
         );
         notes.push(`moved the pin on ${sourceId}`);
-      } else if (carried.has(id)) {
+      } else if (carried.has(id) || input.drag === 'stay') {
         addRefinement(
           source,
           statement(
