@@ -329,11 +329,18 @@ function dedupe(points: Point[]): Point[] {
   return out;
 }
 
+/** The portals a document draws, which relaxation holds where the warp put them. */
+const portalIds = (doc: Diagram) =>
+  doc.graph.nodes.filter(n => doc.styles[n.id]?.shape === 'portal').map(n => n.id);
+
 /** How far relaxation may move a box from where the warp put it, unless the host says otherwise. */
 export const RELAX_MAX_MOVE = 48;
 
 export interface RelaxOptions {
-  /** Objects that hold still: the opened containers, and whatever around them the reader is reading. */
+  /**
+   * Objects that hold still: the opened containers, and whatever around them the reader is reading.
+   * A portal (`shape=portal`) always holds: its place is the frame's edge, which a tidy does not know.
+   */
   fixed: readonly string[];
   /** How far any box may move from where the warp put it, in drawing units. */
   maxMove?: number;
@@ -355,7 +362,7 @@ export async function relaxRoom(
     mode: 'pass',
     scope: 'all',
     maxMove: options.maxMove ?? RELAX_MAX_MOVE,
-    fixedIds: [...options.fixed],
+    fixedIds: [...new Set([...options.fixed, ...portalIds(made.doc)])],
     warmStart: true,
   });
   const doc = clone(made.doc);

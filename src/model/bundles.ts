@@ -10,9 +10,9 @@
  */
 import { resolveAppearance } from './appearance';
 import { roundedPath } from './geometry';
-import type { VisibleGraph } from './graph';
+import { visibleGraph, type VisibleGraph } from './graph';
 import { edgeLabelSize } from './labels';
-import type { DrawnRoute, EdgeLabelBox } from './routes';
+import type { EdgeLabelBox } from './routes';
 import type { Diagram, Point } from './types';
 
 export interface DrawnBundle {
@@ -35,6 +35,9 @@ export interface DrawnBundle {
   toA: boolean;
   toB: boolean;
 }
+
+/** What bundling reads of a route: which line it is and its course. */
+export type BundledRoute = { id: string; points: Point[] };
 
 /** The count a trunk is labelled with when it has no name. */
 export const bundleCount = (n: number) => `${n} flows`;
@@ -82,13 +85,13 @@ function longestRun(points: readonly Point[]): Point {
 export function findBundles(
   doc: Diagram,
   vg: VisibleGraph,
-  routes: readonly DrawnRoute[],
+  routes: readonly BundledRoute[],
 ): DrawnBundle[] {
   const threshold = doc.settings.routing?.bundle ?? 0,
     named = new Map((doc.appearance.bundles ?? []).map(x => [pair(x.a, x.b), x]));
   if (threshold < 2 && !named.size) return [];
   const byRoute = new Map(routes.map(r => [r.id, r])),
-    groups = new Map<string, Array<{ edge: VisibleGraph['edges'][number]; route: DrawnRoute }>>();
+    groups = new Map<string, Array<{ edge: VisibleGraph['edges'][number]; route: BundledRoute }>>();
   for (const edge of vg.edges) {
     const route = byRoute.get(edge.id);
     if (!route || edge.a === edge.b || doc.layout.edges[edge.id]?.row !== undefined) continue;
@@ -136,3 +139,10 @@ export function findBundles(
   }
   return out.sort((p, q) => (p.id < q.id ? -1 : p.id > q.id ? 1 : 0));
 }
+
+/**
+ * The trunks a host's own drawing has: {@link findBundles} over `doc`'s visible graph and the
+ * routes the host will draw (a made room's, say), as the viewer finds them once it adopts them.
+ */
+export const bundlesOf = (doc: Diagram, routes: readonly BundledRoute[]) =>
+  findBundles(doc, visibleGraph(doc), routes);

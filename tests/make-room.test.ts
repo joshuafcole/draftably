@@ -12,6 +12,7 @@ import { compile } from '../src/dsl/compile';
 import { dilate, type Cut, type WarpBox } from '../src/dsl/dilate';
 import { makeRoom, relaxRoom, type RoomDrawing } from '../src/dsl/make-room';
 import { projectScene, visibleRects } from '../src/dsl/project';
+import { bundlesOf } from '../src/model/bundles';
 import { computeRoutes } from '../src/model/routes';
 import type { Point, Rect } from '../src/model/types';
 
@@ -257,4 +258,68 @@ describe('makeRoom, relaxation on', () => {
     },
     60_000,
   );
+});
+
+/**
+ * A portal and a trunk through the warp (Phase 14 on Phase 13): a card with three lines to a
+ * portal opens, so the portal is beyond the cut and moves with it. It stays outside the frame on
+ * the side it faced, relaxation holds it where the warp put it, and the three lines stay one trunk.
+ */
+describe('makeRoom, a portal and a trunk', () => {
+  const source = (open: boolean) =>
+    [
+      'routing bundle=3',
+      'layout root flow direction=right',
+      'node a "Gateway"',
+      'node b "Planner"',
+      ...(open
+        ? [
+            'group c "Crawler"',
+            'node c.p0 "Fetcher" in=c',
+            'node c.p1 "Parser" in=c',
+            'edge c.f c.p0 -> c.p1',
+          ]
+        : ['node c "Crawler"']),
+      'node far "Offsite" shape=portal',
+      'edge ab a -> b',
+      `edge bc b -> ${open ? 'c.p0' : 'c'}`,
+      ...['x', 'y', 'z'].map((id, i) =>
+        i === 1
+          ? `edge ${id} far -> ${open ? 'c.p0' : 'c'}`
+          : `edge ${id} ${open ? 'c.p0' : 'c'} -> far`,
+      ),
+    ].join('\n') + '\n';
+  const outside = (doc: RoomDrawing['doc']) => {
+    const { rects } = visibleRects(doc),
+      others = [...rects].filter(([id]) => id !== 'far').map(([, r]) => r),
+      p = rects.get('far')!;
+    return {
+      p,
+      right: p.x - Math.max(...others.map(r => r.x + r.w)),
+    };
+  };
+
+  it('keeps the portal outside the frame and the trunk one trunk, warped and relaxed', async () => {
+    const rest = await drawn(source(false)),
+      open = await drawn(source(true)),
+      made = makeRoom(rest, new Map([['c', open]]), open.doc);
+    const before = outside(rest.doc),
+      after = outside(made.doc);
+    expect(before.right).toBeGreaterThan(0);
+    // The portal is beyond the crawler's cut: it moved, and kept its gap to the frame.
+    expect(after.p.x).toBeGreaterThan(before.p.x);
+    expect(after.right).toBeCloseTo(before.right, 2);
+    for (const drawing of [rest, made]) {
+      const trunks = bundlesOf(drawing.doc, drawing.routes.routes);
+      expect(trunks).toHaveLength(1);
+      expect([...trunks[0].members].sort()).toEqual(['x', 'y', 'z']);
+    }
+    const relaxed = await relaxRoom(made, { fixed: ['c'] }),
+      held = outside(relaxed.doc);
+    expect(held.p).toEqual(after.p);
+    expect(held.right).toBeGreaterThan(0);
+    const trunks = bundlesOf(relaxed.doc, relaxed.routes.routes);
+    expect(trunks).toHaveLength(1);
+    expect(trunks[0].members).toHaveLength(3);
+  });
 });

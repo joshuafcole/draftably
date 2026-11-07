@@ -64,6 +64,8 @@ export {
   type RoomDrawing,
 } from './dsl/make-room';
 export type { Route, RoutingResult } from './engines/routing-engine.js';
+// The trunks a drawing's routes run as (`routing bundle=N`, `bundle a b`), as the viewer finds them.
+export { bundleCount, bundlesOf, type BundledRoute, type DrawnBundle } from './model/bundles';
 
 // Route a projected document, and the drawing conflicts `check` reports.
 export { computeRoutes, type DrawnRoute, type SceneRoutes } from './model/routes';
