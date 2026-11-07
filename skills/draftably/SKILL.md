@@ -371,7 +371,8 @@ content area.
   connection between two listed nodes is in focus too. `draftably inspect f.draft --svg` takes
   `--state write` to draw one state and `--states` to draw them all side by side. States never
   move anything. `chips=hidden` keeps a state off the Editor's chips and `--states`, for states a
-  host steps through itself; `--state` still draws it.
+  host steps through itself; `--state` still draws it. `context=a,b` draws those IDs as usual
+  between the focus and the fade, for one step of a route shown inside the whole route.
 - When a box names real code, a file or a page, link it: `href="src/orders/service.ts"`. Write
   file paths from the repository root (relative links start at the git root of the `.draft`), and
   add `:42` to open at a line. Use the URL as it is for anything on the web, such as a GitHub link.

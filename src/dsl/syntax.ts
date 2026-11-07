@@ -387,7 +387,7 @@ export interface Model {
   noteLines: number[];
   /** Source line of each `footnote`, in order. */
   footnoteLines: number[];
-  /** Source line of each ID an emphasis state lists, by `state:id`. */
+  /** Source line of each ID an emphasis state lists, by `state:id`, or `state:context:id`. */
   stateLines: Map<string, number>;
   /** Sequence diagrams: `phase` statements, each a run of messages drawn as a row band. */
   phases: Array<{ id: string; label: string; ids: string[]; line: number }>;
@@ -606,6 +606,12 @@ export function parseModel(source: string | SourceDoc): Model {
       );
       return parts as [number, number];
     };
+    /** A list of IDs in one word, `a,b,c`. */
+    const idList = (key: string): string[] => {
+      const w = attrs.get(key)!;
+      assert(!w.quoted && w.value, `Expected ${key}=a,b with IDs; got ${w.value || 'nothing'}.`);
+      return w.value.split(',').map(x => id(bare(x)));
+    };
     const was = () => {
       for (const key of ['was', 'was-shape', 'was-count', 'was-at', 'was-size'])
         assert(!attrs.has(key) || s.mark === '~', `${key}= belongs on a changed (~) line.`);
@@ -682,7 +688,7 @@ export function parseModel(source: string | SourceDoc): Model {
       }
       case 'state': {
         assert(args.length >= 1, 'A state needs an ID: state write "Write path" api orders.');
-        allow(['rest', 'chips']);
+        allow(['rest', 'chips', 'context']);
         const sid = id(args[0]),
           label = args[1]?.quoted ? args[1].value : undefined,
           ids = args.slice(label === undefined ? 1 : 2).map(w => id(w)),
@@ -704,6 +710,13 @@ export function parseModel(source: string | SourceDoc): Model {
           state.ids.push(x);
           m.stateLines.set(`${sid}:${x}`, line);
         }
+        if (attrs.has('context'))
+          for (const x of idList('context')) {
+            const context = (state.context ??= []);
+            assert(!context.includes(x), `${x} is already in the context of state ${sid}.`);
+            context.push(x);
+            m.stateLines.set(`${sid}:context:${x}`, line);
+          }
         break;
       }
       case 'phase': {
@@ -1295,7 +1308,7 @@ function validateReferences(m: Model) {
     );
   });
   const edgeIds = new Set(m.edges.map(e => e.id));
-  for (const s of m.appearance.states ?? [])
+  for (const s of m.appearance.states ?? []) {
     for (const x of s.ids) {
       const line = m.stateLines.get(`${s.id}:${x}`)!;
       assert(
@@ -1304,6 +1317,13 @@ function validateReferences(m: Model) {
         line,
       );
     }
+    for (const x of s.context ?? [])
+      assert(
+        by.has(x) || edgeIds.has(x),
+        `Unknown node, group or edge ${x} in the context of state ${s.id}.`,
+        m.stateLines.get(`${s.id}:context:${x}`)!,
+      );
+  }
   const cells = new Map(m.layouts.filter(l => l.algorithm === 'cells').map(l => [l.scope, l]));
   for (const o of m.objects) {
     const grid = cells.get(o.parent);

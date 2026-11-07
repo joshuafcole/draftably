@@ -84,7 +84,10 @@ export function removeIds(source: string, ids: string[]) {
   return check(next);
 }
 
-/** Rename an id everywhere it is used: declarations, edges, `in=`, refinements and states. */
+/**
+ * Rename an id everywhere it is used: declarations, edges, `in=`, refinements and states, their
+ * `context=` lists included.
+ */
 export function renameId(source: string, from: string, to: string) {
   if (!ID.test(to)) throw new DslError(`${to} is not a valid id.`);
   const { doc } = find(source, from);
@@ -94,6 +97,9 @@ export function renameId(source: string, from: string, to: string) {
     s.args = s.args.map(w => (!w.quoted && w.value === from ? bare(to) : w));
     for (const key of ['in', 'root'])
       if (getAttr(s, key)?.value === from) setAttr(s, key, bare(to));
+    const context = s.command === 'state' ? getAttr(s, 'context')?.value.split(',') : undefined;
+    if (context?.includes(from))
+      setAttr(s, 'context', bare(context.map(x => (x === from ? to : x)).join(',')));
   }
   return check(printSource(doc));
 }

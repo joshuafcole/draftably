@@ -135,6 +135,11 @@ export interface EmphasisState {
   label: string;
   /** Objects (a group brings its members) and connections in focus. */
   ids: string[];
+  /**
+   * With `rest=dim`, objects and connections that draw as usual while the rest fades, from
+   * `context=`: the setting around what is in focus, such as the whole route around one step.
+   */
+  context?: string[];
   /** How everything else draws: faded like a context line, or as usual. */
   rest: 'dim' | 'plain';
   /**

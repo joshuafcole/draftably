@@ -191,32 +191,48 @@ export const listedStates = (doc: Diagram) => (doc.appearance.states ?? []).filt
  * The document drawn in emphasis state `id`. Listed objects (a group with all its members) and
  * listed connections are in focus, and so is a connection between two focused nodes. With
  * `rest=dim`, everything else fades, except the containers that hold something in focus, so the
- * context still reads. With `rest=plain` nothing fades, so focus also takes an accent ring.
- * Nothing moves.
+ * context still reads, and the state's `context=`, which draws as usual: so does a connection
+ * whose ends are both in focus or context. With `rest=plain` nothing fades, so focus also takes an
+ * accent ring. Nothing moves.
  */
 export function withState(doc: Diagram, id: string): Diagram {
   const state = doc.appearance.states?.find(s => s.id === id);
   if (!state) return doc;
-  const focus = new Set<string>();
-  for (const x of state.ids) {
-    focus.add(x);
-    if (doc.graph.groups.some(g => g.id === x)) for (const d of descendants(doc, x)) focus.add(d);
-  }
+  /** The IDs listed, with every member of a listed group. */
+  const expand = (ids: readonly string[]) => {
+    const out = new Set<string>();
+    for (const x of ids) {
+      out.add(x);
+      if (doc.graph.groups.some(g => g.id === x)) for (const d of descendants(doc, x)) out.add(d);
+    }
+    return out;
+  };
+  const focus = expand(state.ids),
+    context = expand(state.context ?? []);
   const parent = new Map(
     [...doc.graph.nodes, ...doc.graph.groups].map(o => [o.id, o.parentId] as const),
   );
+  // The containers of anything in focus or context draw plain too, but bring no connections.
   const frames = new Set<string>();
-  for (const x of focus) for (let p = parent.get(x); p; p = parent.get(p)) frames.add(p);
+  for (const x of [...focus, ...context])
+    for (let p = parent.get(x); p; p = parent.get(p)) frames.add(p);
   const rest = state.rest === 'dim' ? ('dim' as const) : undefined,
     on = state.rest === 'dim' ? ('focus' as const) : ('ring' as const),
-    spotOf = (x: string) => (focus.has(x) ? on : frames.has(x) ? undefined : rest),
-    styles = { ...doc.styles };
+    spotOf = (x: string) =>
+      focus.has(x) ? on : context.has(x) || frames.has(x) ? undefined : rest,
+    styles = { ...doc.styles },
+    near = (x: string) => focus.has(x) || context.has(x);
   for (const o of [...doc.graph.nodes, ...doc.graph.groups]) {
     const spot = spotOf(o.id);
     if (spot) styles[o.id] = { ...styleOf(doc, o.id), spot };
   }
   const edges = doc.graph.edges.map(e => {
-    const spot = focus.has(e.id) || (focus.has(e.from) && focus.has(e.to)) ? on : rest;
+    const spot =
+      focus.has(e.id) || (focus.has(e.from) && focus.has(e.to))
+        ? on
+        : context.has(e.id) || (near(e.from) && near(e.to))
+          ? undefined
+          : rest;
     return spot ? { ...e, spot } : e;
   });
   return { ...doc, styles, graph: { ...doc.graph, edges } };

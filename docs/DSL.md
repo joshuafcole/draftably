@@ -675,6 +675,12 @@ and focused connections a line in the theme's `secondary` accent. A state never 
 every state of a file has the same layout. In a file with change marks, hue still means change;
 a state only adds the heavier border or the fade.
 
+`context=a,b,c` adds a middle tier: the IDs it lists draw as usual, neither in focus nor faded,
+and so does a connection whose ends are both in focus or context. Use it to show one step of a
+route inside the whole route: `state step2 "Charge" orders payments context=web,api,db`. Like
+the focus list, it takes nodes, groups and connections, and a continued state adds to it.
+Context only matters with `rest=dim`; with `rest=plain` nothing fades anyway.
+
 `inspect --svg --state write` draws one state; without `--state`, the drawing has none.
 `inspect --svg --states` (or `--png`) draws every state as its own labelled panel, in file
 order, in a grid whose whole image comes closest to 1.6 wide per tall. Every object sits at the

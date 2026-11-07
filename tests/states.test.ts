@@ -6,6 +6,7 @@ import { checkSource } from '../src/dsl/compile';
 import { projectScene } from '../src/dsl/project';
 import { readSource, printSource } from '../src/dsl/syntax';
 import { removeReferences } from '../src/dsl/source-edits';
+import { renameId } from '../src/cli/edit';
 import { styleOf } from '../src/model/graph';
 import { withState } from '../src/model/status';
 
@@ -84,5 +85,70 @@ describe('states hidden from the chips', () => {
     expect(svg.match(/data-state="/g)).toHaveLength(3);
     expect(svg).not.toContain('Step 1');
     expect(styleOf(withState(d, 'step1'), 'orders').spot).toBe('focus');
+  });
+});
+
+describe('context around a state', () => {
+  // A route a -> b -> c -> d, a side branch to e, and one step of the route in focus.
+  const ROUTE = `node a "A"
+node b "B"
+node c "C"
+node d "D"
+node e "E"
+edge ab a -> b
+edge bc b -> c
+edge cd c -> d
+edge be b -> e
+state step "Step" b context=a,c,d
+`;
+  const drawn = () => withState(projectScene(checkSource(ROUTE)), 'step'),
+    spots = (d: ReturnType<typeof drawn>, ids: string[]) =>
+      ids.map(id => styleOf(d, id).spot ?? d.graph.edges.find(e => e.id === id)?.spot ?? 'plain');
+
+  it('draws the context plain between the focus and the faded rest', () => {
+    const d = drawn();
+    expect(spots(d, ['b', 'a', 'c', 'd', 'e'])).toEqual([
+      'focus',
+      'plain',
+      'plain',
+      'plain',
+      'dim',
+    ]);
+    // A connection with both ends in focus or context is context; one leaving it fades.
+    const edge = (id: string) => d.graph.edges.find(e => e.id === id)!.spot ?? 'plain';
+    expect(['ab', 'bc', 'cd', 'be'].map(edge)).toEqual(['plain', 'plain', 'plain', 'dim']);
+  });
+
+  it('leaves a state without context as it was', () => {
+    // Two containers that hold focus still draw plain, and a line between them still fades.
+    const d = withState(
+      projectScene(
+        checkSource(
+          'group g "G"\ngroup h "H"\nnode a "A" in=g\nnode b "B" in=h\nedge gh g -> h\nstate s "S" a b\n',
+        ),
+      ),
+      's',
+    );
+    expect([styleOf(d, 'g').spot, d.graph.edges[0].spot]).toEqual([undefined, 'dim']);
+  });
+
+  it('checks, continues, prunes and renames context IDs like focus IDs', () => {
+    expect(() => checkSource('node a "A"\nstate s "S" a context=ghost\n')).toThrow(
+      /ghost in the context of state s/,
+    );
+    const two = projectScene(
+      checkSource(
+        'node a "A"\nnode b "B"\nnode c "C"\nstate s "S" a context=b\nstate s context=c\n',
+      ),
+    );
+    expect(two.appearance.states![0].context).toEqual(['b', 'c']);
+    const src = readSource(
+      'node a "A"\nnode b "B"\nstate s "S" a context=a,b\nstate t context=b\n',
+    );
+    removeReferences(src, 'b');
+    expect(printSource(src)).toBe('node a "A"\nnode b "B"\nstate s "S" a context=a\n');
+    expect(renameId('node a "A"\nnode b "B"\nstate s "S" a context=a,b\n', 'b', 'bee')).toContain(
+      'context=a,bee',
+    );
   });
 });

@@ -537,6 +537,9 @@ export function normalizeAppearance(input: Raw): DiagramAppearance {
         label: typeof st.label === 'string' ? st.label : st.id,
         ids: st.ids.filter((x: unknown) => typeof x === 'string'),
         rest: st.rest === 'plain' ? 'plain' : 'dim',
+        ...(Array.isArray(st.context)
+          ? { context: st.context.filter((x: unknown) => typeof x === 'string') }
+          : {}),
         ...(st.hidden === true ? { hidden: true } : {}),
       });
   if (states.length) out.states = states;

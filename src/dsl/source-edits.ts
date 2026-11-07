@@ -106,12 +106,24 @@ export function removeReferences(doc: SourceDoc, id: string) {
   );
 }
 
-/** Take an object or connection out of every `state` line; drop a line left with no IDs. */
+/**
+ * Take an object or connection out of every `state` line, its `context=` list included; drop a
+ * line left with no IDs in either.
+ */
 export function removeFromStates(doc: SourceDoc, id: string) {
   for (const s of statements(doc))
-    if (s.command === 'state')
+    if (s.command === 'state') {
       s.args = s.args.filter((w, i) => i === 0 || w.quoted || w.value !== id);
-  removeWhere(doc, s => s.command === 'state' && !s.args.slice(1).some(w => !w.quoted));
+      const context = getAttr(s, 'context')?.value.split(',');
+      if (context?.includes(id)) {
+        const kept = context.filter(x => x !== id);
+        setAttr(s, 'context', kept.length ? bare(kept.join(',')) : undefined);
+      }
+    }
+  removeWhere(
+    doc,
+    s => s.command === 'state' && !s.args.slice(1).some(w => !w.quoted) && !getAttr(s, 'context'),
+  );
 }
 
 /** A note on a deleted object or message keeps its words and moves to the frame. */
