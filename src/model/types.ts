@@ -32,6 +32,13 @@ export interface DiagramNode {
   wasShape?: ShapeKind;
   /** Count before a change, from `was-count=` on a `~` line; 1 means a single box. */
   wasCount?: number | string;
+  /**
+   * Top-left corner before a change, from `was-at=` on a `~` line, in drawing coordinates: the
+   * merged drawing's parent content origin plus the file's numbers.
+   */
+  wasAt?: Point;
+  /** Size before a change, from `was-size=` on a `~` line. */
+  wasSize?: { w: number; h: number };
   /** A link to open from exported drawings. */
   href?: string;
   /** How many things this box stands for, or a symbol such as `N`; drawn as a stack with a badge. */
@@ -49,6 +56,8 @@ export interface DiagramGroup {
   title: string;
   /** Title before a change, from `was=` on a `~` line. */
   was?: string;
+  /** Top-left corner before a change, from `was-at=` on a `~` line, in drawing coordinates. */
+  wasAt?: Point;
   /** A link to open from exported drawings. */
   href?: string;
   parentId?: string;

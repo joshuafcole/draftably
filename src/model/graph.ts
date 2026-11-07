@@ -147,3 +147,15 @@ export function frameRect(doc: Diagram, geometry: GeometryLookup, id: string): N
 
 export const objectRect = (doc: Diagram, geometry: GeometryLookup, id: string): Rect =>
   isGroup(doc, id) ? frameRect(doc, geometry, id) : geometry(id);
+
+/**
+ * An object's box before a change (`was-at=`, `was-size=`), from its box now, or undefined when
+ * it has neither.
+ */
+export function pastRect(doc: Diagram, id: string, now: Rect): Rect | undefined {
+  const o = findNode(doc, id) ?? findGroup(doc, id),
+    at = o?.wasAt,
+    size = o && 'wasSize' in o ? o.wasSize : undefined;
+  if (!at && !size) return undefined;
+  return { x: at?.x ?? now.x, y: at?.y ?? now.y, w: size?.w ?? now.w, h: size?.h ?? now.h };
+}

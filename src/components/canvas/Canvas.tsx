@@ -6,6 +6,7 @@ import { CrossingView, EdgeView } from '../scene/EdgeView';
 import { GroupView } from '../scene/GroupView';
 import { NodeView } from '../scene/NodeView';
 import { Lifelines, SequenceBackdrop } from '../scene/Lifelines';
+import { PositionMarks } from '../scene/PositionMarks';
 import { InlineEditor } from './InlineEditor';
 import { Overlay } from './Overlay';
 import { Frame } from './Frame';
@@ -201,6 +202,7 @@ export function Canvas(props: CanvasProps) {
               )}
             </For>
           </g>
+          <PositionMarks doc={shown()} rects={s.sceneRects()} bounds={s.sceneBounds()} />
           <g>
             <For each={s.edgeIds()}>
               {id => (

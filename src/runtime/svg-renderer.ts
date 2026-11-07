@@ -6,7 +6,8 @@ import { resolveAppearance, swatchFor, type ResolvedAppearance } from '../model/
 import { oldDoc, panelDoc, withoutMargins } from '../model/panels';
 import { countText, STACK_OFFSETS } from '../model/stack';
 import { measureText } from '../model/fonts';
-import { diagramFrame, type DiagramFrame } from '../model/frame';
+import { diagramFrame, FRAME_PAD, type DiagramFrame } from '../model/frame';
+import { positionMarks, positionMarkup } from '../model/position-marks';
 import { headingMarkup } from '../model/heading';
 import { legendMarkup, markerMarkup } from '../model/legend';
 import { footnoteMarkup } from '../model/footnote';
@@ -378,6 +379,14 @@ function sceneMarkup(
       ),
     );
   }
+  // Where changed objects were, over the boxes so a grown box can't hide its old outline, and
+  // outside the bounds: marks move nothing.
+  const past = positionMarkup(
+    doc,
+    look,
+    positionMarks(doc, rects, drawingBounds(doc, vg, rects, routes)),
+  );
+  if (past) out.push(past);
   // A line that crosses cells to reach one is drawn over them, ending in a dot.
   for (const route of routes) {
     if (!route.cross) continue;
@@ -394,7 +403,7 @@ function sceneMarkup(
   }
   return {
     markup: out.join('\n'),
-    bounds: drawingBounds(doc, vg, rects, routes, 40),
+    bounds: drawingBounds(doc, vg, rects, routes, FRAME_PAD),
     rects,
     routes,
   };

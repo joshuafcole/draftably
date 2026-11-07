@@ -44,6 +44,11 @@ export function projectScene(scene: Scene, view: ViewState = {}): Diagram {
       ...(o.was !== undefined ? { was: o.was } : {}),
       ...(o.wasShape !== undefined ? { wasShape: o.wasShape } : {}),
       ...(o.wasCount !== undefined ? { wasCount: o.wasCount } : {}),
+      // The file gives the old corner in the parent's content area; the drawing places it there.
+      ...(o.wasAt
+        ? { wasAt: { x: o.x - o.localX + o.wasAt.x, y: o.y - o.localY + o.wasAt.y } }
+        : {}),
+      ...(o.wasSize ? { wasSize: { ...o.wasSize } } : {}),
       ...(o.href !== undefined ? { href: o.href } : {}),
       ...(o.count !== undefined ? { count: o.count } : {}),
       ...(o.span !== undefined ? { span: o.span } : {}),
