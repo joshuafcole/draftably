@@ -8,6 +8,15 @@ import { createDiagramSession, type DiagramSession, type SessionOptions } from '
 import { Editor } from './Editor';
 import '../styles/app.css';
 
+export type { Camera } from '../model/types';
+export type {
+  CameraEvent,
+  CameraReason,
+  DiagramSession,
+  FitOptions,
+  RevealOptions,
+} from '../state/session';
+
 /**
  * Shortcuts act on the session the user last pointed at. Clicking a shape leaves focus on the
  * page, so they listen on the document, once for all editors, and skip keys meant for the host's

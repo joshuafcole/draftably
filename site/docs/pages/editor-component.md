@@ -78,6 +78,38 @@ editor.destroy(); // when the host is removed
 | `openLink`   | Opens an object's link. Without it, a URL opens in a new tab.              |
 | `confirm`    | Asks before an action that replaces the diagram.                           |
 | `onInteract` | Called when the user starts a gesture, so you can close your own menus.    |
+| `onCamera`   | Called after every camera move with `{ camera, reason }`: see below.       |
+
+## Move the camera
+
+The session moves the camera for you. `fitTo` frames some objects, and `reveal` brings one into
+view without jumping: nothing moves if it is already on screen, otherwise the camera pans the
+least it can, and zooms out only when the object can't fit, never below 55%.
+
+```ts
+const editor = mountEditor(host, {
+  source,
+  onCamera: ({ camera, reason }) => console.log(reason, camera),
+});
+const { session } = editor;
+
+session.fitTo(['api', 'db']); // frame these, centred
+session.reveal('cache', { margin: 40 }); // bring this into view
+session.setCamera({ x: 0, y: 0, k: 1 }); // the screen point of the origin, and the zoom
+session.getCamera();
+```
+
+| Call                  | Effect                                                                                    |
+| --------------------- | ----------------------------------------------------------------------------------------- |
+| `getCamera()`         | The camera now: `x` and `y` are where the drawing's origin is on screen, `k` is the zoom. |
+| `setCamera(camera)`   | Move it there.                                                                            |
+| `fitTo(ids, options)` | Frame shapes, groups or connections, centred. `margin` (40), `minZoom`, `maxZoom` (1).    |
+| `reveal(id, options)` | Bring one object into view with the least move. `margin` (40), `minZoom` (0.55).          |
+
+`fitTo` and `reveal` return whether the camera moved; an id the diagram does not have is skipped.
+Asked before the canvas has a size, they wait for it. `onCamera` reports every move once, with
+`reason: 'api'` for these calls and `'user'` for everything else, the editor's own fit included.
+`<draft-editor>` fires the same as a `draft-camera` event, and its `editor.session` takes the calls.
 
 [Using the Editor](#editing-in-the-viewer) and [Shortcuts](#shortcuts) describe what your users can
 do in it.

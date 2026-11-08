@@ -7,6 +7,7 @@
  */
 import { createRoot } from 'solid-js';
 import { createActions } from './actions';
+import { createCamera, type CameraEvent } from './camera';
 import { createCanvasText } from './canvas-text';
 import { createDocument } from './document';
 import { createEditor } from './editor';
@@ -17,6 +18,8 @@ import { createPointer } from './pointer';
 import { createRouting } from './routing';
 import { createScene } from './scene';
 import { createSculpt } from './sculpt';
+
+export type { CameraEvent, CameraReason, FitOptions, RevealOptions } from './camera';
 
 export interface ConfirmRequest {
   title: string;
@@ -36,6 +39,8 @@ export interface SessionOptions {
   openLink?: (href: string) => void;
   /** The user started a gesture or a tool on the canvas; a host closes its menus here. */
   onInteract?: () => void;
+  /** The camera moved: `api` for the host's calls, `user` for everything else. */
+  onCamera?: (event: CameraEvent) => void;
 }
 
 export function createDiagramSession(options: SessionOptions = {}) {
@@ -50,7 +55,8 @@ export function createDiagramSession(options: SessionOptions = {}) {
     const s7 = Object.assign(s6, createActions(s6));
     const s8 = Object.assign(s7, createRouting(s7));
     const s9 = Object.assign(s8, createSculpt(s8));
-    return Object.assign(s9, createPointer(s9));
+    const s10 = Object.assign(s9, createCamera(s9));
+    return Object.assign(s10, createPointer(s10));
   });
 }
 

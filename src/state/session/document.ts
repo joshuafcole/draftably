@@ -12,6 +12,7 @@ import type { Camera, Diagram } from '../../model/types';
 import { toast } from '../toast';
 import type { CanvasTextPart } from './canvas-text';
 import type { SessionOptions } from '.';
+import type { CameraReason } from './camera';
 
 const LEGACY_KEYS = ['diagram-studio-v4', 'diagram-studio-v3', 'diagram-studio-v2'];
 const HISTORY_LIMIT = 80;
@@ -206,6 +207,10 @@ export function createDocument(s: CanvasTextPart, options: SessionOptions) {
       if (keepCamera) state.setDoc('camera', camera);
       state.setRevision(r => r + 1);
     });
+    // Undo and restores bring their own camera back.
+    const c = state.doc.camera;
+    if (c.x !== camera.x || c.y !== camera.y || c.k !== camera.k)
+      options.onCamera?.({ camera: { ...c }, reason: 'user' });
   }
 
   const historyHandlers: Array<(entry: HistoryEntry, direction: 'undo' | 'redo') => void> = [];
@@ -244,9 +249,13 @@ export function createDocument(s: CanvasTextPart, options: SessionOptions) {
 
   // --- Camera ----------------------------------------------------------------------------------
 
-  function setCamera(camera: Camera) {
+  /** The editor's own moves pass `user`. */
+  function setCamera(camera: Camera, reason: CameraReason = 'api') {
+    const c = state.doc.camera;
+    if (c.x === camera.x && c.y === camera.y && c.k === camera.k) return;
     state.setDoc('camera', camera);
     persist();
+    options.onCamera?.({ camera: { ...camera }, reason });
   }
 
   // --- Persistence -----------------------------------------------------------------------------

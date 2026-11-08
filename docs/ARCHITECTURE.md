@@ -50,6 +50,7 @@ parts through `s`. A page can hold any number of sessions.
 | `canvas-text.ts`            | Text ids (`@note:0`, `@legend:1`, `@phase:id`) for text that is not an object, and its selection. |
 | `layout.ts`                 | Layout passes, previews, the layout lab's settings and checkpoints.                               |
 | `sculpt.ts`                 | The layout timeline and the layout brush.                                                         |
+| `camera.ts`                 | The camera as a host drives it: `getCamera`, `fitTo` and `reveal`.                                |
 | `emphasis.ts`, `routing.ts` | The shown emphasis state, and router settings.                                                    |
 | `file-session.ts`           | The diagram's `.draft` source: a served file, an example, or text a host owns.                    |
 
