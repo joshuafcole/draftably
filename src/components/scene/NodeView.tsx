@@ -13,6 +13,7 @@ import { linkMark } from '../../model/link';
 import type { Diagram, NodeLayout, Side } from '../../model/types';
 import { SceneGlyph } from '../Icon';
 import { LinkMarkView } from './LinkMark';
+import { NodeBody, useNodeContent } from './node-content';
 import { pinSpot, PositionBadge, RemovedMarker, ResizeHandles, SceneText } from './parts';
 
 const SIDES: Side[] = ['left', 'right', 'top', 'bottom'];
@@ -53,6 +54,8 @@ export function NodeView(props: NodeViewProps) {
   const cell = () => isCell(props.doc, props.id);
   const radius = () => (cell() ? 0 : look().radius);
   const clipId = () => `${props.idPrefix ?? ''}image-clip-${props.id}`;
+  const content = useNodeContent();
+  const body = () => (content?.draws(props.id) ? content : undefined);
 
   const shapeAttrs = () => ({
     fill: color().fill,
@@ -188,17 +191,26 @@ export function NodeView(props: NodeViewProps) {
           <SceneGlyph name={style().icon} x={g().x} y={g().y} size={g().size} color={color().ink} />
         )}
       </Show>
-      <SceneText
-        class="node-title"
-        lines={label().lines}
-        x={label().x}
-        y={label().y}
-        lineHeight={label().lineHeight}
-        type={look().title}
-        fill={label().mode === 'center' && style().shape !== 'text' ? color().ink : look().text}
-        strike={paint().strike}
-        fade={paint().inkFade}
-      />
+      <Show
+        when={body()}
+        fallback={
+          <SceneText
+            class="node-title"
+            lines={label().lines}
+            x={label().x}
+            y={label().y}
+            lineHeight={label().lineHeight}
+            type={look().title}
+            fill={label().mode === 'center' && style().shape !== 'text' ? color().ink : look().text}
+            strike={paint().strike}
+            fade={paint().inkFade}
+          />
+        }
+      >
+        {host => (
+          <NodeBody content={host()} id={props.id} rect={props.rect} selected={props.selected} />
+        )}
+      </Show>
       <Show when={paint().marker && !node().count}>
         <RemovedMarker
           x={props.rect.w - MARKER.inset}

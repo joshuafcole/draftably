@@ -1,5 +1,6 @@
 import { createEffect } from 'solid-js';
 import { render } from 'solid-js/web';
+import { NodeContentProvider, type NodeContent } from '../components/scene/node-content';
 import { registerFonts } from '../lib/font-data';
 import { resolveAppearance } from '../model/appearance';
 import { activeSession, setActiveSession } from '../state/active-session';
@@ -7,6 +8,8 @@ import { copyShapes, handleCanvasKey, handleKeyUp, pasteShapes } from '../state/
 import { createDiagramSession, type DiagramSession, type SessionOptions } from '../state/session';
 import { Editor } from './Editor';
 import '../styles/app.css';
+
+export type { NodeContent, NodeContentProps } from '../components/scene/node-content';
 
 /**
  * Shortcuts act on the session the user last pointed at. Clicking a shape leaves focus on the
@@ -32,6 +35,8 @@ export interface MountOptions extends SessionOptions {
   source: string;
   /** Receives the new text after every kept edit, undo and redo. */
   onChange?: (source: string) => void;
+  /** Draw some nodes' bodies yourself. Declare their room with `size … min-height=`. */
+  nodeContent?: NodeContent;
 }
 
 export interface MountedEditor {
@@ -50,7 +55,7 @@ export interface MountedEditor {
  * host a size; the canvas fills it.
  */
 export function mountEditor(host: HTMLElement, options: MountOptions): MountedEditor {
-  const { source, onChange, ...sessionOptions } = options;
+  const { source, onChange, nodeContent, ...sessionOptions } = options;
   const session = createDiagramSession(sessionOptions);
   registerFonts();
   void session.openSource(source, onChange).then(() => requestAnimationFrame(session.fitView));
@@ -65,7 +70,13 @@ export function mountEditor(host: HTMLElement, options: MountOptions): MountedEd
     createEffect(() =>
       host.style.setProperty('--diagram-canvas', resolveAppearance(session.doc.appearance).canvas),
     );
-    return <Editor session={session} />;
+    return nodeContent ? (
+      <NodeContentProvider content={nodeContent}>
+        <Editor session={session} />
+      </NodeContentProvider>
+    ) : (
+      <Editor session={session} />
+    );
   }, host);
   host.classList.add('draft-editor');
   if (!mounted++) for (const [type, fn] of KEYS) document.addEventListener(type, fn);

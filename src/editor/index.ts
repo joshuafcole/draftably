@@ -13,6 +13,11 @@ export {
   useDiagramSession,
   useSessionIfAny,
 } from '../components/session-context';
+export {
+  NodeContentProvider,
+  type NodeContent,
+  type NodeContentProps,
+} from '../components/scene/node-content';
 export type { CanvasProps } from '../components/canvas/Canvas';
 export { Editor } from './Editor';
 export { mountEditor, type MountedEditor, type MountOptions } from './mount';
