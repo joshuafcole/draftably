@@ -1,14 +1,13 @@
 /**
- * `draftably pdf`: a set of diagrams as one vector PDF. Headless Chrome prints one page per
- * diagram (or per emphasis state) from the same SVG `inspect --svg` draws, then pdf-lib adds
- * bookmarks and attaches each file's `.draft` source, which `check` and `open` read back.
+ * `draftably pdf`: a set of diagrams as one vector PDF. PDFKit draws one page per diagram (or per
+ * emphasis state) from the same SVG `inspect --svg` draws, then pdf-lib adds bookmarks and
+ * attaches each file's `.draft` source, which `check` and `open` read back.
  */
-import { execFile } from 'node:child_process';
+// The editor's declaration build reaches this file but not src/*.d.ts, so name the types here.
+// eslint-disable-next-line @typescript-eslint/triple-slash-reference
+/// <reference path="./svg-to-pdfkit.d.ts" />
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
-import { pathToFileURL } from 'node:url';
-import { promisify } from 'node:util';
 import {
   decodePDFRawStream,
   PDFArray,
@@ -24,9 +23,11 @@ import {
 import { compile } from '../dsl/compile';
 import { projectScene } from '../dsl/project';
 import { formatSource } from '../dsl/syntax';
+
+import { FACES, type FaceId } from '../model/fonts';
 import { listedStates, withState } from '../model/status';
 import { svgHref } from './links';
-import { findChrome } from './png';
+import { fontFiles } from './raster-fonts';
 import { renderSvg } from './svg';
 
 export type PdfOrder = 'name' | 'title' | 'given';
@@ -54,7 +55,25 @@ export interface PdfInput {
 /** Fixed page sizes in CSS pixels (96 per inch), portrait; slide is 16:9 and always landscape. */
 const SIZES = { letter: [816, 1056], a4: [794, 1123], slide: [1280, 720] } as const;
 const MARGIN = 48;
-const COVER_ROWS = 24;
+/** Points per CSS pixel. */
+const PX = 0.75;
+/** Cover layout in CSS pixels: page padding, the heading on the first page, one contents row. */
+const COVER_PAD = 72,
+  COVER_HEAD = 38.4 + 6 + 20.3 + 36 + 18.85 + 10,
+  COVER_ROW = 29.3;
+
+const coverSize = (page: PdfPage) => (page === 'fit' ? [1056, 816] : SIZES[page]);
+
+/** The first contents row on each cover page; each page holds as many rows as fit. */
+function coverStarts(page: PdfPage, rows: number) {
+  const h = coverSize(page)[1],
+    starts: number[] = [];
+  for (let at = 0; at < rows;) {
+    starts.push(at);
+    at += Math.floor((h - COVER_PAD * 2 - (starts.length === 1 ? COVER_HEAD : 0)) / COVER_ROW);
+  }
+  return starts;
+}
 
 export const isPdfName = (name: string) => /\.pdf$/i.test(name);
 
@@ -70,18 +89,6 @@ export function pdfInputs(args: string[]): PdfInput[] {
       : [f],
   );
   return files.map(f => ({ name: f, source: fs.readFileSync(path.resolve(f), 'utf8') }));
-}
-
-const esc = (s: string) =>
-  s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-
-/** Prefix every id in `svg`, so the arrowheads of one page never stand in for another's. */
-function scopeIds(svg: string, prefix: string) {
-  const ids = new Set([...svg.matchAll(/\bid="([^"]+)"/g)].map(m => m[1]));
-  return svg
-    .replace(/\bid="([^"]+)"/g, (_, id) => `id="${prefix}${id}"`)
-    .replace(/url\(#([^)]+)\)/g, (m, id) => (ids.has(id) ? `url(#${prefix}${id})` : m))
-    .replace(/href="#([^"]+)"/g, (m, id) => (ids.has(id) ? `href="#${prefix}${id}"` : m));
 }
 
 interface Sheet {
@@ -128,86 +135,103 @@ function pageSize(page: PdfPage, w: number, h: number) {
   return page === 'slide' || w > h ? [Math.max(a, b), Math.min(a, b)] : [a, b];
 }
 
-/** The print document: optional cover pages, then one named page per sheet. */
-function printHtml(pages: Sheet[], opts: PdfOptions, cover: number, count: number) {
-  const page = opts.page ?? 'fit',
-    css: string[] = [],
-    body: string[] = [];
-  const add = (w: number, h: number, inner: string, id: string) => {
-    const name = `p${body.length}`;
-    css.push(`@page ${name}{size:${w}px ${h}px}`);
-    body.push(
-      `<section id="${id}" style="page:${name};width:${w}px;height:${h}px">${inner}</section>`,
-    );
-  };
+/** PDFKit's loaded font, for the line metrics its type definitions leave out. */
+interface LoadedFont {
+  ascender: number;
+  descender: number;
+}
+
+/**
+ * Draw the cover pages and one page per sheet with PDFKit. Sizes are CSS pixels, as the diagrams
+ * are, drawn as points (96 px to 72 pt), so a page prints at the size the viewer shows.
+ */
+async function draw(pages: Sheet[], opts: PdfOptions, starts: number[], count: number) {
+  const [{ default: PDFDocument }, { default: SVGtoPDF }] = await Promise.all([
+    import('pdfkit'),
+    import('svg-to-pdfkit'),
+  ]);
+  const doc = new PDFDocument({ autoFirstPage: false, compress: true }),
+    chunks: Buffer[] = [];
+  doc.on('data', (c: Buffer) => chunks.push(c));
+  const done = new Promise(resolve => doc.on('end', resolve));
+  const fonts = fontFiles();
+  for (const [id, file] of Object.entries(fonts)) doc.registerFont(id, file);
+  const add = (w: number, h: number) => doc.addPage({ size: [w * PX, h * PX], margin: 0 });
+  const page = opts.page ?? 'fit';
+
   if (opts.title) {
-    const [w, h] = page === 'fit' ? [1056, 816] : SIZES[page];
+    const [w, h] = coverSize(page),
+      cover = starts.length;
+    // One line of text in a CSS line box `lh` tall whose top is at `top`. The cover is laid out
+    // in pixels but drawn in points: PDFKit starts a new page for text below the page's height
+    // in points, so it must not run under a scale.
+    const line = (text: string, x: number, top: number, size: number, lh: number, o = {}) => {
+      const f = (doc as unknown as { _font: LoadedFont })._font,
+        content = ((f.ascender - f.descender) / 1000) * size;
+      doc
+        .fontSize(size * PX)
+        .text(text, x * PX, (top + (lh - content) / 2) * PX, { lineBreak: false, ...o });
+    };
     for (let c = 0; c < cover; c++) {
-      const rows = pages
-        .slice(c * COVER_ROWS, (c + 1) * COVER_ROWS)
-        .map(
-          (p, i) =>
-            `<li><a href="#page-${c * COVER_ROWS + i}"><span>${esc(p.title)}</span><b>${cover + c * COVER_ROWS + i + 1}</b></a></li>`,
-        );
-      add(
-        w,
-        h,
-        `<div class="cover">${c ? '' : `<h1>${esc(opts.title)}</h1><p>${count} ${count === 1 ? 'diagram' : 'diagrams'}</p><h2>Contents</h2>`}<ol>${rows.join('')}</ol></div>`,
-        `cover-${c}`,
-      );
+      add(w, h);
+      let y = COVER_PAD;
+      if (!c) {
+        doc.font('sans-600').fillColor('#1f2933');
+        line(opts.title, 80, y, 32, 38.4);
+        y += 38.4 + 6;
+        doc.font('sans-500').fillColor('#6b7785');
+        line(`${count} ${count === 1 ? 'diagram' : 'diagrams'}`, 80, y, 14, 20.3);
+        y += 20.3 + 36;
+        doc.font('sans-600');
+        line('CONTENTS', 80, y, 13, 18.85, { characterSpacing: 13 * 0.06 * PX });
+        y += 18.85 + 10;
+      }
+      const right = w - 80;
+      pages.slice(starts[c], starts[c + 1]).forEach((p, at) => {
+        const i = starts[c] + at,
+          n = String(cover + i + 1);
+        doc.font('sans-500').fillColor('#1f2933');
+        const nw = doc.fontSize(14 * PX).widthOfString(n) / PX;
+        line(p.title, 80, y + 4, 14, 20.3, { width: (right - nw - 12 - 80) * PX, ellipsis: true });
+        doc.fillColor('#6b7785');
+        line(n, right - nw, y + 4, 14, 20.3);
+        doc.goTo(80 * PX, y * PX, (right - 80) * PX, (COVER_ROW - 1) * PX, `page-${i}`);
+        doc.rect(80 * PX, (y + COVER_ROW - 1) * PX, (right - 80) * PX, PX).fill('#e6e9ee');
+        y += COVER_ROW;
+      });
     }
   }
+
   pages.forEach((p, i) => {
     const [w, h] = pageSize(page, p.w, p.h);
     // A fixed page scales the drawing to fit inside the margins, never past its own size.
     const scale = page === 'fit' ? 1 : Math.min(1, (w - MARGIN * 2) / p.w, (h - MARGIN * 2) / p.h);
-    const svg = scopeIds(p.svg, `p${i}-`).replace(
+    add(w, h).scale(PX);
+    doc.addNamedDestination(`page-${i}`);
+    // svg-to-pdfkit sizes the drawing by the root's own size, so the scale goes there.
+    const svg = p.svg.replace(
       /width="[\d.]+" height="[\d.]+"/,
       `width="${p.w * scale}" height="${p.h * scale}"`,
     );
-    add(w, h, svg, `page-${i}`);
+    SVGtoPDF(doc, svg, (w - p.w * scale) / 2, (h - p.h * scale) / 2, {
+      assumePt: true,
+      fontCallback: (family: string, bold: boolean) => faceId(family, bold),
+    });
   });
-  return `<!doctype html><meta charset="utf-8"><title>${esc(opts.title ?? 'Diagrams')}</title><style>
-@page{margin:0}${css.join('')}
-html,body{margin:0}
-section{break-after:page;overflow:hidden;display:flex;align-items:center;justify-content:center}
-section:last-child{break-after:auto}
-svg{display:block;flex:none}
-.cover{box-sizing:border-box;width:100%;height:100%;padding:72px 80px;font:14px/1.45 Inter,-apple-system,Helvetica,Arial,sans-serif;color:#1f2933}
-.cover h1{font-size:32px;line-height:1.2;margin:0 0 6px;font-weight:650}
-.cover p{margin:0 0 36px;color:#6b7785}
-.cover h2{font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:#6b7785;margin:0 0 10px;font-weight:600}
-.cover ol{list-style:none;margin:0;padding:0}
-.cover a{display:flex;gap:12px;padding:4px 0;color:inherit;text-decoration:none;border-bottom:1px solid #e6e9ee}
-.cover a span{flex:1}
-.cover a b{font-weight:500;color:#6b7785;font-variant-numeric:tabular-nums}
-</style>${body.join('')}`;
+  doc.end();
+  await done;
+  return Buffer.concat(chunks);
 }
 
-/** Print `html` to a PDF with headless Chrome. */
-async function print(html: string) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'draftably-pdf-'));
-  try {
-    const page = path.join(dir, 'print.html'),
-      out = path.join(dir, 'out.pdf');
-    fs.writeFileSync(page, html);
-    await promisify(execFile)(
-      findChrome(),
-      [
-        '--headless=new',
-        '--disable-gpu',
-        '--no-first-run',
-        `--user-data-dir=${path.join(dir, 'profile')}`,
-        '--no-pdf-header-footer',
-        `--print-to-pdf=${out}`,
-        pathToFileURL(page).href,
-      ],
-      { timeout: 120_000 },
-    );
-    return fs.readFileSync(out);
-  } finally {
-    fs.rmSync(dir, { recursive: true, force: true });
-  }
+/** The bundled face an SVG `font-family` and weight name, as PDFKit registered it. */
+function faceId(family: string, bold: boolean): FaceId {
+  const ids = Object.keys(FACES) as FaceId[];
+  const named = ids.filter(id => family.includes(FACES[id].family));
+  return (
+    named.find(id => FACES[id].weight >= 600 === bold) ??
+    named[0] ??
+    (bold ? 'sans-600' : 'sans-500')
+  );
 }
 
 /** Flat bookmarks: one per entry, each opening its page. */
@@ -238,12 +262,11 @@ export async function buildPdf(inputs: PdfInput[], opts: PdfOptions = {}) {
   if (!inputs.length) throw Error('No diagrams to print.');
   const drawn = await sheets(inputs, opts),
     pages = drawn.flatMap(d => d.pages),
-    cover = opts.title ? Math.ceil(pages.length / COVER_ROWS) : 0;
-  const pdf = await PDFDocument.load(await print(printHtml(pages, opts, cover, drawn.length)));
+    starts = opts.title ? coverStarts(opts.page ?? 'fit', pages.length) : [],
+    cover = starts.length;
+  const pdf = await PDFDocument.load(await draw(pages, opts, starts, drawn.length));
   if (pdf.getPageCount() !== cover + pages.length)
-    throw Error(
-      `Chrome printed ${pdf.getPageCount()} pages; expected ${cover + pages.length}. A page overflowed.`,
-    );
+    throw Error(`Drew ${pdf.getPageCount()} pages; expected ${cover + pages.length}.`);
   const refs = pdf.getPages().map(p => p.ref);
   addOutline(pdf, [
     ...(cover ? [{ title: 'Contents', page: refs[0] }] : []),

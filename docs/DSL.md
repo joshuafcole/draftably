@@ -1201,8 +1201,7 @@ source becomes invalid, the Editor keeps the last valid drawing and shows the er
 
 `--png <file>` on `inspect` or `compare` saves a PNG at `--scale` times the SVG's size (2 by
 default) and prints its size in pixels. `--max-width <px>` lowers the scale so the image is at
-most that wide. It renders with an installed Chrome, Chromium or Edge in headless mode; set
-`CHROME_PATH` to use another copy.
+most that wide. The CLI draws the PNG itself with the bundled fonts, so it needs no browser.
 
 `inspect` uses the Editor's own router and the same font tables, so its geometry matches the
 Editor. `inspect --svg` draws with the file's theme and embeds its fonts.

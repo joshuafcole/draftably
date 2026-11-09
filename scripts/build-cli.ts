@@ -41,6 +41,12 @@ writeFileSync(
     readFileSync(path.join(root, 'node_modules/mermaid/LICENSE'), 'utf8') +
     '\n\njsdom\n\n' +
     readFileSync(path.join(root, 'node_modules/jsdom/LICENSE.txt'), 'utf8') +
+    '\n\nresvg-js\n\n' +
+    readFileSync(path.join(root, 'node_modules/@resvg/resvg-js/LICENSE'), 'utf8') +
+    '\n\nPDFKit\n\n' +
+    readFileSync(path.join(root, 'node_modules/pdfkit/LICENSE'), 'utf8') +
+    '\n\nsvg-to-pdfkit\n\n' +
+    readFileSync(path.join(root, 'node_modules/svg-to-pdfkit/LICENSE'), 'utf8') +
     '\n\nD2\n\n' +
     readFileSync(path.join(root, 'node_modules/@d2lang/d2/LICENSE.txt'), 'utf8') +
     '\n\nD2 third-party notices\n\n' +

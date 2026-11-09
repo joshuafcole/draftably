@@ -87,8 +87,8 @@ draftably inspect architecture.draft --png architecture.png
 ```
 
 `check` reports source errors and drawing conflicts, and exits 1 on errors for CI.
-PNG export needs Chrome, Chromium or Edge. The package includes the CLI, editor and computation
-workers; installation does not download a browser.
+The CLI draws PNG and PDF files itself, so export needs no browser. The package includes the CLI,
+editor and computation workers.
 
 ## Review, refine and share
 

@@ -62,15 +62,15 @@ Commands:
        [--state <id>]       Draw it in one emphasis state (also with --png).
        [--states]           Draw every emphasis state as its own aligned panel.
   inspect <file> --png <out.png> [--scale 2] [--max-width <px>]
-                            Save the drawing as a PNG (needs Chrome or Chromium). --max-width
-                            lowers the scale so the image is at most that many pixels wide.
+                            Save the drawing as a PNG. --max-width lowers the scale so the
+                            image is at most that many pixels wide.
                             PNG and SVG output embed the source; --no-source leaves it out.
   inspect <file> --clipboard [--scale 2]
                             Put the drawing on the macOS clipboard: a PNG with its source, and
                             the SVG as text.
   pdf <file|folder>… -o <out.pdf>
                             Save the diagrams as one vector PDF, one per page, each with its
-       [--order <how>]      heading and key (needs Chrome or Chromium). --order: given (default;
+       [--order <how>]      heading and key. --order: given (default;
                             a folder's files by name), name or title. --page: fit (default,
        [--page <size>]      each page the diagram's size), letter, a4 or slide; a fixed size
                             scales the drawing to fit. --title adds a cover and contents.

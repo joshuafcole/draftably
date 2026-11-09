@@ -1,4 +1,3 @@
-import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -19,22 +18,13 @@ async function run(...argv: string[]) {
   return { code: await main(argv), out };
 }
 
-const hasChrome = (() => {
-  if (process.env.CHROME_PATH || fs.existsSync('/Applications/Google Chrome.app')) return true;
-  try {
-    return !!execFileSync('which', ['google-chrome'], { encoding: 'utf8' }).trim();
-  } catch {
-    return false;
-  }
-})();
-
 const write = (name: string, text: string) => {
   const file = path.join(dir, name);
   fs.writeFileSync(file, text);
   return file;
 };
 
-describe.skipIf(!hasChrome)('source embedded in exported PNGs', () => {
+describe('source embedded in exported PNGs', () => {
   it('gives back the formatted source of a plain file byte for byte', async () => {
     const draft = 'examples/checkout.draft',
       png = path.join(dir, 'plain.png');
@@ -69,7 +59,7 @@ describe.skipIf(!hasChrome)('source embedded in exported PNGs', () => {
   }, 60_000);
 });
 
-describe.skipIf(!hasChrome)('source attached to a PDF of several diagrams', () => {
+describe('source attached to a PDF of several diagrams', () => {
   it('gives back each file and stops on a file with errors', async () => {
     const pdf = path.join(dir, 'set.pdf');
     const files = ['examples/checkout.draft', 'examples/emphasis.draft'];
