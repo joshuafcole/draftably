@@ -5,8 +5,9 @@ import { checkSource } from '../src/dsl/compile';
 import { projectScene } from '../src/dsl/project';
 import { formatSource, parseModel } from '../src/dsl/syntax';
 import { normalize } from '../src/model/document';
+import { panelDoc } from '../src/model/panels';
 import { positionMarks } from '../src/model/position-marks';
-import { statusLabel, usedStatuses } from '../src/model/status';
+import { isDiff, statusLabel, usedStatuses } from '../src/model/status';
 import type { Diagram, Rect } from '../src/model/types';
 
 const BOX: Rect = { x: 400, y: 300, w: 160, h: 60 };
@@ -67,7 +68,13 @@ describe('was-at and was-size', () => {
     });
     expect(formatSource(line)).toBe(line);
     expect(parseModel('~group g "G" was-at=4,8\n').objects[0].wasAt).toEqual({ x: 4, y: 8 });
-    expect(() => parseModel('node a "A" was-at=1,2\n')).toThrow(/was-at= belongs on a changed/);
+    expect(() => parseModel('+node a "A" was-at=1,2\n')).toThrow(/was-at= belongs on a changed/);
+    expect(() => parseModel('-node a "A" was-size=1,2\n')).toThrow(
+      /was-size= belongs on a changed/,
+    );
+    // An old label, shape or count is a change, so it still needs the mark.
+    expect(() => parseModel('node a "A" was="B"\n')).toThrow(/was= belongs on a changed/);
+    expect(() => parseModel('node a "A" was-count=2\n')).toThrow(/was-count= belongs on a changed/);
     expect(() => parseModel('~group g "G" was-size=1,2\n')).toThrow(/Unknown group attribute/);
     expect(() => parseModel('~node a "A" was-at=1\n')).toThrow(/Expected was-at=a,b/);
     expect(() => parseModel('~node a "A" was-size=0,40\n')).toThrow(/Expected was-size=a,b/);
@@ -141,5 +148,53 @@ describe('compare writes position marks', () => {
     expect(svg.match(/<g data-was="a"><line/g)).toHaveLength(1);
     expect(svg).not.toContain('<g data-was="b">');
     expect(usedStatuses(doc).map(statusLabel)).toEqual(['2 changed', '1 moved', '1 resized']);
+  });
+});
+
+describe('a move with no change mark', () => {
+  const SRC = 'node a "A"\nnode b "B"\nedge e a -> b\npin a x=300 y=0\n',
+    compile = (source: string) => projectScene(checkSource(source)),
+    key = (doc: Diagram) => usedStatuses(doc).map(c => `${c.status}:${c.count}/${c.lines}`);
+
+  it('parses without a mark and keeps no status', () => {
+    const line = 'node a "A" was-at=10,20 was-size=160,56\n',
+      [a] = parseModel(line).objects;
+    expect(a).toMatchObject({ wasAt: { x: 10, y: 20 }, wasSize: { w: 160, h: 56 } });
+    expect(a.status).toBeUndefined();
+    expect(formatSource(line)).toBe(line);
+    expect(parseModel('group g "G" was-at=4,8\n').objects[0].wasAt).toEqual({ x: 4, y: 8 });
+  });
+
+  it('makes the document a diff, and a document with neither mark nor place is not one', () => {
+    expect(isDiff(compile(SRC.replace('node a "A"', 'node a "A" was-at=0,0')))).toBe(true);
+    expect(isDiff(compile(SRC.replace('node b "B"', 'node b "B" was-size=100,40')))).toBe(true);
+    expect(isDiff(compile(SRC.replace('node a "A"', '~node a "A"')))).toBe(true);
+    expect(isDiff(compile(SRC))).toBe(false);
+  });
+
+  it('counts as moved and not as changed, and draws its ghost', () => {
+    const doc = compile(SRC.replace('node a "A"', 'node a "A" was-at=0,0'));
+    expect(key(doc)).toEqual(['moved:1/0']);
+    expect(doc.styles.a?.status).toBeUndefined();
+    expect(renderSvg(doc)).toContain('stroke-dasharray="2 3"');
+    expect(key(compile(SRC.replace('node b "B"', 'node b "B" was-size=100,40')))).toEqual([
+      'resized:1/0',
+    ]);
+  });
+
+  it('a ~ line with was-at still counts under both', () => {
+    const doc = compile(SRC.replace('node a "A"', '~node a "A" was-at=0,0'));
+    expect(key(doc)).toEqual(['changed:1/0', 'moved:1/0']);
+  });
+
+  it('stays in both panels, with its ghost', () => {
+    const doc = compile(SRC.replace('node a "A"', 'node a "A" was-at=0,0'));
+    for (const side of ['before', 'after'] as const) {
+      const panel = panelDoc(doc, side);
+      expect(panel.graph.nodes.map(n => n.id)).toEqual(['a', 'b']);
+      expect(panel.graph.nodes.find(n => n.id === 'a')!.wasAt).toEqual({ x: 0, y: 0 });
+      expect(isDiff(panel)).toBe(true);
+      expect(key(panel)).toEqual(['moved:1/0']);
+    }
   });
 });

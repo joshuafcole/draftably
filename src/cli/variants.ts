@@ -552,7 +552,9 @@ export function autoVariants(scene: Scene, conflicts: Diagnostic[]) {
     });
   // A marked file draws one merged picture unless a `compare` line splits it into panels.
   const compare = m.appearance.compare,
-    marked = [...m.objects, ...m.edges].some(o => o.status);
+    marked = [...m.objects, ...m.edges].some(
+      o => o.status || ('wasAt' in o && o.wasAt) || ('wasSize' in o && o.wasSize),
+    );
   if (compare || marked)
     for (const direction of ['right', 'down'])
       if (compare?.direction !== direction)

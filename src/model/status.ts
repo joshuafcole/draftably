@@ -30,8 +30,9 @@ export type Spot = 'focus' | 'ring' | 'dim';
 export const STATUSES: Status[] = ['same', 'added', 'removed', 'changed', 'context'];
 
 /**
- * A changed object drawn with a ghost where it was (`was-at=`) or at its old size (`was-size=`).
- * The legend counts these apart from `changed`, which counts them too.
+ * An object drawn with a ghost where it was (`was-at=`) or at its old size (`was-size=`). The
+ * legend counts these apart from `changed`; a `~` line counts under both, one with no mark under
+ * these alone.
  */
 export type PlaceChange = 'moved' | 'resized';
 
@@ -141,11 +142,16 @@ function changePaint(look: ResolvedAppearance, status?: Status): StatusPaint {
   }
 }
 
-/** Whether the document is a diff: any object or connection carries a change mark. */
+/**
+ * Whether the document is a diff: any object or connection carries a change mark, or an object
+ * says where it was or how big (`was-at=`, `was-size=`), which needs no mark: a move is a
+ * difference even when nothing about the object changed.
+ */
 export const isDiff = (doc: Diagram) =>
   !!doc.appearance.compare ||
   Object.values(doc.styles).some(s => s.status) ||
-  doc.graph.edges.some(e => e.status);
+  doc.graph.edges.some(e => e.status) ||
+  [...doc.graph.nodes, ...doc.graph.groups].some(o => o.wasAt || ('wasSize' in o && o.wasSize));
 
 /**
  * In a diff, the swatch a status draws a shape with: a pale tint of its hue with a strong border

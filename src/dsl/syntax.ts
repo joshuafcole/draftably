@@ -655,8 +655,15 @@ export function parseModel(source: string | SourceDoc): Model {
       return w.value.split(',').map(x => id(bare(x)));
     };
     const was = () => {
-      for (const key of ['was', 'was-shape', 'was-count', 'was-at', 'was-size'])
+      // The old label, shape and count are changes; an old place or size is only layout, so a line
+      // with no mark may carry them: it draws its ghost and counts as moved, not as changed.
+      for (const key of ['was', 'was-shape', 'was-count'])
         assert(!attrs.has(key) || s.mark === '~', `${key}= belongs on a changed (~) line.`);
+      for (const key of ['was-at', 'was-size'])
+        assert(
+          !attrs.has(key) || !s.mark || s.mark === '~',
+          `${key}= belongs on a changed (~) line or one with no mark.`,
+        );
       const at = attrs.has('was-at') ? pair('was-at', -100_000, 100_000) : undefined,
         size = attrs.has('was-size') ? pair('was-size', 1, 100_000) : undefined;
       return {

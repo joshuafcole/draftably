@@ -565,15 +565,15 @@ can draw:
 ~edge dispatch gate -> web "create" was="start"
 ```
 
-| Word           | Goes on                    | Records                                                                                          |
-| -------------- | -------------------------- | ------------------------------------------------------------------------------------------------ |
-| `was="old"`    | `~node`, `~group`, `~edge` | The label before the change.                                                                     |
-| `was-shape=`   | `~node`                    | The shape before the change. Any shape but `marker`.                                             |
-| `was-count=`   | `~node`                    | The count before the change. `was-count=1` is one box.                                           |
-| `was-at=x,y`   | `~node`, `~group`          | The top-left corner before the change, in the parent's content area as `pin` and `stay` give it. |
-| `was-size=w,h` | `~node`                    | The width and height before the change.                                                          |
+| Word           | Goes on                            | Records                                                                                          |
+| -------------- | ---------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `was="old"`    | `~node`, `~group`, `~edge`         | The label before the change.                                                                     |
+| `was-shape=`   | `~node`                            | The shape before the change. Any shape but `marker`.                                             |
+| `was-count=`   | `~node`                            | The count before the change. `was-count=1` is one box.                                           |
+| `was-at=x,y`   | `~node`, `~group`, `node`, `group` | The top-left corner before the change, in the parent's content area as `pin` and `stay` give it. |
+| `was-size=w,h` | `~node`, `node`                    | The width and height before the change.                                                          |
 
-`check` refuses these words on a line with no `~` mark. `compare` writes them for you.
+`check` refuses `was`, `was-shape` and `was-count` on a line with no `~` mark, and every was word on a `+` or `-` line. `was-at` and `was-size` are the exception: an old place or size is a change of layout only, so they also go on a line with no mark. Such an object is not changed. It draws its ghost, the legend counts it as `moved` or `resized` and not as `changed`, and the file is a diff, so it draws in change colors. A `~` line with `was-at` behaves as it did, counted under both. `compare` writes them for you.
 
 `was-at=` and `was-size=` draw on the merged drawing itself, in the changed mark's amber, as a
 dotted ghost of the old box. The ghost of a box that moved clear of where it was takes one
@@ -602,7 +602,7 @@ declarations, and participant order in a sequence. Both panels draw the new vers
 read a Before panel with that line. An image with panels carries the same list in small grey
 text beside the Before label: `Drawn as new: a (color), layout root`.
 
-Unmarked lines are unchanged.
+Unmarked lines are unchanged, though one with `was-at=` or `was-size=` is unchanged but moved or resized. In panels it stays in both, since it exists in both, at the merged position; the ghost shows where it was, in each panel.
 
 In a file with marks, color means change and nothing else. Unchanged shapes are drawn on the
 theme's neutral surface, containers become quiet outlines, and unchanged lines turn grey, so only
