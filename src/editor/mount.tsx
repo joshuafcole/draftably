@@ -53,7 +53,9 @@ export function mountEditor(host: HTMLElement, options: MountOptions): MountedEd
   const { source, onChange, ...sessionOptions } = options;
   const session = createDiagramSession(sessionOptions);
   registerFonts();
-  void session.openSource(source, onChange).then(() => requestAnimationFrame(session.fitView));
+  void session
+    .openSource(source, onChange)
+    .then(() => requestAnimationFrame(() => session.fitView()));
   try {
     activeSession();
   } catch {

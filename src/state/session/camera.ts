@@ -16,8 +16,12 @@ import type { EmphasisPart } from './emphasis';
 import { MAX_ZOOM, MIN_ZOOM, type EditorPart } from './editor';
 import type { ScenePart } from './scene';
 
-/** Who moved the camera: the host through this part, or the user (and the editor for them). */
-export type CameraMover = 'user' | 'host';
+/**
+ * Who moved the camera: the host through this part, the reader (a drag, a pinch, the wheel, a key,
+ * a zoom button, an undo, or the Fit command), or `'fit'` for the editor's own automatic fits and
+ * reveals (the first fit once the canvas has a size, a fit after a layout or an opened diagram).
+ */
+export type CameraMover = 'user' | 'host' | 'fit';
 
 export interface FitOptions {
   /** Zoom no further out than this; the objects may then not all fit. MIN_ZOOM by default. */

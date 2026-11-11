@@ -151,7 +151,7 @@ export const canvasCommands = {
     label: 'Fit diagram',
     keys: '1',
     icon: 'fit',
-    run: () => activeSession().fitView(),
+    run: () => activeSession().fitView('user'),
     duringTimeline: true,
   },
   'zoom-in': {

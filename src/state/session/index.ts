@@ -80,8 +80,13 @@ export interface SessionOptions {
   /** In a read-only session, the user opened an object: a double click, or Enter on it. */
   onActivate?: (item: ViewItem) => void;
   /**
-   * The camera moved: `by: 'host'` when the host moved it (`moveCamera`, `fitTo`, `reveal`),
-   * `'user'` for everything else, the editor's own fits included. A call that leaves the camera
+   * The camera moved, and who moved it: `'host'` for the host (`moveCamera`, `fitTo`, `reveal`),
+   * `'fit'` for the editor's own automatic fits and reveals (the first fit once the canvas has a
+   * size, a fit after a layout or an opened diagram), and `'user'` for the reader: a drag or
+   * pinch pan or zoom, the wheel, keys, the zoom buttons, the Fit command, undo. A drag reports on
+   * every pointer move and the wheel on every wheel event, so a reader's move can cancel a host's
+   * glide. A host that tests `by !== 'host'` for "the reader moved it" now also sees `'fit'`; one
+   * that tests `by === 'user'` no longer sees the editor's fits. A call that leaves the camera
    * where it was reports nothing.
    */
   onCamera?: (camera: Camera, by: CameraMover) => void;

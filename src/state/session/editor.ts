@@ -6,6 +6,7 @@ import { createSignal, onCleanup } from 'solid-js';
 import { clamp, rectUnion } from '../../model/geometry';
 import { findNode, objectRect } from '../../model/graph';
 import type { NodeGeometry, Point, PortSide, Rect } from '../../model/types';
+import type { CameraMover } from './camera';
 import type { DocumentPart } from './document';
 import type { ScenePart } from './scene';
 import type { EmphasisPart } from './emphasis';
@@ -164,7 +165,7 @@ export function createEditor(s: DocumentPart & ScenePart & EmphasisPart) {
    * large monitor. Before the canvas is laid out its size is unknown, so the fit waits for it rather
    * than zoom out to the minimum.
    */
-  function fitView() {
+  function fitView(by: CameraMover = 'fit') {
     const { width: w, height: h } = stageSize();
     if (!s.doc.graph.nodes.length && !s.doc.graph.groups.length) return;
     fitPending = w <= 1 || h <= 1;
@@ -178,11 +179,14 @@ export function createEditor(s: DocumentPart & ScenePart & EmphasisPart) {
         MIN_ZOOM,
         1,
       );
-    s.setCamera({
-      x: (w - b.w * k) / 2 - b.x * k,
-      y: (h - bottom + pad - b.h * k) / 2 - b.y * k,
-      k,
-    });
+    s.setCamera(
+      {
+        x: (w - b.w * k) / 2 - b.x * k,
+        y: (h - bottom + pad - b.h * k) / 2 - b.y * k,
+        k,
+      },
+      by,
+    );
   }
 
   /** Some of the diagram lies outside the canvas, or under the zoom controls. */
@@ -201,7 +205,7 @@ export function createEditor(s: DocumentPart & ScenePart & EmphasisPart) {
       { width: w } = stageSize(),
       h = stageSize().height - reservedBottom,
       k = clamp(Math.min(w / b.w, h / b.h), MIN_ZOOM, 1.2);
-    s.setCamera({ x: (w - b.w * k) / 2 - b.x * k, y: (h - b.h * k) / 2 - b.y * k, k });
+    s.setCamera({ x: (w - b.w * k) / 2 - b.x * k, y: (h - b.h * k) / 2 - b.y * k, k }, 'fit');
   }
 
   /** Pan just enough to bring an object fully into view. */
@@ -214,7 +218,7 @@ export function createEditor(s: DocumentPart & ScenePart & EmphasisPart) {
     if ((r.x + r.w) * c.k + c.x > w - pad) c.x = w - pad - (r.x + r.w) * c.k;
     if (r.y * c.k + c.y < pad) c.y = pad - r.y * c.k;
     if ((r.y + r.h) * c.k + c.y > h - pad) c.y = h - pad - (r.y + r.h) * c.k;
-    s.setCamera(c);
+    s.setCamera(c, 'fit');
   }
 
   /** Center the selected objects without changing the zoom. */

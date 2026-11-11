@@ -206,14 +206,24 @@ export function createDocument(s: CanvasTextPart, options: SessionOptions) {
     persist();
   }
 
-  /** Replace the document while keeping the current camera. */
-  function restoreDocument(next: Diagram, { keepCamera = true } = {}) {
+  /**
+   * Replace the document while keeping the current camera. Without `keepCamera` the document's own
+   * camera comes back with it (undo, a cancelled drag); `by` then reports that move to `onCamera`
+   * when the camera changed, and without `by` nobody is told (a first load).
+   */
+  function restoreDocument(
+    next: Diagram,
+    { keepCamera = true, by }: { keepCamera?: boolean; by?: CameraMover } = {},
+  ) {
     const camera = { ...state.doc.camera };
     batch(() => {
       state.setDoc(reconcile(next));
       if (keepCamera) state.setDoc('camera', camera);
       state.setRevision(r => r + 1);
     });
+    const now = state.doc.camera;
+    if (by && (now.x !== camera.x || now.y !== camera.y || now.k !== camera.k))
+      options.onCamera?.({ ...now }, by);
   }
 
   const historyHandlers: Array<(entry: HistoryEntry, direction: 'undo' | 'redo') => void> = [];
@@ -236,7 +246,7 @@ export function createDocument(s: CanvasTextPart, options: SessionOptions) {
       }
       for (const handler of historyHandlers) handler(entry, direction);
       // Undo restores the view along with the diagram, so the restored change is on screen.
-      restoreDocument(normalize(JSON.parse(entry.data)), { keepCamera: false });
+      restoreDocument(normalize(JSON.parse(entry.data)), { keepCamera: false, by: 'user' });
       clearSelection();
     });
     persist();
@@ -254,7 +264,9 @@ export function createDocument(s: CanvasTextPart, options: SessionOptions) {
 
   /**
    * Move the camera. `by` says who moved it, for `SessionOptions.onCamera`: the host through the
-   * camera part, or the user (and the editor's own fits for them) through everything else.
+   * camera part, the editor's own automatic fits as `'fit'`, and the reader (a drag, a pinch, the
+   * wheel, a key or button) as `'user'`. Every camera change goes through here, so every one is
+   * reported.
    */
   function setCamera(camera: Camera, by: CameraMover = 'user') {
     const c = state.doc.camera;

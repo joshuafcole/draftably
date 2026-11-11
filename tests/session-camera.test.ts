@@ -165,3 +165,180 @@ describe('the camera on a session', () => {
     expect((r.y + r.h / 2) * c.k + c.y).toBeCloseTo(100, 5);
   });
 });
+
+/** A pointer event on the background of the canvas (a mouse, or a finger by `id`). */
+function pointer(x: number, y: number, extra: Record<string, unknown> = {}) {
+  return {
+    clientX: x,
+    clientY: y,
+    pointerId: 1,
+    pointerType: 'mouse',
+    button: 0,
+    shiftKey: false,
+    altKey: false,
+    ctrlKey: false,
+    metaKey: false,
+    preventDefault() {},
+    currentTarget: {
+      setPointerCapture() {},
+      releasePointerCapture() {},
+      getBoundingClientRect: () => ({ left: 0, top: 0, width: 800, height: 600 }),
+    },
+    target: { closest: () => null },
+    ...extra,
+  } as unknown as PointerEvent;
+}
+
+describe('who the camera reports as the mover', () => {
+  it('a drag pan reports the user on every pointer move, like the wheel does', async () => {
+    const moves: Array<[Camera, CameraMover]> = [];
+    const s = await open(moves);
+    s.moveCamera({ x: 100, y: 100, k: 1 });
+    moves.length = 0;
+    s.onPointerDown(pointer(300, 300));
+    for (let i = 1; i <= 4; i++) s.onPointerMove(pointer(300 + i * 10, 300 + i * 5));
+    s.onPointerUp(pointer(340, 320));
+    expect(moves.map(([, by]) => by)).toEqual(['user', 'user', 'user', 'user']);
+    expect(moves.at(-1)?.[0]).toEqual({ x: 140, y: 120, k: 1 });
+    expect(s.camera()).toEqual({ x: 140, y: 120, k: 1 });
+    // The wheel reports once per event, the same way.
+    moves.length = 0;
+    s.onWheel({
+      ...pointer(400, 300),
+      deltaY: -100,
+      deltaX: 0,
+      deltaMode: 0,
+    } as unknown as WheelEvent);
+    expect(moves.map(([, by]) => by)).toEqual(['user']);
+    s.dispose();
+  });
+
+  it('a drag zoom (Ctrl on a read-only canvas) reports the user', async () => {
+    const moves: Array<[Camera, CameraMover]> = [];
+    const s = await open(moves);
+    s.setReadOnly(true);
+    moves.length = 0;
+    s.onPointerDown(pointer(300, 300, { ctrlKey: true }));
+    s.onPointerMove(pointer(300, 260, { ctrlKey: true }));
+    s.onPointerUp(pointer(300, 260));
+    expect(moves.map(([, by]) => by)).toEqual(['user']);
+    expect(moves[0][0].k).toBeGreaterThan(1);
+    s.dispose();
+  });
+
+  it('a pinch reports the user on every move', async () => {
+    const moves: Array<[Camera, CameraMover]> = [];
+    const s = await open(moves);
+    const finger = (id: number, x: number, y: number) =>
+      pointer(x, y, { pointerId: id, pointerType: 'touch' });
+    s.onPointerDown(finger(1, 300, 300));
+    s.onPointerDown(finger(2, 400, 300));
+    moves.length = 0;
+    s.onPointerMove(finger(2, 500, 300));
+    s.onPointerMove(finger(2, 600, 300));
+    expect(moves.map(([, by]) => by)).toEqual(['user', 'user']);
+    expect(moves[1][0].k).toBeGreaterThan(moves[0][0].k);
+    s.dispose();
+  });
+
+  it('a cancelled drag pan puts the camera back and says the user did', async () => {
+    const moves: Array<[Camera, CameraMover]> = [];
+    const s = await open(moves);
+    s.moveCamera({ x: 100, y: 100, k: 1 });
+    s.onPointerDown(pointer(300, 300));
+    s.onPointerMove(pointer(380, 330));
+    expect(s.camera()).toEqual({ x: 180, y: 130, k: 1 });
+    moves.length = 0;
+    s.cancelGesture();
+    expect(s.camera()).toEqual({ x: 100, y: 100, k: 1 });
+    expect(moves).toEqual([[{ x: 100, y: 100, k: 1 }, 'user']]);
+    s.dispose();
+  });
+
+  it("a reader's drag cancels a host glide, as a wheel turn does", async () => {
+    // A host glide as a host writes one: step the camera with moveCamera until it arrives, and
+    // stop the moment anything but the host moves the camera.
+    const glide = async (interrupt: (s: Session) => void) => {
+      let cancelled = false;
+      const s = await open([], true);
+      const heard = createDiagramSession({
+        onCamera: (_, by) => {
+          if (by !== 'host') cancelled = true;
+        },
+      });
+      await heard.openSource(SOURCE);
+      for (let i = 0; i < 40 && heard.fileCompiling(); i++)
+        await new Promise(r => setTimeout(r, 0));
+      heard.setStageSize(STAGE);
+      const from = heard.camera();
+      for (let i = 1; i <= 10 && !cancelled; i++) {
+        heard.moveCamera({ ...from, x: from.x - i * 20 });
+        if (i === 3) interrupt(heard as unknown as Session);
+      }
+      const reached = from.x - heard.camera().x;
+      heard.dispose();
+      s.dispose();
+      return { cancelled, reached };
+    };
+    const drag = await glide(s => {
+      s.onPointerDown(pointer(300, 300));
+      s.onPointerMove(pointer(310, 300));
+    });
+    const wheel = await glide(s =>
+      s.onWheel({
+        ...pointer(400, 300),
+        deltaY: -100,
+        deltaX: 0,
+        deltaMode: 0,
+      } as unknown as WheelEvent),
+    );
+    // Both stop the glide at its third step; neither lets it run its ten.
+    expect(drag.cancelled).toBe(true);
+    expect(wheel.cancelled).toBe(true);
+    expect(drag.reached).toBeLessThan(200);
+    expect(wheel.reached).toBeLessThan(200);
+  });
+
+  it("the editor's own fits report 'fit', and the host and the reader keep their names", async () => {
+    const moves: Array<[Camera, CameraMover]> = [];
+    const s = await open([], false);
+    const sized = createDiagramSession({ onCamera: (camera, by) => moves.push([camera, by]) });
+    await sized.openSource(SOURCE);
+    for (let i = 0; i < 40 && sized.fileCompiling(); i++) await new Promise(r => setTimeout(r, 0));
+    // The first fit waits for the canvas to have a size, then reports itself.
+    sized.fitView();
+    expect(moves).toEqual([]);
+    sized.setStageSize(STAGE);
+    expect(moves.map(([, by]) => by)).toEqual(['fit']);
+    // The Fit command is the reader's.
+    sized.moveCamera({ x: 0, y: 0, k: 0.5 });
+    sized.fitView('user');
+    expect(moves.map(([, by]) => by)).toEqual(['fit', 'host', 'user']);
+    sized.moveCamera({ x: 3, y: 4, k: 0.5 });
+    sized.fitView();
+    sized.panBy(7, 0);
+    expect(moves.map(([, by]) => by)).toEqual(['fit', 'host', 'user', 'host', 'fit', 'user']);
+    // A host move is still the host's.
+    sized.moveCamera({ x: 1, y: 2, k: 0.7 });
+    sized.fitTo(['a']);
+    expect(moves.slice(-2).map(([, by]) => by)).toEqual(['host', 'host']);
+    sized.dispose();
+    s.dispose();
+  });
+
+  it('undo that brings the camera back with the diagram is reported as the user', async () => {
+    const moves: Array<[Camera, CameraMover]> = [];
+    const s = createDiagramSession({ onCamera: (camera, by) => moves.push([camera, by]) });
+    s.setStageSize(STAGE);
+    s.moveCamera({ x: 5, y: 5, k: 1 });
+    s.transact('Add', d => {
+      d.graph.nodes.push({ id: 'n', label: 'N' } as never);
+    });
+    s.moveCamera({ x: 90, y: 90, k: 1 });
+    moves.length = 0;
+    s.undo();
+    expect(s.camera()).toEqual({ x: 5, y: 5, k: 1 });
+    expect(moves).toEqual([[{ x: 5, y: 5, k: 1 }, 'user']]);
+    s.dispose();
+  });
+});
