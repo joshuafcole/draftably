@@ -69,4 +69,36 @@ describe('a session drawing one side of a marked document', () => {
     // Showing a side is view state: the document and its layout are untouched.
     expect(JSON.stringify(s.doc.layout)).toBe(layout);
   });
+
+  // The key under the drawing lists what that drawing shows, so a panel never counts the other
+  // version's objects.
+  const key = (s: Awaited<ReturnType<typeof open>>) =>
+    s
+      .viewerFrame()
+      .key.items.flatMap(i => (i.status ? [i.status] : []))
+      .map(c => `${c.status}:${c.count}/${c.lines}`)
+      .sort();
+
+  it('counts the statuses of the whole merge in the key', async () => {
+    const s = await open();
+    expect(key(s)).toEqual(['added:1/1', 'changed:1/0', 'removed:1/1']);
+  });
+
+  it('before counts what was removed and nothing added', async () => {
+    const s = await open({ panel: 'before' });
+    expect(key(s)).toEqual(['changed:1/0', 'removed:1/1']);
+  });
+
+  it('after counts what was added and nothing removed', async () => {
+    const s = await open({ panel: 'after' });
+    expect(key(s)).toEqual(['added:1/1', 'changed:1/0']);
+  });
+
+  it('a key follows the side shown', async () => {
+    const s = await open();
+    s.showPanel('before');
+    expect(key(s)).toEqual(['changed:1/0', 'removed:1/1']);
+    s.showPanel(null);
+    expect(key(s)).toEqual(['added:1/1', 'changed:1/0', 'removed:1/1']);
+  });
 });

@@ -88,12 +88,14 @@ export function createEmphasis(s: DocumentPart & ScenePart) {
    */
   const viewerFrame = createMemo(() => {
     const look = resolveAppearance(s.doc.appearance),
-      id = activeState();
+      id = activeState(),
+      side = panel();
     return diagramFrame(
       look,
       s.doc.appearance.heading,
       drawnLegend(s.doc),
-      usedStatuses(s.doc),
+      // A panel's key counts what that panel shows; the merge counts both versions.
+      usedStatuses(side ? panelDoc(s.doc, side) : s.doc),
       drawingBounds(s.doc, s.visibleScene(), s.sceneRects(), s.routes(), FRAME_PAD),
       placeNotes(id ? { ...s.doc, drawnState: id } : s.doc, look, s.sceneRects(), s.routes()),
       s.doc.appearance.footnotes,
