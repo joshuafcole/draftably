@@ -20,7 +20,7 @@
  * course its container's own drawing gave it, joined just inside the frame. A route nothing gives
  * a course for is routed afresh, and named in `rerouted`.
  */
-import type { Route, RoutingResult } from '../engines/routing-engine.js';
+import type { PriorRoute, Route, RoutingResult } from '../engines/routing-engine.js';
 import { clone } from '../model/geometry';
 import { visibleGraph } from '../model/graph';
 import { computeRoutes } from '../model/routes';
@@ -44,6 +44,10 @@ export interface MadeRoom {
   cuts: Array<Cut & { frame: string }>;
   /** Edges no drawing gave a course for, routed afresh. */
   rerouted: string[];
+  /** Edges whose course was stitched from two drawings: an end runs on into an opened container. */
+  joined: string[];
+  /** Edges whose points did not all move by one vector: a cut ran across them, or they were joined. */
+  reshaped: string[];
 }
 
 /** Why a drawing could not be warped into `final`; the host lays it out instead. */
@@ -247,14 +251,23 @@ export function makeRoom(
   };
 
   const routes: Route[] = [],
-    rerouted: string[] = [];
+    rerouted: string[] = [],
+    joinedIds: string[] = [],
+    reshaped: string[] = [];
   for (const e of vg.edges) {
     const a = chain(e.a),
       b = chain(e.b);
     let common = 0;
     while (common < a.length && common < b.length && a[common] === b[common]) common++;
     const host = frames.get(common ? a[common - 1] : ROOT)!,
-      route = host.drawing.routes.routes.find(r => r.id === e.id);
+      route = host.drawing.routes.routes.find(r => r.id === e.id),
+      bends = host.drawing.doc.layout.edges[e.id]?.waypoints;
+    // Authored bends are points of the drawing like any other: they move with their cuts.
+    if (bends?.length)
+      doc.layout.edges[e.id] = {
+        ...doc.layout.edges[e.id],
+        waypoints: bends.map(p => toFinal(host, p)),
+      };
     if (!route) {
       rerouted.push(e.id);
       continue;
@@ -295,6 +308,8 @@ export function makeRoom(
       rerouted.push(e.id);
       continue;
     }
+    if (joined) joinedIds.push(e.id);
+    if (joined || !translated(route.points, points)) reshaped.push(e.id);
     // A warped route keeps every point it had; only a joined one is tidied where it was joined.
     routes.push({ ...next, points: joined ? dedupe(points) : points });
   }
@@ -307,7 +322,73 @@ export function makeRoom(
       if (r) routes.push(r);
     }
   }
-  return { doc, routes: { ...rest.routes, routes }, cuts, rerouted };
+  return { doc, routes: { ...rest.routes, routes }, cuts, rerouted, joined: joinedIds, reshaped };
+}
+
+/** Whether `b` is `a` with every point moved by one vector, within a hundredth (none at all, too). */
+function translated(a: readonly Point[], b: readonly Point[]) {
+  if (a.length !== b.length) return false;
+  const dx = b[0].x - a[0].x,
+    dy = b[0].y - a[0].y;
+  return a.every(
+    (p, i) => Math.abs(b[i].x - p.x - dx) < 0.01 && Math.abs(b[i].y - p.y - dy) < 0.01,
+  );
+}
+
+/**
+ * Redraw only the lines the warp bent out of shape; every other line keeps the warp's course, and
+ * no box moves.
+ *
+ * A line is **bent** when its course was stitched from two drawings (`joined`, `rerouted`), or
+ * when a cut ran across it (`reshaped`) and the router, handed the warp's course as the line's
+ * plan, will not hold it: a diagonal piece, an end that no longer leaves its box square from the
+ * side it faces or sits off its port, or a piece through a box, a frame it is not in or a title
+ * band, within the router's clearance. A line the warp only moved, or stretched cleanly, is kept
+ * point for point; so is one the warp moved whole, which it cannot have bent.
+ *
+ * One router call on the warped drawing: every line not stitched is handed over as its plan, listed
+ * first, so the router holds each one it accepts (it neither searches nor moves a held line, and
+ * costs crossing or running beside it) and each bent line is searched with them in place and every
+ * box as an obstacle. A bent line keeps its authored bends, which `makeRoom` warps, and where it
+ * can the sides the warp left it. A function of `made` alone: the same open set draws the same
+ * lines, and with nothing reshaped nothing is routed.
+ */
+export function redrawBent(made: MadeRoom): MadeRoom & { redrawn: string[] } {
+  const stitched = new Set([...made.joined, ...made.rerouted]),
+    reshaped = new Set(made.reshaped);
+  if (!stitched.size && !reshaped.size) return { ...made, redrawn: [] };
+  const { vg, rects } = visibleRects(made.doc),
+    warped = new Map(made.routes.routes.map(r => [r.id, r])),
+    planned = (id: string) => (stitched.has(id) ? undefined : warped.get(id)),
+    edges = { ...made.doc.layout.edges },
+    previous: PriorRoute[] = [];
+  for (const e of vg.edges) {
+    const r = planned(e.id),
+      w = warped.get(e.id);
+    if (r)
+      edges[e.id] = {
+        plan: { points: r.points, fromOffset: r.fromOffset, toOffset: r.toOffset },
+      };
+    else if (w) previous.push({ id: e.id, fromSide: w.fromSide, toSide: w.toSide });
+  }
+  const order = [...vg.edges.filter(e => planned(e.id)), ...vg.edges.filter(e => !planned(e.id))],
+    doc = { ...made.doc, layout: { ...made.doc.layout, edges } },
+    { result } = computeRoutes(doc, { ...vg, edges: order }, rects, { previous }),
+    drawn = new Map(result.routes.map(r => [r.id, r])),
+    routes: Route[] = [],
+    redrawn: string[] = [];
+  for (const e of vg.edges) {
+    const plan = planned(e.id),
+      fresh = drawn.get(e.id);
+    // Held, or moved whole: the warp's own course, exactly.
+    if (plan && (!reshaped.has(e.id) || !fresh || translated(plan.points, fresh.points)))
+      routes.push(plan);
+    else if (fresh) {
+      routes.push(fresh);
+      redrawn.push(e.id);
+    }
+  }
+  return { ...made, routes: { ...result, routes }, redrawn };
 }
 
 /** Consecutive repeats and points on a straight run, dropped. */

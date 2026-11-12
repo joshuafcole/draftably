@@ -10,7 +10,7 @@
 import { describe, expect, it } from 'vitest';
 import { compile } from '../src/dsl/compile';
 import { dilate, type Cut, type WarpBox } from '../src/dsl/dilate';
-import { makeRoom, relaxRoom, type RoomDrawing } from '../src/dsl/make-room';
+import { makeRoom, redrawBent, relaxRoom, type RoomDrawing } from '../src/dsl/make-room';
 import { projectScene, visibleRects } from '../src/dsl/project';
 import { bundlesOf } from '../src/model/bundles';
 import { computeRoutes } from '../src/model/routes';
@@ -321,5 +321,189 @@ describe('makeRoom, a portal and a trunk', () => {
     const trunks = bundlesOf(relaxed.doc, relaxed.routes.routes);
     expect(trunks).toHaveLength(1);
     expect(trunks[0].members).toHaveLength(3);
+  });
+});
+
+/** Where `p` lies on the course, within a hundredth: on one of its pieces. */
+const onCourse = (p: Point, points: readonly Point[]) =>
+  points.some((a, i) => {
+    const b = points[i + 1];
+    if (!b) return close(a.x, p.x) && close(a.y, p.y);
+    const within = (v: number, u: number, w: number) =>
+      v >= Math.min(u, w) - 0.01 && v <= Math.max(u, w) + 0.01;
+    return (
+      within(p.x, a.x, b.x) &&
+      within(p.y, a.y, b.y) &&
+      Math.abs((b.x - a.x) * (p.y - a.y) - (b.y - a.y) * (p.x - a.x)) <
+        0.01 * Math.hypot(b.x - a.x, b.y - a.y) + 0.01
+    );
+  });
+const level = (points: readonly Point[]) =>
+  points.every((p, i) => !i || close(p.x, points[i - 1].x) || close(p.y, points[i - 1].y));
+
+/** The boxes a course passes through, short of its own ends and the containers they are in. */
+function through(
+  doc: RoomDrawing['doc'],
+  r: { from: string; to: string; points: readonly Point[] },
+) {
+  const { rects } = visibleRects(doc),
+    parent = new Map([...doc.graph.nodes, ...doc.graph.groups].map(o => [o.id, o.parentId])),
+    mine = new Set<string>();
+  for (const end of [r.from, r.to])
+    for (let at: string | undefined = end; at; at = parent.get(at)) mine.add(at);
+  return [...rects]
+    .filter(([id]) => !mine.has(id))
+    .filter(([, b]) =>
+      r.points.some((a, i) => {
+        const c = r.points[i + 1];
+        if (!c) return false;
+        return (
+          Math.max(a.x, c.x) > b.x + 0.5 &&
+          Math.min(a.x, c.x) < b.x + b.w - 0.5 &&
+          Math.max(a.y, c.y) > b.y + 0.5 &&
+          Math.min(a.y, c.y) < b.y + b.h - 0.5
+        );
+      }),
+    )
+    .map(([id]) => id);
+}
+
+describe('redrawBent: the warp, and only the lines it bent redrawn', () => {
+  const seeds = Array.from({ length: 24 }, (_, i) => 1000 + i * 7919);
+
+  it.each(seeds)(
+    'seed %i: boxes stay where the warp put them, unbent lines are the warp’s, bent ones clear every box',
+    async seed => {
+      const { cards, source } = world(seed),
+        card = cards[0]!,
+        rest = await drawn(source(new Set())),
+        open = await drawn(source(new Set([card])));
+      const made = makeRoom(rest, new Map([[card, open]]), open.doc),
+        out = redrawBent(made);
+      // Boxes: the warp's, exactly (the warp's own guarantees are the tests above).
+      expect([...visibleRects(out.doc).rects]).toEqual([...visibleRects(made.doc).rects]);
+      const warped = new Map(made.routes.routes.map(r => [r.id, r])),
+        bent = new Set([...made.joined, ...made.rerouted, ...made.reshaped]),
+        fresh = () => {
+          const { vg, rects } = visibleRects(made.doc);
+          return new Map(
+            computeRoutes(made.doc, vg, rects, { previous: [] }).result.routes.map(r => [r.id, r]),
+          );
+        };
+      expect(out.routes.routes.map(r => r.id).sort()).toEqual([...warped.keys()].sort());
+      for (const r of out.routes.routes) {
+        if (!out.redrawn.includes(r.id)) {
+          // Kept: point for point the warp's.
+          expect(r.points, `${r.id} kept`).toEqual(warped.get(r.id)!.points);
+          if (!r.blocked)
+            expect(through(out.doc, r), `${r.id} clear of the frame`).not.toContain(card);
+          continue;
+        }
+        // Only a line the warp reshaped or stitched is ever redrawn, and a stitched one always is.
+        expect(bent.has(r.id), `${r.id} was bent`).toBe(true);
+        // Blocked only where the router finds no way even with every line drawn afresh.
+        if (r.blocked) {
+          expect(fresh().get(r.id)!.blocked, `${r.id} has no route at all`).toBe(true);
+          continue;
+        }
+        expect(level(r.points), `${r.id} level and upright`).toBe(true);
+        expect(through(out.doc, r), `${r.id} clear of every box`).toEqual([]);
+      }
+      for (const id of made.joined) expect(out.redrawn, `${id} joined`).toContain(id);
+      // A line the warp moved whole is never touched.
+      for (const id of warped.keys())
+        if (!bent.has(id)) expect(out.redrawn, `${id} moved whole`).not.toContain(id);
+    },
+  );
+
+  it.each(seeds.slice(0, 8))(
+    'seed %i: nothing opened, nothing is redrawn (closing puts every line back)',
+    async seed => {
+      const rest = await drawn(world(seed).source(new Set())),
+        out = redrawBent(makeRoom(rest, new Map(), rest.doc));
+      const byId = (routes: readonly { id: string }[]) =>
+        [...routes].sort((a, b) => (a.id < b.id ? -1 : 1));
+      expect(out.redrawn).toEqual([]);
+      expect(byId(out.routes.routes)).toEqual(byId(rest.routes.routes));
+    },
+  );
+
+  it.each(Array.from({ length: 6 }, (_, i) => 77 + i * 104729))(
+    'seed %i: the same open set draws the same lines whatever order it was opened in',
+    async seed => {
+      const { cards, source } = world(seed),
+        rest = await drawn(source(new Set())),
+        final = await drawn(source(new Set(cards))),
+        own = new Map(
+          await Promise.all(cards.map(async c => [c, await drawn(source(new Set([c])))] as const)),
+        );
+      const one = redrawBent(makeRoom(rest, new Map(cards.map(c => [c, own.get(c)!])), final.doc)),
+        other = redrawBent(
+          makeRoom(rest, new Map([...cards].reverse().map(c => [c, own.get(c)!])), final.doc),
+        );
+      expect(other.routes.routes).toEqual(one.routes.routes);
+      expect(other.redrawn).toEqual(one.redrawn);
+    },
+    60_000,
+  );
+
+  it('keeps authored bends: warped with the line it keeps, and the line it redraws runs through them', async () => {
+    const base = (open: boolean) =>
+      [
+        'layout root flow direction=right',
+        'node a "Gateway"',
+        ...(open
+          ? [
+              'group card "Ranker"',
+              'node card.p0 "Scorer" in=card',
+              'node card.p1 "Cache" in=card',
+              'edge card.f card.p0 -> card.p1',
+            ]
+          : ['node card "Ranker"']),
+        'node b "Merger"',
+        'edge ab a -> b',
+        `edge ac a -> ${open ? 'card.p0' : 'card'}`,
+        `edge cb ${open ? 'card.p1' : 'card'} -> b`,
+      ].join('\n') + '\n';
+    // Where the boxes sit at rest decides where the bends go: over the row, and under it.
+    const bare = visibleRects((await drawn(base(false))).doc).rects,
+      a = bare.get('a')!,
+      b = bare.get('b')!,
+      card = bare.get('card')!,
+      top = Math.min(a.y, b.y, card.y) - 60,
+      bottom = Math.max(a.y + a.h, card.y + card.h) + 60,
+      ax = a.x + a.w / 2,
+      bends = (open: boolean) =>
+        base(open) +
+        `route ab via=${ax + 30},${top};${b.x + b.w / 2 - 30},${top} strength=required\n` +
+        `route ac via=${ax - 30},${bottom};${card.x + card.w / 2 + 30},${bottom} strength=required\n`;
+    const rest = await drawn(bends(false)),
+      open = await drawn(bends(true)),
+      made = makeRoom(rest, new Map([['card', open]]), open.doc),
+      out = redrawBent(made);
+    expect(made.cuts.some(c => c.axis === 'x' && c.delta > 0)).toBe(true);
+    const point = (id: string) => made.doc.layout.edges[id]!.waypoints!,
+      route = (id: string) => out.routes.routes.find(r => r.id === id)!,
+      restAb = rest.routes.routes.find(r => r.id === 'ab')!;
+    expect(point('ab')).toHaveLength(2);
+    // The line over the row: kept, its bends where the warp put them, its vertex count kept.
+    expect(out.redrawn).not.toContain('ab');
+    expect(route('ab').points).toHaveLength(restAb.points.length);
+    for (const p of point('ab'))
+      expect(onCourse(p, route('ab').points), 'ab through its bend').toBe(true);
+    // The line into the opened card: joined, so redrawn, through its bends where the warp put them.
+    expect(out.redrawn).toContain('ac');
+    expect(route('ac').blocked).toBe(false);
+    expect(level(route('ac').points)).toBe(true);
+    for (const p of point('ac'))
+      expect(onCourse(p, route('ac').points), 'ac through its bend').toBe(true);
+    for (const [p, q] of point('ac').map((p, i) => [
+      p,
+      rest.doc.layout.edges['ac']!.waypoints![i]!,
+    ])) {
+      const xs = translations(made.cuts, 'x'),
+        ys = translations(made.cuts, 'y');
+      expect(moves(q.x, p.x, xs) && moves(q.y, p.y, ys), 'ac bend moved by a cut').toBe(true);
+    }
   });
 });

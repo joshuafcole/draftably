@@ -60,6 +60,7 @@ export {
 export {
   CannotMakeRoom,
   makeRoom,
+  redrawBent,
   relaxRoom,
   RELAX_MAX_MOVE,
   type MadeRoom,
