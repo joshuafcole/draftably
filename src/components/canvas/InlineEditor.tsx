@@ -17,7 +17,7 @@ export function InlineEditor() {
 function Editor(props: { id: string }) {
   const s = useDiagramSession();
   let input!: HTMLTextAreaElement;
-  const look = () => resolveAppearance(s.doc.appearance);
+  const look = () => resolveAppearance(s.drawnAppearance());
 
   /**
    * The editor sits on the object itself: a shape's whole face, a container's title band, or a

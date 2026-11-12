@@ -4,6 +4,7 @@ import { cpSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'nod
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import { relativeWorkerUrls } from './lib/worker-urls.ts';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const out = path.join(root, 'packages/runtime/dist');
@@ -30,6 +31,8 @@ await build({
         index: path.join(root, 'src/runtime/index.ts'),
         viewer: path.join(root, 'src/runtime/viewer.ts'),
         element: path.join(root, 'src/runtime/element.ts'),
+        host: path.join(root, 'src/runtime/host.ts'),
+        graph: path.join(root, 'src/graph-api/index.ts'),
       },
       formats: ['es'],
       fileName: (_format, name) => `${name}.js`,
@@ -39,6 +42,7 @@ await build({
     },
   },
 });
+relativeWorkerUrls(out);
 execFileSync('pnpm', ['exec', 'tsc', '-p', 'tsconfig.runtime.json'], {
   cwd: root,
   stdio: 'inherit',
@@ -79,6 +83,7 @@ const css = Object.values(FACES)
   .join('\n');
 writeFileSync(path.join(out, 'fonts.css'), css);
 cpSync(path.join(root, 'src/runtime/viewer.css'), path.join(out, 'viewer.css'));
+cpSync(path.join(root, 'src/runtime/host.css'), path.join(out, 'host.css'));
 cpSync(path.join(root, 'LICENSE'), path.join(out, 'LICENSE'));
 writeFileSync(
   path.join(out, 'THIRD_PARTY_NOTICES'),

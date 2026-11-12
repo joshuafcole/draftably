@@ -1,0 +1,37 @@
+/*
+ * @draftably/runtime/host.css: import it once in every page that uses <draft-diagram> or
+ * <draft-editor>. These rules must work before the elements are defined.
+ */
+
+/* Slot content waits for its element, so nothing flashes before the drawing. */
+draft-diagram:not(:defined) > [data-draft-slot],
+draft-editor:not(:defined) > [data-draft-slot] {
+  display: none;
+}
+
+/* The elements' own heights, held before they define, so the page does not shift. */
+draft-diagram:not(:defined) {
+  display: block;
+  height: 26rem;
+}
+draft-editor:not(:defined) {
+  display: block;
+  height: 28rem;
+}
+
+/* Slot content takes no pointer input, so a click reaches the drawing. Marked content does. */
+draft-diagram [data-draft-input],
+draft-editor [data-draft-input] {
+  pointer-events: auto;
+}
+
+/* An editor that could not load says why. */
+draft-editor[status='error']::before {
+  content: attr(data-error);
+  display: block;
+  margin: 0.35rem;
+  color: #9a3412;
+  font:
+    14px/1.45 system-ui,
+    sans-serif;
+}

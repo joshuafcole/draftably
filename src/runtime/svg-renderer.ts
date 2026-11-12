@@ -3,7 +3,12 @@
  * same appearance, shapes and title wrapping as the canvas and embeds the fonts it uses.
  */
 import { PORTAL_DASH } from '../model/styles';
-import { resolveAppearance, swatchFor, type ResolvedAppearance } from '../model/appearance';
+import {
+  bandSwatch,
+  panelSwatch,
+  resolveAppearance,
+  type ResolvedAppearance,
+} from '../model/appearance';
 import { oldDoc, panelDoc, withoutMargins } from '../model/panels';
 import { countText, STACK_OFFSETS } from '../model/stack';
 import { measureText } from '../model/fonts';
@@ -13,7 +18,7 @@ import { headingMarkup } from '../model/heading';
 import { legendMarkup, markerMarkup } from '../model/legend';
 import { footnoteMarkup } from '../model/footnote';
 import { noteMarkup, placeNotes } from '../model/note';
-import { drawnSwatch, participantAccent } from '../model/colors';
+import { detailInk, drawnSwatch, participantAccent } from '../model/colors';
 import { truncateText } from '../model/fonts';
 import { drawingBounds } from '../model/bounds';
 import { cellsBandOf, isCell, isOpenCell, styleOf } from '../model/graph';
@@ -69,6 +74,13 @@ export interface SvgOptions {
   linkTarget?: '_self' | '_blank';
   metadata?: string;
   maxOutputBytes?: number;
+  /** Receives the boxes and routes of a one-panel drawing, as drawn (not for compare or states). */
+  onDrawn?: (drawn: { rects: Map<string, Rect>; routes: Route[] }) => void;
+  /**
+   * The routes `onDrawn` gave for this document, so drawing it again in other colors routes
+   * nothing again (not for compare or states).
+   */
+  routes?: Route[];
 }
 
 export class SvgLimitError extends Error {}
@@ -152,7 +164,7 @@ const haloMarkup = (shape: string, r: Rect, look: ResolvedAppearance) =>
     `fill="none" stroke="${haloInk(look)}" stroke-width="2"`,
   );
 
-type Route = ReturnType<typeof computeRoutes>['routes'][number];
+export type Route = ReturnType<typeof computeRoutes>['routes'][number];
 
 /** A byte or bit layout's unit numbers and the run-on pieces of its fields. */
 function cellsChromeMarkup(doc: Diagram, look: ResolvedAppearance, id: string, g: Rect) {
@@ -362,8 +374,9 @@ function sceneMarkup(
       p = statusPaint(look, style.status, style.spot),
       radius = isCell(doc, n.id) ? 0 : look.radius,
       label = nodeLabel(doc, n.id, n.title, r),
-      first = r.y + label.y - ((label.lines.length - 1) * label.lineHeight) / 2,
-      ink = label.mode === 'center' && style.shape !== 'text' ? c.ink : look.text,
+      inside = label.mode === 'center' && style.shape !== 'text',
+      ink = inside ? c.ink : look.text,
+      detail = `font-size="${look.detail.size}" font-weight="${look.detail.weight}" fill="${inside ? detailInk(look, c) : look.muted}"`,
       accent = participantAccent(doc, look, n.id),
       paint = `class="shape" fill="${c.fill}" stroke="${c.stroke}" stroke-width="${p.width ?? (accent ? 1.5 : 1.2)}"${p.dash ? ` stroke-dasharray="${p.dash}"` : ''}`;
     const badge = n.count ? countText(n.count) : '',
@@ -387,11 +400,11 @@ function sceneMarkup(
           accent && style.shape === 'box'
             ? `<path d="${accentPath(r, radius)}" fill="${accent}"/>`
             : '',
-          `<text x="${r.x + label.x}" y="${first}" text-anchor="middle" dominant-baseline="central" ${font(look.title)} fill="${ink}"${strikeAttr(p)}>` +
+          `<text x="${r.x + label.x}" y="${r.y + label.y}" text-anchor="middle" dominant-baseline="central" ${font(look.title)} fill="${ink}"${strikeAttr(p)}>` +
             label.lines
               .map(
                 (line, i) =>
-                  `<tspan x="${r.x + label.x}" dy="${i ? label.lineHeight : 0}">${esc(line)}</tspan>`,
+                  `<tspan x="${r.x + label.x}" y="${r.y + label.y + label.offsets[i]}"${line.detail ? ` ${detail}` : ''}>${esc(line.text)}</tspan>`,
               )
               .join('') +
             '</text>',
@@ -582,12 +595,12 @@ export function sequenceBackdrop(doc: Diagram, look: ResolvedAppearance) {
   const seq = doc.layout.sequence;
   if (!seq) return { panel: [], phases: [] };
   const { panel } = seq,
-    band = swatchFor(look, 'slate', 100, 'group'),
+    band = bandSwatch(look),
     tab = seq.phaseX ?? panel.x;
   return {
     panel: [
       panelDrawn(doc) &&
-        `<rect class="sequence-panel" x="${panel.x}" y="${panel.y}" width="${panel.w}" height="${panel.h}" rx="${Math.min(10, look.radius + 4)}" fill="${swatchFor(look, 'slate', 50, 'group').fill}" stroke="${band.stroke}" stroke-opacity="0.6"/>`,
+        `<rect class="sequence-panel" x="${panel.x}" y="${panel.y}" width="${panel.w}" height="${panel.h}" rx="${Math.min(10, look.radius + 4)}" fill="${panelSwatch(look).fill}" stroke="${band.stroke}" stroke-opacity="0.6"/>`,
     ].filter(Boolean) as string[],
     // Alternate phases are tinted, so neighbours read apart even without their divider.
     phases: seq.phases.flatMap((ph, i) => [
@@ -627,7 +640,7 @@ export function renderSvg(doc: Diagram, opts: SvgOptions = {}): string {
   const merged = compare ? routesOf(doc) : undefined,
     shared = merged ? [oldRoutes(doc, merged), merged] : [],
     scenes = (compare ? [panelDoc(doc, 'before'), panelDoc(doc, 'after')] : [doc]).map((d, i) =>
-      sceneMarkup(d, look, marker, opts, shared[i]),
+      sceneMarkup(d, look, marker, opts, shared[i] ?? (compare ? undefined : opts.routes)),
     );
   const b = scenes.map(s => s.bounds).reduce(union),
     x0 = Math.floor(b.x),
@@ -676,6 +689,8 @@ export function renderSvg(doc: Diagram, opts: SvgOptions = {}): string {
       : [arrange(true), arrange(false)],
     { stacked, spans, starts, areaH, frame } = options.reduce((a, b) => (fit(b) < fit(a) ? b : a));
   const out = openSvg(doc, look, defs, frame, opts);
+  // One panel draws at the world origin, so its boxes are the drawing's own coordinates.
+  if (!compare) opts.onDrawn?.({ rects: scenes[0].rects, routes: scenes[0].routes });
   scenes.forEach((scene, i) => {
     // Panel i's corner, and the shift that brings its own span to that corner.
     const px = stacked ? x0 : x0 + starts[i],

@@ -100,3 +100,29 @@ describe('docs links', () => {
     }
   });
 });
+
+// The framework pages show meta-framework code that `pnpm prove:meta` builds and checks. Each block
+// below must match its file in integration-examples/meta/ exactly, after the block's path line.
+describe('meta-framework code', () => {
+  const copies: [page: string, section: string, block: string, file: string][] = [
+    ['react', 'Strict CSP in Next.js', 'proxy.ts', 'next/proxy.ts'],
+    ['solid', 'Strict CSP in SolidStart', 'src/middleware.ts', 'solid-start/src/middleware.ts'],
+    ['solid', 'Strict CSP in SolidStart', 'vite.config.ts', 'solid-start/vite.config.ts'],
+    ['vue', 'Strict CSP in Nuxt', 'server/plugins/csp.ts', 'nuxt/server/plugins/csp.ts'],
+    ['svelte', 'Strict CSP in SvelteKit', 'src/hooks.server.ts', 'sveltekit/src/hooks.server.ts'],
+    ['svelte', 'Strict CSP in SvelteKit', 'vite.config.ts', 'sveltekit/vite.config.ts'],
+  ];
+  for (const [page, section, block, file] of copies)
+    it(`${page}.md shows ${file} as tested`, () => {
+      const md = fs.readFileSync(path.join(pages, `${page}.md`), 'utf8');
+      const start = md.indexOf(`\n### ${section}\n`);
+      expect(start).toBeGreaterThan(0);
+      const end = md.indexOf('\n## ', start + 1);
+      const text = md.slice(start, end < 0 ? undefined : end);
+      const shown = text.match(
+        new RegExp(`\`\`\`\\w+\\n// ${block.replace(/\./g, '\\.')}\\n([\\s\\S]*?)\`\`\``),
+      )?.[1];
+      const tested = fs.readFileSync(path.join(root, 'integration-examples/meta', file), 'utf8');
+      expect(shown).toBe(tested);
+    });
+});

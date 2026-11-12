@@ -7,8 +7,8 @@
     "serve": "docusaurus serve --host 127.0.0.1"
   },
   "dependencies": {
-    "@draftably/markdown": "0.1.0",
-    "@draftably/runtime": "0.1.0",
+    "@draftably/markdown": "^0.2.1",
+    "@draftably/runtime": "^0.4.0",
     "@docusaurus/core": "3.10.2",
     "@docusaurus/preset-classic": "3.10.2",
     "react": "19.2.0",

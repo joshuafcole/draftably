@@ -149,6 +149,8 @@ as the box's; added after the 23 October viewer feedback), **label-overlap**, **
 can take the label for that line's, S1), **label-on-edge** (another edge runs only under the
 label's padding), **labels-too-close** (two labels on different edges closer than a label's height:
 they read as one phrase, or as two labels on one edge), **label-detached** (label farther than its own height from its edge),
+**label-beside-line** (label clear of its own line, though near it: labels read as one set when
+each line runs through its own),
 **label-on-group-title**, **label-on-group-border**.
 
 Routing: **crossings**, **bends per edge**, **many-bends** (≥ 4), **hook** (a U-turn: the line

@@ -3,6 +3,7 @@ import { unwrap } from 'solid-js/store';
 import { renderSvg } from '../../cli/svg';
 import { tip } from '../controls';
 import { useDiagramSession } from '../session-context';
+import { rootOf } from '../../state/dom-root';
 
 /**
  * The file's emphasis states as chips over the canvas: none, each state, and a grid of all of
@@ -99,7 +100,7 @@ function StateGrid() {
   /** A pointer position in panel units, in the panel under it (any panel when between them). */
   const local = (e: { clientX: number; clientY: number }) => {
     const svg = host.querySelector('svg')!,
-      under = (document.elementFromPoint(e.clientX, e.clientY) as Element | null)?.closest(
+      under = (rootOf(host).elementFromPoint(e.clientX, e.clientY) as Element | null)?.closest(
         '[data-state]',
       ) as SVGGElement | null,
       m = (under ?? svg.querySelector('[data-state]'))!.getScreenCTM()!.inverse();

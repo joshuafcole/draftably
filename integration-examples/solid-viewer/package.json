@@ -6,7 +6,7 @@
     "build": "node fallback.mjs && vite build"
   },
   "dependencies": {
-    "@draftably/runtime": "0.1.0",
+    "@draftably/runtime": "^0.4.0",
     "solid-js": "1.9.9"
   },
   "devDependencies": {

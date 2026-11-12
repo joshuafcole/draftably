@@ -13,4 +13,11 @@ export function activeSession(): DiagramSession {
   return session;
 }
 
+export const hasActiveSession = () => active() !== null;
+
 export const setActiveSession = (session: DiagramSession) => setActive(() => session);
+
+/** A destroyed session stops being the target of shortcuts and commands. */
+export const releaseActiveSession = (session: DiagramSession) => {
+  if (active() === session) setActive(null);
+};

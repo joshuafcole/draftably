@@ -10,7 +10,7 @@ import type { Note } from './note';
 import { typeProfile, type FontRole, type TypeProfile } from './fonts';
 import type { FileConfig } from './link';
 
-export type ThemeId = 'drafting' | 'fieldnotes' | 'signal' | 'ink' | 'blueprint';
+export type ThemeId = 'drafting' | 'fieldnotes' | 'signal' | 'ink' | 'blueprint' | 'drafting-dark';
 export const THEME_IDS: ThemeId[] = ['drafting', 'fieldnotes', 'signal', 'ink', 'blueprint'];
 export const DEFAULT_THEME: ThemeId = 'drafting';
 
@@ -20,6 +20,13 @@ export type Shade = (typeof SHADES)[number];
 export const isShade = (n: unknown): n is Shade => SHADES.includes(n as Shade);
 /** Shade of a node that names a color without a shade. */
 export const NODE_SHADE: Shade = 500;
+/**
+ * Shade of a member card: a node drawn in its container's family with no shade of its own. It is
+ * the palest stop on the canvas side of the frame (50 in light themes, 950 in dark ones), so the
+ * card stands apart from its frame by fill and keeps the family's outline and ink.
+ */
+export const memberShadeFor = (theme: ThemeId, dark = PRESETS[theme]?.dark): Shade =>
+  dark ? 950 : 50;
 /**
  * Shade of a group that names a color without a shade. Groups are quiet surfaces behind nodes, so
  * this is a pale shade in light themes and a deep one in dark themes; the scale itself never flips.
@@ -331,6 +338,32 @@ export const PRESETS: Record<ThemeId, Preset> = {
     primary: ['#2B3A55', 900],
     secondary: ['#C23B22', 600],
   },
+  // The default theme on a dark page: the same type, spacing and families as drafting, so it
+  // draws every box in the same place. Graphite surfaces, lighter than the canvas the higher
+  // they sit, with drafting blue and marker gold lifted to read on them. Not a file's theme.
+  'drafting-dark': {
+    label: 'Drafting dark',
+    description: 'Drafting on a graphite page, for a dark host',
+    dark: true,
+    canvas: '#16191E',
+    text: '#E7EAEF',
+    muted: '#9BA3B0',
+    connection: '#AEB6C2',
+    node: { fill: '#21252C', stroke: '#3D4450', ink: '#E7EAEF' },
+    group: { fill: '#1B1F25', stroke: '#30363F', ink: '#C8CED8' },
+    paddingX: 12,
+    paddingY: 20,
+    radius: 4,
+    shadow: false,
+    titleFont: 'sans',
+    annotationFont: 'sans',
+    titleSize: 13,
+    titleLine: 16,
+    annotationSize: 11,
+    chroma: 0.9,
+    primary: ['#7FA4E6', 300],
+    secondary: ['#F0B43C', 400],
+  },
   blueprint: {
     label: 'Blueprint',
     description: 'White lines on blueprint blue, cyan and yellow, monospace titles',
@@ -355,6 +388,25 @@ export const PRESETS: Record<ThemeId, Preset> = {
     secondary: ['#F2C14E', 300],
   },
 };
+
+/**
+ * The appearance to draw on a page of this scheme. The default theme follows the page, with or
+ * without a `theme drafting` line and its size and font overrides: dark draws it as
+ * `drafting-dark`. Another named theme, a `theme-color` line or a color override on the `theme`
+ * line keeps the file's colors on every page.
+ */
+export function forScheme(appearance: DiagramAppearance, dark: boolean): DiagramAppearance {
+  const o = appearance.overrides;
+  if (!dark || appearance.theme !== DEFAULT_THEME || appearance.colors.length) return appearance;
+  if (o.canvas !== undefined || o.text !== undefined || o.connection !== undefined)
+    return appearance;
+  // A legend swatch for member cards shows the card shade, which is the other end of the ramp.
+  const light = memberShadeFor(DEFAULT_THEME),
+    legend = appearance.legend?.map(e =>
+      e.shade === light ? { ...e, shade: memberShadeFor('drafting-dark') } : e,
+    );
+  return { ...appearance, theme: 'drafting-dark', ...(legend ? { legend } : {}) };
+}
 
 // --- Color math (OKLCH) ------------------------------------------------------------------------
 
@@ -418,6 +470,23 @@ function luminance(hex: string) {
   const [r, g, b] = hexToRgb(hex).map(toLinear);
   return 0.2126 * r + 0.7152 * g + 0.0722 * b;
 }
+/** `a` moved toward `b` by `t` (0–1), in sRGB. */
+export function mixColors(a: string, b: string, t: number) {
+  const x = hexToRgb(a),
+    y = hexToRgb(b);
+  return (
+    '#' +
+    x
+      .map((v, i) =>
+        Math.round((v + (y[i] - v) * t) * 255)
+          .toString(16)
+          .padStart(2, '0'),
+      )
+      .join('')
+      .toUpperCase()
+  );
+}
+
 export function contrast(a: string, b: string) {
   const [x, y] = [luminance(a), luminance(b)].sort((p, q) => q - p);
   return (x + 0.05) / (y + 0.05);
@@ -614,6 +683,8 @@ export interface ResolvedAppearance {
   radius: number;
   shadow: boolean;
   title: TypeProfile;
+  /** A node title's detail lines (after its first `\n`): a step smaller and lighter. */
+  detail: TypeProfile;
   groupTitle: TypeProfile;
   annotation: TypeProfile;
   /** Space above a group's content; the group title sits in it. */
@@ -686,6 +757,7 @@ export function resolveAppearance(appearance?: DiagramAppearance): ResolvedAppea
     radius: o.radius ?? p.radius,
     shadow: p.shadow,
     title,
+    detail: typeProfile(titleFont, false, p.titleSize - 1, p.titleLine - 1),
     groupTitle: title,
     annotation: typeProfile(
       annotationFont,
@@ -731,6 +803,21 @@ export function swatchFor(
       ?.get(shade ?? (kind === 'group' ? groupShadeFor(r.theme, r.dark) : NODE_SHADE)) ?? surface
   );
 }
+
+/**
+ * The quiet panel behind notes and a sequence diagram: slate 50 in light themes, and the theme's
+ * own group surface in dark ones, so the theme's text ink reads on it.
+ */
+export const panelSwatch = (r: ResolvedAppearance) =>
+  r.dark ? r.group : swatchFor(r, 'slate', 50, 'group');
+
+/** Bands and dividers drawn over that panel. */
+export const bandSwatch = (r: ResolvedAppearance) =>
+  r.dark ? r.group : swatchFor(r, 'slate', 100, 'group');
+
+/** Ink for a link in a note or footnote, held to 4.5:1 on `against`. */
+export const linkInk = (r: ResolvedAppearance, against: string) =>
+  ensureContrast(swatchFor(r, 'primary', r.dark ? 300 : 700).fill, against, CONTRAST.connection);
 
 /** Shades a family defines, in numeric order. */
 export const shadesOf = (r: ResolvedAppearance, family: string): Shade[] =>

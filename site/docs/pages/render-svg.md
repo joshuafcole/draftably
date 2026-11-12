@@ -28,18 +28,25 @@ The SVG embeds the fonts it uses. Serve it as an ordinary image. Links and sourc
 until you turn them on.
 
 The result also holds a summary: the title, size, viewBox, item IDs, labels, lines, edge endpoints
-and emphasis states. It does not expose the compiled scene.
+and emphasis states. `geometry` gives where each node, group and edge is drawn, in the SVG's
+`viewBox` units, in the [graph API's shapes](#layout-api); it is `null` for `compare` and `states`
+drawings, which repeat items. The result does not expose the compiled scene.
 
-| Option        | Effect                                                                            |
-| ------------- | --------------------------------------------------------------------------------- |
-| `state`       | Draws a declared [emphasis state](#emphasis-states).                              |
-| `sourceId`    | Names the source in diagnostics, such as `architecture.draft`.                    |
-| `signal`      | Asks to cancel. Compilation runs on the calling thread, so it can finish first.   |
-| `title`       | Accessible title text in the SVG.                                                 |
-| `description` | Accessible description text in the SVG.                                           |
-| `styleNonce`  | A nonce for the generated style element, for your CSP.                            |
-| `links`       | The link policy. See [Links](#links-and-source).                                  |
-| `target`      | `'inline'` for SVG pasted into an HTML page. See [Inline output](#inline-output). |
+| Option          | Effect                                                                                                                                                                  |
+| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `state`         | Draws a declared [emphasis state](#emphasis-states).                                                                                                                    |
+| `sourceId`      | Names the source in diagnostics, such as `architecture.draft`.                                                                                                          |
+| `signal`        | Asks to cancel. Compilation runs on the calling thread, so it can finish first.                                                                                         |
+| `title`         | Accessible title text in the SVG.                                                                                                                                       |
+| `description`   | Accessible description text in the SVG.                                                                                                                                 |
+| `styleNonce`    | A nonce for the generated style element, for your CSP.                                                                                                                  |
+| `links`         | The link policy. See [Links](#links-and-source).                                                                                                                        |
+| `target`        | `'inline'` for SVG pasted into an HTML page. See [Inline output](#inline-output).                                                                                       |
+| `idPrefix`      | Required with `target: 'inline'`: a prefix that keeps IDs unique on the page.                                                                                           |
+| `fonts`         | `'embed'` (default) or, inline only, `'host'` to use fonts the page loads.                                                                                              |
+| `includeSource` | Embeds the `.draft` source in the SVG's metadata.                                                                                                                       |
+| `limits`        | Lower caps on source size, objects, edges, depth and output bytes.                                                                                                      |
+| `colorScheme`   | `'light'` (default) or `'dark'`: the colors of a source in the default theme. `'auto'` writes both as `light-dark()` colors, for a page whose `color-scheme` picks one. |
 
 ## Validate
 
@@ -109,5 +116,5 @@ Syntax, compile, limit and cancel failures return structured results, not except
 that are not valid XML return `DRAFT_TEXT_INVALID`. An unexpected failure returns `DRAFT_INTERNAL`
 without a stack trace.
 
-For an interactive diagram on a page, use the [element and viewer](#element) from the same
+For an interactive diagram on a page, use the [element](#embed-concepts) from the same
 package.

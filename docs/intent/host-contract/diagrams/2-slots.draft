@@ -1,0 +1,41 @@
+diagram "How host content reaches a node" version=1
+subtitle "Content stays in the host's tree; the element only positions it"
+
+group host "Host's own tree" color=blue
+node card "<Card data-draft-slot=\"body:api\">" in=host
+node badge "<Badge data-draft-slot=\"overlay:db\">" in=host
+node button "<button data-draft-input> in the Card" in=host
+
+group element "Shadow root of the element, top layer first" color=mint
+layout element cells direction=down
+node handles "Editor handles and selection" in=element
+node anchors "Anchor layer: one stable target per item" in=element
+node svg "Drawing: replaced on each update" in=element
+
+group rules "Rules" color=amber
+node pointer "Slot content lets the pointer through" in=rules
+node lod "Below zoom 0.4, titles replace bodies" in=rules
+node marked "Marked content takes its own input" in=rules
+
+legend blue "Host-owned"
+legend mint "Draftably-owned"
+legend amber "Rules"
+legend line solid "Assigned by the element"
+legend line dashed "Follows this rule"
+
+edge body card -> anchors "body: fills the node, scales"
+edge overlay badge -> anchors "overlay: screen size"
+edge r1 anchors -> pointer kind=async
+edge r2 button -> marked kind=async
+edge r3 anchors -> lod kind=async
+
+note "Proved through React, Solid, Vue and Svelte wrappers in Chromium, Firefox and WebKit." near=host side=below width=260
+
+footnote "The element assigns children with slot.assign() and never writes to the host's DOM."
+footnote "The viewport uses overflow: clip, so focus never scrolls content away from the camera."
+footnote "A camera move writes one transform on the body layer and one position per overlay."
+
+state ownership "Who owns what" host element rest=plain
+state input "Pointer and keys" pointer marked button card anchors
+
+layout root flow direction=right fit=slide

@@ -1,6 +1,6 @@
 {
   "name": "@draftably/solid",
-  "version": "0.2.0",
+  "version": "0.4.0",
   "description": "Solid components for Draftably diagrams.",
   "license": "MIT",
   "type": "module",

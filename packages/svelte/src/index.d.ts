@@ -1,10 +1,21 @@
-import type { Component } from 'svelte';
+import type { Component, Snippet } from 'svelte';
 import type { DraftDiagramElement } from '@draftably/runtime/element';
 import type { UpdateResult, ViewerOptions } from '@draftably/runtime/viewer';
+import type { ElementAttributes, HostEventProps } from './events';
 
+export { renderSvg } from '@draftably/runtime';
+export { HOST_EVENTS } from '@draftably/runtime/host';
+export type {
+  ElementAttributes,
+  HostEventDetail,
+  HostEventName,
+  HostEventProps,
+  HostEvents,
+} from './events';
 export type { DraftDiagramElement, UpdateResult, ViewerOptions };
 
-export interface DraftDiagramProps {
+/** The element's props, its event props, and any other attribute, such as `data-theme`. */
+export interface DraftDiagramProps extends HostEventProps, ElementAttributes {
   /** `.draft` source. A change redraws the diagram and keeps the camera. */
   source: string;
   /** A declared emphasis state to show. */
@@ -15,10 +26,14 @@ export interface DraftDiagramProps {
   outline?: 'visible' | 'hidden';
   /** Static SVG from `renderSvg(source, { target: 'inline', idPrefix })`, shown until the viewer draws. */
   svg?: string;
+  /** Every `mountViewer` option. A new object with the same values does nothing. */
   options?: ViewerOptions;
-  onupdate?: (result: UpdateResult) => void;
+  /** `bind:element` gives the `<draft-diagram>` element. */
+  element?: DraftDiagramElement;
   class?: string;
   style?: string;
+  /** Slot content: children marked `data-draft-slot="body:<id>"` or `"overlay:<id>"`. */
+  children?: Snippet;
 }
 
-export const DraftDiagram: Component<DraftDiagramProps>;
+export const DraftDiagram: Component<DraftDiagramProps, Record<string, never>, 'element'>;

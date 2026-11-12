@@ -5,7 +5,13 @@ import { checkSource, compile } from '../src/dsl/compile';
 import { projectScene, visibleRects } from '../src/dsl/project';
 import { computeRoutes } from '../src/model/routes';
 
-import { PRESETS, contrast, resolveAppearance, type ThemeId } from '../src/model/appearance';
+import {
+  PRESETS,
+  contrast,
+  forScheme,
+  resolveAppearance,
+  type ThemeId,
+} from '../src/model/appearance';
 import { drawnSwatch, participantAccent } from '../src/model/colors';
 import { edgeLabelLines, edgeLabelSize } from '../src/model/labels';
 
@@ -273,10 +279,13 @@ describe('sequence spacing', () => {
 describe('sequence headers', () => {
   it('outlines a participant with no color in every theme', () => {
     for (const theme of Object.keys(PRESETS) as ThemeId[]) {
-      const doc = projectScene(
-          checkSource(`theme ${theme}\nnode a "A"\nnode b "B" color=blue\nlayout root sequence`),
+      // The dark default has no theme line: a dark page draws a file without one in it.
+      const dark = theme === 'drafting-dark',
+        line = dark ? '' : `theme ${theme}\n`,
+        doc = projectScene(
+          checkSource(`${line}node a "A"\nnode b "B" color=blue\nlayout root sequence`),
         ),
-        look = resolveAppearance(doc.appearance),
+        look = resolveAppearance(forScheme(doc.appearance, dark)),
         plain = drawnSwatch(doc, look, 'a', 'node');
       expect(contrast(plain.stroke, plain.fill)).toBeGreaterThan(1.5);
       expect(participantAccent(doc, look, 'a')).toBeUndefined();

@@ -1,6 +1,6 @@
 {
   "name": "@draftably/runtime",
-  "version": "0.2.0",
+  "version": "0.4.0",
   "private": false,
   "description": "Portable native Draftably SVG rendering, validation, and optional viewer.",
   "type": "module",
@@ -26,7 +26,16 @@
       "types": "./dist/types/src/runtime/element.d.ts",
       "import": "./dist/element.js"
     },
+    "./host": {
+      "types": "./dist/types/src/runtime/host.d.ts",
+      "import": "./dist/host.js"
+    },
+    "./graph": {
+      "types": "./dist/types/src/graph-api/index.d.ts",
+      "import": "./dist/graph.js"
+    },
     "./viewer.css": "./dist/viewer.css",
+    "./host.css": "./dist/host.css",
     "./fonts.css": "./dist/fonts.css",
     "./browser": {
       "types": "./dist/types/src/runtime/index.d.ts",

@@ -10,6 +10,8 @@ import {
   BUILT_IN_FAMILIES,
   contrast,
   CONTRAST,
+  linkInk,
+  panelSwatch,
   PRESETS,
   resolveAppearance,
   SHADES,
@@ -84,6 +86,23 @@ describe('type metrics', () => {
       expect.objectContaining({ code: 'text-overflow', ids: ['triage'], line: 35 }),
     );
     expect(checkSource(proof).diagnostics.some(d => d.code === 'text-overflow')).toBe(false);
+  });
+
+  it('raises an auto height to min-height for boxes, diamonds and cells, with height=auto only', () => {
+    const h = (source: string) => checkSource(source).byId.get('a')!.h;
+    expect(h('node a "Build"\nsize a width=140 height=auto min-height=90')).toBe(90);
+    expect(h('node a "Build"\nsize a width=140 height=auto min-height=24')).toBe(
+      h('node a "Build"\nsize a width=140 height=auto'),
+    );
+    expect(h('node a "Ok?" shape=diamond\nsize a width=90 height=auto min-height=150')).toBe(150);
+    expect(
+      h(
+        'group g "G"\nlayout g cells\nnode a "A" in=g\nnode b "B" in=g\nsize a width=140 height=auto min-height=90',
+      ),
+    ).toBe(90);
+    expect(() => checkSource('node a "Build"\nsize a width=140 height=60 min-height=90')).toThrow(
+      /min-height/,
+    );
   });
 
   it('compiles the same geometry every time', () => {
@@ -208,6 +227,10 @@ describe('palettes', () => {
       expect(contrast(look.canvas, look.connection)).toBeGreaterThanOrEqual(CONTRAST.connection);
       expect(contrast(look.canvas, look.node.stroke)).toBeGreaterThanOrEqual(CONTRAST.outline);
       expect(contrast(look.canvas, look.group.stroke)).toBeGreaterThanOrEqual(CONTRAST.frame);
+      // Notes and sequence panels set the theme's text and links on the quiet panel.
+      const panel = panelSwatch(look).fill;
+      expect(contrast(panel, look.text)).toBeGreaterThanOrEqual(7);
+      expect(contrast(panel, linkInk(look, panel))).toBeGreaterThanOrEqual(CONTRAST.connection);
       for (const family of BUILT_IN_FAMILIES)
         for (const s of SHADES) {
           const c = swatchFor(look, family, s),

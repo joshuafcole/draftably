@@ -1,44 +1,47 @@
 import { For, Show } from 'solid-js';
-import type { TypeProfile } from '../../model/fonts';
+import type { ResolvedAppearance } from '../../model/appearance';
+import type { NodeLabel } from '../../model/labels';
 import { markerMarkup } from '../../model/legend';
 import type { Rect } from '../../model/types';
 import { SceneGlyph } from '../Icon';
 import { useSessionIfAny } from '../session-context';
 import type { DiagramSession } from '../../state/session';
 
-/** Multi-line, vertically centered text in one of the diagram's type profiles. */
-export function SceneText(props: {
-  lines: string[];
-  x: number;
-  y: number;
-  lineHeight: number;
-  type: TypeProfile;
+/** A shape's title: its name lines, then its detail lines a step smaller in `detailFill`. */
+export function NodeTitle(props: {
+  label: NodeLabel;
+  look: ResolvedAppearance;
   fill: string;
-  class?: string;
-  /** Strike the text through, as for a removed object. */
+  detailFill: string;
   strike?: boolean;
-  /** Fade of the text alone, as for a removed object. */
   fade?: number;
 }) {
-  const first = () => props.y - ((props.lines.length - 1) * props.lineHeight) / 2;
+  const t = () => props.look.title,
+    d = () => props.look.detail;
   return (
     <text
-      class={props.class}
-      x={props.x}
-      y={first()}
-      font-size={String(props.type.size)}
-      font-weight={String(props.type.weight)}
-      font-family={props.type.family}
+      class="node-title"
+      x={props.label.x}
+      y={props.label.y}
+      font-size={String(t().size)}
+      font-weight={String(t().weight)}
+      font-family={t().family}
       fill={props.fill}
       fill-opacity={props.fade}
       text-decoration={props.strike ? 'line-through' : undefined}
       text-anchor="middle"
       dominant-baseline="central"
     >
-      <For each={props.lines}>
+      <For each={props.label.lines}>
         {(line, i) => (
-          <tspan x={props.x} dy={i() ? props.lineHeight : 0}>
-            {line}
+          <tspan
+            x={props.label.x}
+            y={props.label.y + props.label.offsets[i()]}
+            font-size={line.detail ? String(d().size) : undefined}
+            font-weight={line.detail ? String(d().weight) : undefined}
+            fill={line.detail ? props.detailFill : undefined}
+          >
+            {line.text}
           </tspan>
         )}
       </For>

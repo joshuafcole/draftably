@@ -48,7 +48,7 @@ export function headingSlot(doc: Diagram, frame: DiagramFrame, key: Key) {
  */
 export function Frame() {
   const s = useDiagramSession();
-  const look = () => resolveAppearance(s.doc.appearance);
+  const look = () => resolveAppearance(s.drawnAppearance());
   const frame = createMemo(s.viewerFrame);
   // Width while the right edge is dragged, before it is saved.
   const [dragW, setDragW] = createSignal<number | null>(null);
@@ -110,6 +110,8 @@ export function Frame() {
         width={w()}
         height={frame().h}
         fill={look().canvas}
+        // The UI's line color glares on a dark drawing; there the border is the drawing's own.
+        style={look().dark ? { stroke: look().group.stroke } : undefined}
       />
       <For each={lines()}>
         {line => (

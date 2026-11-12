@@ -4,7 +4,7 @@
  * note without one sits in the frame under the subtitle. The viewer, `inspect --svg` and the
  * editor's exports all place and draw them from here.
  */
-import { swatchFor, type ResolvedAppearance } from './appearance';
+import { linkInk, panelSwatch, type ResolvedAppearance } from './appearance';
 import type { BoundedRoute } from './bounds';
 import { richLines, runsMarkup, type Run } from './rich-text';
 import { contains, overlaps, rectUnion } from './geometry';
@@ -328,8 +328,8 @@ export function noteMarkup(
   write: (href: string) => string | null = h => h,
 ): string {
   const { family, size, weight, lineHeight } = look.annotation,
-    panel = swatchFor(look, 'slate', 50, 'group'),
-    link = swatchFor(look, 'primary', 700).fill;
+    panel = panelSwatch(look),
+    link = linkInk(look, panel.fill);
   return notes
     .filter(n => !n.hidden)
     .map(({ note, rect: r, lines, leader: l }) => {

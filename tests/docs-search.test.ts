@@ -40,7 +40,8 @@ describe('docs search', () => {
 
   it.each([
     ['colour', /Themes/],
-    ['dark mode', /Themes/],
+    // A dark page draws the diagram dark; the section says how, and how to opt out.
+    ['dark mode', /Dark pages/],
     ['swimlane', /Swim lanes/],
     ['codex', /Agent skill/],
     ['offline', /Save/],
@@ -64,7 +65,7 @@ describe('docs search', () => {
     ['back edge', /Feedback lines and ties/],
     ['group layout', /Scopes and groups/],
     ['docusaurus', /Documentation sites/],
-    ['mountViewer', /Element and viewer/],
+    ['mountViewer', /API reference/],
     ['renderSvg', /Render SVG/],
     ['mermaid drop-in', /Switch from Mermaid/],
   ])('ranks the right page first: %s', (query, page) => {

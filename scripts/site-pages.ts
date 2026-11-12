@@ -19,6 +19,8 @@ interface Meta {
   path: string;
   title: string;
   description: string;
+  /** For a moved page: the new page's path, as its canonical URL. Left out of the sitemap. */
+  movedTo?: string;
 }
 
 const SITE: Meta[] = [
@@ -60,7 +62,7 @@ async function docsPages(): Promise<Meta[]> {
   });
   try {
     const docs = await server.ssrLoadModule('/docs/content.ts');
-    return docs.PAGES.map(
+    const pages: Meta[] = docs.PAGES.map(
       (p: {
         slug: string;
         title: string;
@@ -75,6 +77,12 @@ async function docsPages(): Promise<Meta[]> {
         };
       },
     );
+    // An old path gets a page too, so it answers 200; the app then routes it to the new page.
+    const moved = Object.entries(docs.MOVED as Record<string, string>).map(([from, to]) => {
+      const target = pages.find(p => p.path === `docs/${to}`)!;
+      return { ...target, path: `docs/${from}`, movedTo: target.path };
+    });
+    return [...pages, ...moved];
   } finally {
     await server.close();
   }
@@ -84,7 +92,10 @@ const esc = (s: string) =>
   s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
 // Pages serves each route from its folder and redirects the bare path to it with a slash.
-const urlOf = (meta: Meta) => `${origin}${base}${meta.path ? `${meta.path}/` : ''}`;
+const urlOf = (meta: Meta) => {
+  const p = meta.movedTo ?? meta.path;
+  return `${origin}${base}${p ? `${p}/` : ''}`;
+};
 
 /** The page's text before the app runs. One line, so a second run can find and replace it. */
 function staticBody(meta: Meta) {
@@ -141,7 +152,10 @@ for (const meta of all) {
 }
 // Unknown paths still load the app, under the site's own card.
 fs.writeFileSync(path.join(out, '404.html'), page(template, SITE[0]));
-const urls = all.map(meta => `  <url><loc>${esc(urlOf(meta))}</loc></url>`).join('\n');
+const urls = all
+  .filter(meta => !meta.movedTo)
+  .map(meta => `  <url><loc>${esc(urlOf(meta))}</loc></url>`)
+  .join('\n');
 fs.writeFileSync(
   path.join(out, 'sitemap.xml'),
   `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls}\n</urlset>\n`,

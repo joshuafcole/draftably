@@ -1,3 +1,4 @@
+// One render per message. The page's pool queues jobs and gives each worker one at a time.
 import { renderSvg } from './render';
 import type { RenderOptions } from './types';
 

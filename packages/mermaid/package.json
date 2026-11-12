@@ -1,6 +1,6 @@
 {
   "name": "@draftably/mermaid",
-  "version": "0.2.0",
+  "version": "0.2.2",
   "description": "A drop-in for the mermaid package that draws diagrams with Draftably.",
   "license": "MIT",
   "type": "module",

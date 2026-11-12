@@ -38,6 +38,8 @@ your work is kept.
 - **Install the CLI to save files on disk.** Your diagrams become `.draft` files that you can
   commit, check in CI and give to a coding agent. The editor saves each edit to the file. The
   steps are below.
+- **Show diagrams in your app.** The [embedding quick start](#embed-quick-start) puts a live
+  diagram on a page. Each framework has a complete app: [React](#react) · [Solid](#solid) · [Vue](#vue) · [Svelte](#svelte) · [Plain HTML](#plain-html).
 
 ## Install
 
@@ -106,7 +108,7 @@ npx draftably inspect architecture.draft --svg > architecture.svg # SVG with the
 npx draftably vary architecture.draft                             # try other layouts and rank them
 ```
 
-`check` exits 1 when the file has errors, so it fits in CI. `vary` needs Chrome, Chromium or Edge.
+`check` exits 1 when the file has errors, so it fits in CI.
 The SVG is a shareable static image. Its embedded source lets you reopen it in Draftably.
 
 To continue from the exported image, run `draftably open architecture.svg`. It writes
@@ -159,3 +161,4 @@ Once a day the CLI checks npm and prints a note when there is a newer version. S
   when a command fails.
 - [Themes](#themes): the five looks, drawn from one file.
 - [Agent skill](#agent-skill): let a coding agent write and check diagrams for you.
+- [Choose how to embed](#embed): show or edit diagrams in your own app.

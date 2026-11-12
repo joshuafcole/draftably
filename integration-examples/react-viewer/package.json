@@ -6,7 +6,7 @@
     "build": "node fallback.mjs && vite build"
   },
   "dependencies": {
-    "@draftably/runtime": "0.1.0",
+    "@draftably/runtime": "^0.4.0",
     "react": "19.1.0",
     "react-dom": "19.1.0"
   },

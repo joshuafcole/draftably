@@ -39,6 +39,16 @@ The Editor writes the `theme` line for you.
 | `ink`        | Sumi ink tones, indigo and a vermilion seal, generous padding.  |
 | `blueprint`  | Dark: white lines on blueprint blue, monospace titles.          |
 
+A file in the default theme follows the page it is embedded in: with no `theme` line or with
+`theme drafting`, also with padding and font overrides. On a dark page the viewer and the editor
+draw it in a dark variant of `drafting`, with the same type and spacing. A page is dark only
+when its `color-scheme` allows dark. A page that declares none stays light, also on a dark system.
+A dark-mode site opts in with one line, `:root { color-scheme: light dark }` to follow the system
+setting or `color-scheme: dark` on its dark class (see [Dark pages](#dark-pages)).
+Another theme (`fieldnotes`, `signal`, `ink`, `blueprint`), a `theme-color` line or a color on the
+`theme` line (`canvas=`, `text=`, `connection=`) keeps the file's colors on every page. To keep one
+diagram light, set `color-scheme: light` on its element.
+
 The `theme` line also takes overrides such as `padding-x=`, `radius=` and `title-font=`, and
 `theme-color` lines change or add color families. [Themes and colors](#themes-and-colors) lists
 them all.

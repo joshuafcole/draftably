@@ -20,4 +20,4 @@ runtime from dependency optimization so its worker resolves during development.
 `fallback.ts` generates the image once before starting or building the page.
 
 The source files are small enough to copy into an existing Vite app. The
-[element guide](https://draftably.dev/docs/element) shows the minimum integration.
+[plain HTML guide](https://draftably.dev/docs/plain-html) shows the minimum integration.

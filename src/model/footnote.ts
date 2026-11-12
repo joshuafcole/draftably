@@ -4,7 +4,7 @@
  * marker (`1`, `a`, `*`) that a label can point at, and links in `[label](href)` form. The viewer,
  * `inspect --svg`, PDF and the editor's exports all lay it out here.
  */
-import { swatchFor, type ResolvedAppearance } from './appearance';
+import { linkInk, type ResolvedAppearance } from './appearance';
 import { measureText } from './fonts';
 import { headingTypes } from './heading';
 import { richLines, runsMarkup, type Run } from './rich-text';
@@ -62,7 +62,7 @@ export function footnoteMarkup(
   if (!layout.items.length) return '';
   const { type } = layout,
     font = `font-family="${type.family.replace(/"/g, '&quot;')}" font-size="${type.size}" font-weight="${type.weight}"`,
-    link = swatchFor(look, 'primary', 700).fill,
+    link = linkInk(look, look.canvas),
     mid = (top: number) => top + type.lineHeight / 2;
   const marks = layout.items
     .filter(item => item.note.mark)

@@ -9,8 +9,8 @@
     "preview": "vitepress preview . --host 127.0.0.1"
   },
   "dependencies": {
-    "@draftably/markdown": "0.1.0",
-    "@draftably/runtime": "0.1.0",
+    "@draftably/markdown": "^0.2.1",
+    "@draftably/runtime": "^0.4.0",
     "remark-parse": "11.0.0",
     "remark-stringify": "11.0.0",
     "unified": "11.0.5",

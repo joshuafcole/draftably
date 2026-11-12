@@ -7,5 +7,11 @@
     "declarationDir": "packages/runtime/dist/types",
     "rootDir": "."
   },
-  "include": ["src/runtime/index.ts", "src/runtime/viewer.ts", "src/runtime/element.ts"]
+  "include": [
+    "src/runtime/index.ts",
+    "src/runtime/viewer.ts",
+    "src/runtime/element.ts",
+    "src/runtime/host.ts",
+    "src/graph-api/index.ts"
+  ]
 }

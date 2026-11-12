@@ -77,12 +77,13 @@ export function titleLineBoxes(
 ): Rect[] {
   if (!title) return [];
   const l = nodeLabel(doc, id, title, r);
-  return lineBoxes(
-    l.lines,
-    r.x + l.x,
-    r.y + l.y - ((l.lines.length - 1) * l.lineHeight) / 2,
-    look.title,
-  );
+  // Detail lines (after the title's first `\n`) are set a step smaller (`look.detail`).
+  return l.lines.map((line, i) => {
+    const type = line.detail ? look.detail : look.title,
+      w = measureText(line.text, type),
+      h = glyphHeight(type);
+    return { x: r.x + l.x - w / 2, y: r.y + l.y + l.offsets[i] - h / 2, w, h };
+  });
 }
 
 /** A group's title: its icon and text, as the canvas draws them. */

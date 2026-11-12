@@ -1,0 +1,8 @@
+{
+  "framework": "vue",
+  "files": { "src/Proof.ts": "app/proof/Proof.ts" },
+  "shared": "app/proof",
+  "build": ["pnpm", "build"],
+  "start": ["node", ".output/server/index.mjs"],
+  "path": "/"
+}

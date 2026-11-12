@@ -67,7 +67,10 @@ function pointer(id: string | null, kind: string, x: number, y: number, extra = 
       releasePointerCapture() {},
       getBoundingClientRect: () => ({ left: 0, top: 0, width: 800, height: 600 }),
     },
-    target: { closest: (sel: string) => (sel === '[data-kind]' ? hit : null) },
+    target: {
+      closest: (sel: string) => (sel === '[data-kind]' ? hit : null),
+      getRootNode: () => ({ activeElement: null, elementFromPoint: () => null }),
+    },
     ...extra,
   } as unknown as PointerEvent;
 }

@@ -83,7 +83,9 @@ describe('engine recipes', () => {
     const source = checkout.replace('layout platform column gap=28', 'layout platform engine=grid');
     const scene = await compile(source),
       plain = await compile(checkout);
-    expect(at(scene, 'web')).toEqual(at(plain, 'web'));
+    // The root keeps its own recipe: web stays in its rank. It lines up with what it feeds, so
+    // only its place across the run follows the group's new size.
+    expect(at(scene, 'web').x).toBe(at(plain, 'web').x);
     expect(
       scene.byId.get('api')!.localX === plain.byId.get('api')!.localX &&
         scene.byId.get('api')!.localY === plain.byId.get('api')!.localY &&

@@ -19,8 +19,40 @@ group inner "Inner" in=middle color=red
 node a "A" in=inner
 `);
     expect([shade('outer'), shade('middle'), shade('inner')]).toEqual([100, 200, 300]);
-    // The default 500 is two steps from a 300 frame, so the shape takes 600.
-    expect(shade('a')).toBe(600);
+    // A member with no shade of its own is a pale card on its frame's tint.
+    expect(shade('a')).toBe(50);
+  });
+
+  it('draws members as pale cards and keeps 500 for a node that names a color', () => {
+    const source = (theme: string) => `diagram "Cards" version=1
+theme ${theme}
+group g "G" color=teal
+node member "Member" in=g
+group plan "Plan" color=slate
+node pick "Pick" in=plan color=violet
+node loose "Loose" color=teal
+legend teal "Teal"
+legend violet "Violet"
+`;
+    const shade = drawn(source('drafting'));
+    expect([shade('member'), shade('pick'), shade('loose')]).toEqual([50, 500, 500]);
+    // A node of the family names it, so its legend swatch keeps the colored node's shade.
+    expect(checkSource(source('drafting')).model.appearance.legend?.map(e => e.shade)).toEqual([
+      500, 500,
+    ]);
+    const dark = drawn(source('blueprint'));
+    expect([dark('g'), dark('member')]).toEqual([900, 950]);
+  });
+
+  it('keys a family that only members draw at the card shade', () => {
+    const scene = checkSource(`diagram "Key" version=1
+group g "G" color=teal
+node a "A" in=g
+legend teal "Teal"
+legend teal "Strong" shade=500
+`);
+    expect(scene.model.appearance.legend?.map(e => e.shade)).toEqual([50, 500]);
+    expect(scene.diagnostics.filter(d => d.code === 'legend-shade')).toEqual([]);
   });
 
   it('moves a pale member clear of a container in its own family', () => {

@@ -2,7 +2,7 @@
 
 > draftably is a text format for diagrams. A `.draft` file lists boxes, groups and connections, one statement per line, and automatic layout draws them. The `draftably` CLI checks, lays out and renders files, and ships an agent skill that teaches coding agents the syntax.
 
-To write a `.draft` file, read the agent skill first. It has the syntax, the layout engines and the check loop.
+To write a `.draft` file, read the agent skill first. It has the syntax, the layout engines and the check loop. To show or edit diagrams in a web app, start with [Choose how to embed](https://draftably.dev/docs/embed/).
 
 ## Docs
 
@@ -15,13 +15,39 @@ To write a `.draft` file, read the agent skill first. It has the syntax, the lay
 - [Layout engines](https://draftably.dev/docs/layout-engines/): placement algorithms and settings
 - [Refinements](https://draftably.dev/docs/refinements/): ordering, pins and placement adjustments
 
-## Integrations
+## Embed in an app
 
-- [Choose an integration](https://draftably.dev/docs/embed/): static images, interactive viewers, editors and Markdown
+- [Choose how to embed](https://draftably.dev/docs/embed/): who draws (Draftably, your app, a flow library, or nobody at runtime), with a row per framework
+- [Quick start](https://draftably.dev/docs/embed-quick-start/): install the framework package with `@draftably/runtime`, import `host.css` once, the Vite 5–7 `optimizeDeps` setting, one diagram and one event
+- [How embedding works](https://draftably.dev/docs/embed-concepts/): `<draft-diagram>` and `<draft-editor>` are the contract; the microtask mount, live options, `status`
+- [React and Next.js](https://draftably.dev/docs/react/): a complete Vite app, a Next.js server component and a strict-CSP `proxy.ts`
+- [Solid and SolidStart](https://draftably.dev/docs/solid/): a complete Vite app, a SolidStart server query and nonce middleware
+- [Vue and Nuxt](https://draftably.dev/docs/vue/): a complete Vite app, Nuxt `useAsyncData` and a nonce Nitro plugin
+- [Svelte and SvelteKit](https://draftably.dev/docs/svelte/): a complete Vite app, a SvelteKit `load` and CSP hook
+- [Plain HTML and no bundler](https://draftably.dev/docs/plain-html/): the custom elements in any page; serve `dist` from your origin, or use `execution: { mode: 'main' }` from a CDN
+- [Editor component](https://draftably.dev/docs/editor-component/): let users drag boxes and lines and get the `.draft` source back
+- [Content on nodes](https://draftably.dev/docs/content-on-nodes/): your own markup on a node with `data-draft-slot` and `data-draft-input`
+- [Camera and geometry](https://draftably.dev/docs/camera-and-geometry/): `fit`, `reveal`, `getCamera`, `setCamera` and `geometry()`
+- [Events and status](https://draftably.dev/docs/events-and-status/): every `draft-<name>` event, which element sends it, its prop name in each framework, and the diagnostic codes
+- [Theming](https://draftably.dev/docs/theming/): dark pages, frame colors and editor colors
+- [Server rendering and strict CSP](https://draftably.dev/docs/server-rendering/): `renderSvg` fallbacks and a complete nonce policy
+- [API reference](https://draftably.dev/docs/api-reference/): every export, element property, viewer option and handle method
+- [Performance](https://draftably.dev/docs/performance/): what a page loads, many diagrams, and main-thread mode
+- [Troubleshooting](https://draftably.dev/docs/troubleshooting/): each symptom and its fix
+- [Upgrade to 0.4](https://draftably.dev/docs/upgrade/): every breaking change, with code before and after
+
+## Graph layout
+
+- [Your app draws](https://draftably.dev/docs/your-app-draws/): when to draw with your own components, and a `layout()` sample that draws boxes, lines, arrowheads and labels
+- [Layout API](https://draftably.dev/docs/layout-api/): `layout` and `route` for a graph your app draws
+- [Drop in your graph layout](https://draftably.dev/docs/layout-drop-in/): React Flow, Svelte Flow, elkjs, dagre and Cytoscape.js
+
+## Docs and Markdown
+
+- [Switch from Mermaid](https://draftably.dev/docs/from-mermaid/): one package alias
 - [Render SVG](https://draftably.dev/docs/render-svg/): the portable runtime in a script or build
-- [Framework components](https://draftably.dev/docs/frameworks/): React, Solid, Vue and Svelte
 - [Markdown](https://draftably.dev/docs/markdown/): remark and markdown-it adapters, includes and generated assets
-- [Documentation sites](https://draftably.dev/docs/documentation-sites/): Starlight, Docusaurus and VitePress recipes
+- [Documentation sites](https://draftably.dev/docs/documentation-sites/): Starlight, Docusaurus and VitePress setup
 - [Support](https://draftably.dev/docs/support/): package requirements and tested integrations
 
 ## Optional

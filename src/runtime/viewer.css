@@ -1,7 +1,16 @@
+/*
+ * Public tokens: set any --draft-* property on the element or an ancestor, and it wins.
+ * They inherit through the shadow root; the defaults below apply only when unset.
+ */
 .draft-viewer {
-  --dv-border: #cbd5e1;
-  --dv-ink: #1e293b;
-  --dv-bg: #fff;
+  /* The viewer sets color-scheme from the page; each default has a dark value. */
+  --dv-border: var(--draft-border, light-dark(#cbd5e1, #3d4450));
+  --dv-ink: var(--draft-ink, light-dark(#1e293b, #e7eaef));
+  --dv-bg: var(--draft-bg, light-dark(#fff, #16191e));
+  --dv-focus: var(--draft-focus, light-dark(#2563eb, #7fa4e6));
+  --dv-shadow: var(--draft-shadow, light-dark(rgb(15 23 42 / 0.12), rgb(0 0 0 / 0.4)));
+  --dv-warning-ink: var(--draft-warning-ink, light-dark(#9a3412, #fdba74));
+  --dv-warning-bg: var(--draft-warning-bg, light-dark(#fff7ed, #431407));
   position: relative;
   display: grid;
   grid-template-rows: auto minmax(8rem, 1fr) auto auto;
@@ -15,9 +24,13 @@
   font:
     14px/1.45 system-ui,
     sans-serif;
-  overflow: hidden;
+  overflow: clip;
+}
+.draft-viewer__toolbar[hidden] {
+  display: none;
 }
 .draft-viewer__toolbar {
+  grid-row: 1;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -35,12 +48,14 @@
 }
 .draft-viewer button:focus-visible,
 .draft-viewer__viewport:focus-visible {
-  outline: 3px solid #2563eb;
+  outline: 3px solid var(--dv-focus);
   outline-offset: 2px;
 }
 .draft-viewer__viewport {
+  grid-row: 2;
   position: relative;
-  overflow: hidden;
+  /* clip, not hidden: focus on off-screen slot content must not scroll the drawing away. */
+  overflow: clip;
   min-height: 8rem;
   touch-action: none;
   cursor: grab;
@@ -55,10 +70,12 @@
   overflow: visible;
 }
 .draft-viewer__status {
+  grid-row: 3;
   margin: 0;
   padding: 0.35rem 0.65rem;
 }
 .draft-viewer__outline {
+  grid-row: 4;
   margin: 0;
   padding: 0.4rem 0.8rem 0.6rem 2rem;
   max-height: 7rem;
@@ -85,11 +102,11 @@
   position: absolute;
   inset: auto 0 0;
   background: var(--dv-bg);
-  box-shadow: 0 -4px 12px rgb(15 23 42 / 0.12);
+  box-shadow: 0 -4px 12px var(--dv-shadow);
 }
 .draft-viewer--stale .draft-viewer__status {
-  color: #9a3412;
-  background: #fff7ed;
+  color: var(--dv-warning-ink);
+  background: var(--dv-warning-bg);
 }
 .draft-viewer__status:empty {
   display: none;
@@ -107,4 +124,50 @@
   .draft-viewer__toolbar button {
     padding-inline: 0.45rem;
   }
+}
+
+/* The anchor layer: slot targets above the drawing. Slot content takes no pointer input unless
+   it is marked data-draft-input. */
+.draft-anchors {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: visible;
+}
+.draft-anchors__bodies {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  transform-origin: 0 0;
+}
+.draft-anchors__overlays {
+  position: absolute;
+  inset: 0;
+}
+.draft-anchor {
+  position: absolute;
+  box-sizing: border-box;
+  pointer-events: none;
+}
+/* Marked content in a mountViewer target, in the page's DOM. The element's slotted content gets the
+   same rule from host.css, because these selectors do not reach into slots. */
+.draft-anchor [data-draft-input] {
+  pointer-events: auto;
+}
+.draft-anchor--body {
+  overflow: clip;
+}
+.draft-anchor--overlay {
+  left: 0;
+  top: 0;
+  overflow: visible;
+}
+.draft-anchors[data-draft-detail='low'] .draft-anchors__bodies {
+  visibility: hidden;
+}
+/* A body replaces its node's drawn title; the title stays for screen readers. */
+.draft-viewer__viewport[data-draft-detail='full'] [data-draft-body] text {
+  opacity: 0;
 }

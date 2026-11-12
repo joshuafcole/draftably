@@ -173,6 +173,20 @@ describe('translating editor edits', () => {
     expect(group.text).not.toMatch(/^near services/m);
   });
 
+  it('keeps height=auto and min-height through a width-only resize', () => {
+    const source =
+      'node a "Build"\nnode b "Ship"\nedge a-b a -> b\n\nsize a width=140 height=auto min-height=90\n';
+    const wider = edit(source, 'Resize shape', ['a'], d => {
+      d.layout.nodes.a.w = 200;
+    });
+    expect(wider.text).toContain('size a width=200 height=auto min-height=90');
+    const taller = edit(source, 'Resize shape', ['a'], d => {
+      d.layout.nodes.a.h = 130;
+    });
+    expect(taller.text).toContain('size a width=140 height=130');
+    expect(taller.text).not.toContain('min-height');
+  });
+
   it('leaves no layout notes after a plain resize', () => {
     // Issue #437: a resize anchored its neighbours where they were, and the relayout broke them.
     const source = SCORING;

@@ -36,7 +36,14 @@ const probe = `import assert from 'node:assert/strict';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { renderSvg, validate } from '@draftably/runtime';
 import { renderSvg as renderBrowserSvg } from '@draftably/runtime/browser';
+import { layout, route } from '@draftably/runtime/graph';
 assert.equal(typeof document, 'undefined');
+const placed = await layout({ nodes: [{ id: '1' }, { id: '2' }], edges: [{ source: '1', target: '2' }] });
+assert.deepEqual(Object.keys(placed.nodes), ['1', '2']);
+assert.ok(placed.edges.e1.points.length >= 2);
+assert.match(placed.draft, /edge e1 _0 -> _1/);
+const lines = route({ nodes: [{ id: 'a', x: 0, y: 0, width: 80, height: 40 }, { id: 'b', x: 200, y: 0, width: 80, height: 40 }], edges: [{ source: 'a', target: 'b' }] });
+assert.equal(lines.edges.e1.blocked, false);
 assert.equal((await renderBrowserSvg('node a "Browser entry"')).ok, true);
 const sources = JSON.parse(readFileSync('sources.json', 'utf8'));
 const times = [];
@@ -78,6 +85,10 @@ writeFileSync(
   path.join(dir, 'consumer.ts'),
   `import {renderSvg, validate, type RenderOptions, type RenderResult} from '@draftably/runtime';
 import {renderSvg as renderBrowserSvg, type RenderResult as BrowserResult} from '@draftably/runtime/browser';
+import {layout, type GraphIn, type LayoutResult} from '@draftably/runtime/graph';
+const graph: GraphIn = { nodes: [{ id: 'a' }], routing: { quality: 'quick' } };
+const placed: LayoutResult = await layout(graph);
+console.log(placed.nodes.a.x);
 const options: RenderOptions = { target: 'inline', idPrefix: 'example', fonts: 'host' };
 const result: RenderResult = await renderSvg('node a "A"', options);
 const browserResult: BrowserResult = await renderBrowserSvg('node a "A"', options);

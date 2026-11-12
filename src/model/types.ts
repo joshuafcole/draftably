@@ -121,6 +121,11 @@ export interface EdgeLayout {
   toOffset?: number;
   /** A sequence message: drawn straight between the two lifelines at this height, not routed. */
   row?: number;
+  /**
+   * Set by the compiler for a forward line in a `flow` scope: its route planned from the ranks.
+   * The quick router takes it as it is when it clears every box.
+   */
+  plan?: { points: Point[]; fromOffset: number; toOffset: number };
 }
 
 /**

@@ -169,9 +169,10 @@ const enhancement = enhanceDrafts(root, {
 Include it with `<script type="module" src="/assets/draftably-client.js"></script>` after the
 content root. Set `#docs` to an element that contains the generated figures. Adapt the output URL,
 asset copying and bundler setup to your host. The client accepts only same-origin JSON,
-mounts the [viewer](#element), and hides the image only after the first successful drawing. On a
+mounts the [viewer](#embed-concepts), and hides the image only after the first successful drawing. On a
 failure the image stays. `destroy()` stops the work and puts the image back.
-With Vite, add `optimizeDeps: { exclude: ['@draftably/runtime'] }` so the viewer worker loads in development.
+With Vite 5–7, see [Configure Vite 5–7](#configure-vite-57) so the viewer's worker loads in
+development.
 
 ## Complete Unified build
 

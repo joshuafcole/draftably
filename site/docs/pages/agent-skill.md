@@ -4,6 +4,10 @@ draftably ships a skill that teaches coding agents such as Claude Code, Codex an
 `.draft` files, check them, pick a layout and hand the result to you in the editor. The agent edits
 text, so its diagrams diff and review like code.
 
+The skill also teaches an agent to [embed diagrams](#embed) in a web app: the install line,
+`host.css`, the Vite setting, event props and content on nodes, so the code it writes runs on the
+first try.
+
 ## Install it
 
 Each agent reads skills from its own folder. Run one command in your project.

@@ -1,0 +1,23 @@
+{
+  "name": "draftably-react-flow-example",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build"
+  },
+  "dependencies": {
+    "@draftably/react": "^0.4.0",
+    "@draftably/runtime": "^0.4.0",
+    "@xyflow/react": "12.12.1",
+    "react": "19.2.0",
+    "react-dom": "19.2.0"
+  },
+  "devDependencies": {
+    "@types/react": "19.2.0",
+    "@types/react-dom": "19.2.0",
+    "@vitejs/plugin-react": "4.7.0",
+    "typescript": "5.8.3",
+    "vite": "6.4.5"
+  }
+}

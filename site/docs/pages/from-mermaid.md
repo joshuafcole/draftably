@@ -21,8 +21,8 @@ pnpm add mermaid@npm:@draftably/mermaid
 
 `package.json` now reads `"mermaid": "npm:@draftably/mermaid@^0.1.0"`, and your own
 `import mermaid from 'mermaid'` gets Draftably. Calls to `initialize`, `run`, `render` and `parse`
-behave as before. With Vite, add `optimizeDeps: { exclude: ['@draftably/runtime'] }` to
-`vite.config.ts`.
+behave as before. With Vite 5–7, see [Configure Vite 5–7](#configure-vite-57) so the
+viewer's worker loads in development.
 
 A plugin that depends on Mermaid itself, such as a Docusaurus or VitePress Mermaid theme, keeps
 its own copy. Add an override so it gets the drop-in too:

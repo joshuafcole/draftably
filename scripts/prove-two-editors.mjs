@@ -144,6 +144,11 @@ try {
   await page.keyboard.press('c');
   await page.keyboard.press('Enter');
   await page.keyboard.press('Tab');
+  // Both editors have shapes a and b; Tab must focus the shape in this editor, not the page's first.
+  check(
+    'Tab focuses a shape in the same editor',
+    await page.evaluate(() => !!document.activeElement?.closest('#right')),
+  );
   await page.keyboard.press('Enter');
   await idle(1);
   check(
@@ -167,6 +172,26 @@ try {
   await idle(1);
   check('Delete removes the pasted shape', (await right()).graph.nodes.length === count);
   check('shortcuts in Right leave Left untouched', (await state(0)).source === left4.source);
+
+  // A press on the page outside every editor ends shortcuts that reach the page body.
+  await page.mouse.click(...center(await node('right', 'b')));
+  const kept = (await right()).graph.nodes.length;
+  await page.mouse.click(6, 6);
+  await page.keyboard.press('Delete');
+  await sleep(200);
+  check(
+    'a key after a click on page whitespace reaches no editor',
+    (await right()).graph.nodes.length === kept,
+  );
+  await page.screenshot({ path: path.join(proof.out, 'after-whitespace.png') });
+
+  // A destroyed editor stops being the target of shortcuts.
+  await page.mouse.click(...center(await node('right', 'b')));
+  await page.evaluate(() => window.editors[1].destroy());
+  await page.keyboard.press('Delete');
+  await page.keyboard.press('ControlOrMeta+z');
+  await sleep(200);
+  check('a destroyed editor takes no shortcuts', (await state(0)).source === left4.source);
 } catch (error) {
   check('proof ran to completion', false, error.message);
 } finally {

@@ -37,6 +37,30 @@ describe('constraint=false', () => {
     expect(tied.byId.get('t1')!.y).toBeGreaterThan(tied.byId.get('sync')!.y);
   });
 
+  it('lets a dashed side input rank only a box no solid edge reaches', async () => {
+    const scene = await compile(
+      [
+        'diagram "Side input" version=1',
+        'node a "Start"',
+        'node b "Middle"',
+        'node c "End"',
+        'node x "Called by start"',
+        'node q "Queue"',
+        'node w "Worker"',
+        'edge ab a -> b',
+        'edge bc b -> c',
+        'edge ax a -> x',
+        'edge cx c -> x "same shapes" kind=async',
+        'edge qw q -> w kind=async',
+        'layout root flow direction=right',
+      ].join('\n'),
+    );
+    // x sits beside b, where its solid caller places it, not past c.
+    expect(scene.byId.get('x')!.x).toBe(scene.byId.get('b')!.x);
+    // A worker that only a dashed edge reaches still ranks after its queue.
+    expect(scene.byId.get('w')!.x).toBeGreaterThan(scene.byId.get('q')!.x);
+  });
+
   it('rejects other values', async () => {
     await expect(compile(flow('edge back sync -> key constraint=no'))).rejects.toThrow(
       'constraint=true|false',

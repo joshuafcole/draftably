@@ -1,0 +1,8 @@
+{
+  "framework": "react",
+  "files": { "src/Proof.tsx": "app/components/Proof.tsx" },
+  "shared": "app",
+  "build": ["pnpm", "build"],
+  "start": ["pnpm", "start"],
+  "path": "/"
+}

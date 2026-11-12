@@ -1,11 +1,14 @@
-import { renderSvg as writeSvg, SvgLimitError } from './svg-renderer';
+import { renderSvg as writeSvg, SvgLimitError, type Route } from './svg-renderer';
 import { applyLinks, assertOptions, textLink } from './policy';
 import { runtimeVersion, fontMetricsVersion } from './version';
-import { resolveAppearance } from '../model/appearance';
+import { forScheme, resolveAppearance } from '../model/appearance';
+import { mergeSchemes } from './schemes';
 import { compile, type Scene } from '../dsl/compile';
 import { projectScene } from '../dsl/project';
 import { DslError, parseModel, type Model } from '../dsl/syntax';
 import { withState } from '../model/status';
+import type { Rect } from '../model/types';
+import { placedItems, type DrawnRoute, type Geometry } from './geometry';
 import type {
   Diagnostic,
   RenderFailure,
@@ -313,6 +316,12 @@ export async function renderWithScene(
     };
   let doc = projectScene(scene);
   if (options.state) doc = withState(doc, options.state);
+  // The dark drawing shares the light one's layout; only its theme differs. A file's own theme
+  // draws the same in both, so it needs no second drawing.
+  const scheme = options.colorScheme ?? 'light',
+    darkLook = scheme === 'light' ? doc.appearance : forScheme(doc.appearance, true),
+    both = scheme === 'auto' && darkLook !== doc.appearance;
+  if (scheme === 'dark') doc = { ...doc, appearance: darkLook };
   const linkDiagnostics = applyLinks(doc, options);
   const prefix = options.target === 'inline' ? options.idPrefix : 'draft';
   const esc = (value: string) =>
@@ -337,18 +346,36 @@ export async function renderWithScene(
       result: fail('aborted', diagnostic('DRAFT_ABORTED', 'Rendering was aborted.', sourceId)),
     };
   let svg: string;
+  let drawn: { rects: Map<string, Rect>; routes: DrawnRoute[] } | undefined;
   try {
-    svg = writeSvg(doc, {
-      idPrefix: prefix,
-      fontCss,
-      title: options.title,
-      description: options.description,
-      styleNonce: options.styleNonce,
-      linkTarget: options.links?.mode === 'safe' ? (options.links.target ?? '_self') : '_self',
-      textHref: textLink(options),
-      metadata,
-      maxOutputBytes: limits.maxOutputBytes,
-    });
+    // Both drawings embed the same fonts. They go in once, after the merge, so neither the second
+    // drawing nor the color scan copies them.
+    const fonts = both ? '/*draft-fonts*/' : fontCss;
+    const write = (d: typeof doc, routes?: Route[]) =>
+      writeSvg(d, {
+        routes,
+        onDrawn: value => (drawn = value),
+        idPrefix: prefix,
+        fontCss: fonts,
+        title: options.title,
+        description: options.description,
+        styleNonce: options.styleNonce,
+        linkTarget: options.links?.mode === 'safe' ? (options.links.target ?? '_self') : '_self',
+        textHref: textLink(options),
+        metadata,
+        maxOutputBytes: limits.maxOutputBytes,
+      });
+    svg = write(doc);
+    if (both) {
+      // Should the drawings ever differ in more than color, the page gets the light one.
+      // The dark drawing reuses the light one's routes: colors never move a line.
+      const routes = (drawn as { routes: Route[] } | undefined)?.routes;
+      svg = mergeSchemes(svg, write({ ...doc, appearance: darkLook }, routes)) ?? svg;
+      const at = svg.indexOf(fonts);
+      svg = svg.slice(0, at) + fontCss + svg.slice(at + fonts.length);
+      if (new TextEncoder().encode(svg).length > limits.maxOutputBytes)
+        throw new SvgLimitError(`The SVG is larger than ${limits.maxOutputBytes} bytes.`);
+    }
   } catch (error) {
     return {
       result:
@@ -396,14 +423,23 @@ export async function renderWithScene(
       to: e.target,
     })),
   ];
+  const viewBox = [Number(match[1]), Number(match[2]), Number(match[3]), Number(match[4])] as const;
+  const geometry: Geometry | null = drawn
+    ? {
+        revision: 0,
+        frame: { x: viewBox[0], y: viewBox[1], width: viewBox[2], height: viewBox[3] },
+        ...placedItems(doc, drawn.rects, drawn.routes),
+      }
+    : null;
   const value = {
     svg,
     title: options.title ?? scene.title,
     ...(options.description !== undefined ? { description: options.description } : {}),
     width: Number(match[5]),
     height: Number(match[6]),
-    viewBox: [Number(match[1]), Number(match[2]), Number(match[3]), Number(match[4])] as const,
+    viewBox,
     items,
+    geometry,
     states: (scene.model.appearance.states ?? []).map(s => ({
       id: s.id,
       label: s.label,

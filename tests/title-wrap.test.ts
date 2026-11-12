@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { checkSource } from '../src/dsl/compile';
 import { resolveAppearance, type ThemeId } from '../src/model/appearance';
 import { measureText, wordPieces, wrapLines } from '../src/model/fonts';
-import { titleArea, wrapTitle } from '../src/model/labels';
+import { textHeight, titleArea, wrapTitle } from '../src/model/labels';
 
 const look = (theme: ThemeId = 'drafting') =>
   resolveAppearance({ theme, overrides: {}, colors: [] });
@@ -78,13 +78,20 @@ describe('default node width', () => {
   it('widens a title with explicit breaks so each line fits on one row', () => {
     const o = scene.byId.get('split')!;
     expect(o.w).toBeGreaterThan(164);
-    expect(
-      wrapTitle(
-        'Disruption: crash, feature\nunusable, or retry works',
-        titleArea(o.shape, o.w, o.h, scene.look).width,
-        scene.look,
-      ),
-    ).toEqual(['Disruption: crash, feature', 'unusable, or retry works']);
+    const lines = wrapTitle(
+      'Disruption: crash, feature\nunusable, or retry works',
+      titleArea(o.shape, o.w, o.h, scene.look).width,
+      scene.look,
+    );
+    // The text after the first break is a detail line, set a step smaller.
+    expect(lines).toEqual([
+      { text: 'Disruption: crash, feature', detail: false },
+      { text: 'unusable, or retry works', detail: true },
+    ]);
+    expect(textHeight(lines, scene.look)).toBe(
+      scene.look.title.lineHeight + scene.look.detail.lineHeight,
+    );
+    expect(o.h).toBe(textHeight(lines, scene.look) + 2 * scene.look.paddingY);
   });
 
   it('keeps the default width when every word fits, and a requested size exactly', () => {
@@ -113,5 +120,28 @@ describe('diamond size', () => {
     expect(scene.byId.get('long')!.w).toBeGreaterThan(scene.byId.get('short')!.w);
     expect(scene.byId.get('sized')!.w).toBe(160);
     expect(scene.diagnostics.map(d => d.code)).toContain('big-diamond');
+  });
+});
+
+describe('column width', () => {
+  it('gives a column’s boxes the widest one’s width, keeping sized nodes and other shapes', () => {
+    const scene = checkSource(
+      [
+        'diagram "Column" version=1',
+        'group g "G"',
+        'node a "A" in=g',
+        'node b "Billing reconciliation\\nand weekly payout reports" in=g',
+        'node c "C" in=g',
+        'node d "Ok?" in=g shape=diamond',
+        'size c width=120 height=40',
+        'layout g column gap=12',
+      ].join('\n'),
+    );
+    const box = (id: string) => scene.byId.get(id)!;
+    expect(box('b').w).toBeGreaterThan(164);
+    expect(box('a').w).toBe(box('b').w);
+    expect(box('a').x + box('a').w).toBe(box('b').x + box('b').w);
+    expect([box('c').w, box('c').h]).toEqual([120, 40]);
+    expect(box('d').w).toBe(box('d').h);
   });
 });

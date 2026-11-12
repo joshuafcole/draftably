@@ -46,7 +46,7 @@ and groups. References may point to later lines.
 | `group id "label"`                 | A container. `in=group`, `color=`, `shade=`, `frame=box\|soft\|none`, `fold=never`. See [Soft groups](#soft-groups).                                                                                                                                                                                                                                                                                                                  |
 | `theme name`                       | The diagram's theme and diagram-wide overrides. See [Themes and colors](#themes-and-colors).                                                                                                                                                                                                                                                                                                                                          |
 | `theme-color family`               | One shade of a color family. See [Themes and colors](#themes-and-colors).                                                                                                                                                                                                                                                                                                                                                             |
-| `legend family "meaning"`          | One entry of the key: a swatch of `family` (`shade=` optional, 500 by default) and what it means. `legend line dashed\|solid "meaning"` explains a line style. See [Legend](#legend).                                                                                                                                                                                                                                                 |
+| `legend family "meaning"`          | One entry of the key: a swatch of `family` (`shade=` optional; by default the shade its nodes draw) and what it means. `legend line dashed\|solid "meaning"` explains a line style. See [Legend](#legend).                                                                                                                                                                                                                            |
 | `note "text"`                      | A sentence on the diagram that never moves anything. `near=id side=below\|above\|left\|right` puts it beside an object or a sequence message; without `near` it sits under the subtitle and `check` warns `heading-prose`. `width=` (80–1200). `note id "text"` names it, `states=a,b` shows it only in those states, `leader=on` points it at its object. See [Notes](#notes).                                                       |
 | `footnote 1 "text"`                | An entry in the block under the drawing, above the legend. The marker (`1`, `a`, `*`) is optional; a label points at it as `[1]`. Text takes `[label](href)` links. See [Footnotes](#footnotes).                                                                                                                                                                                                                                      |
 | `edge id source -> target "label"` | A connection between two nodes, or a node and a boxed group (the line ends on the group's frame). `kind=async` draws it dashed; `from=`/`to=` choose sides (`auto\|left\|right\|top\|bottom`); `constraint=false` draws it without letting it rank or order anything (for feedback edges); `head=` and `tail=` choose the marks at its ends (see [Line ends](#line-ends)). A long label wraps to about 140px; `\n` starts a new line. |
@@ -65,8 +65,15 @@ Colors are covered in [Themes and colors](#themes-and-colors). An `auto` color i
 family of the nearest colored group. Without a `layout` line, `root` uses `flow gap=48` and groups
 use `column gap=24`.
 
+In a `column`, every box and pill takes the widest one's width, so the column's edges line up. A
+node with a `size` line keeps its size, and diamonds, circles and groups keep their own. A title
+that wraps less at the wider width makes its box shorter.
+
 `flow` ranks objects along its direction by their connections. A loop keeps its path in that
-direction, and only the edge that closes it runs backwards. A run of ranks that is wider than
+direction, and only the edge that closes it runs backwards. Within its rank, an object lines up
+with what it connects to in the rank before: the first of several branches continues its
+parent's line and the others follow it, so a main path runs straight and a tree reads as a tree.
+A gap between ranks widens until each line that turns in it has a lane of its own. A run of ranks that is wider than
 the canvas (1100×720) and more than three times longer than it is deep folds into rows (or
 columns, for `direction=down`) that each start again at the beginning, like lines of text.
 `fold=never` keeps it on one line. `engine=layered` folds the same way unless it has `fold=never`.
@@ -165,8 +172,8 @@ new tab, a `.draft` in the Editor, and a file path in VS Code. A file path may e
 `:42:5` to open at that line and column. A relative path starts at the diagram's git root, or its
 folder outside a repository.
 
-In `inspect --svg` and the Editor's SVG export, each linked object is an `<a>` with a tooltip
-naming its target, and its outline thickens on hover. A URL stays as written and opens in a new
+In `inspect --svg` and the Editor's SVG export, each linked object is an `<a>`, and its outline
+thickens on hover. Nothing pops up on hover, so the browser's status bar shows the target. A URL stays as written and opens in a new
 tab. A file link is written as a path from the diagram's folder, without its line, so it opens
 when the SVG is saved beside the `.draft`. Each object's group carries `data-id` with its ID.
 
@@ -718,7 +725,11 @@ the Editor takes it out of every state.
 
 The file owns the diagram's appearance. A `theme` line picks a preset and may override its
 diagram-wide values; `theme-color` lines change or add colors. Every value is optional: anything
-not written comes from the preset, and a file with no `theme` line uses Drafting.
+not written comes from the preset, and a file with no `theme` line uses Drafting. On a dark page,
+the viewer and the editor draw a Drafting file in Drafting's dark variant, with the same sizes:
+with no `theme` line or with `theme drafting`, also with padding and font overrides. Another
+theme, a `theme-color` line, or `canvas=`, `text=` or `connection=` on the `theme` line keeps the
+file's colors on every page.
 
 ```draft
 theme fieldnotes padding-x=18 padding-y=12 radius=3 title-font=serif annotation-font=sans
@@ -759,6 +770,12 @@ title at the same place. A word too long for a line breaks where an identifier's
 its default width, rather than break a word in the middle. Exported SVG files embed the fonts
 they use.
 
+A node title's first `\n` splits it into a name and a detail: `node gh "GitHub\nopen PRs, CI"`.
+The name keeps the title type. The detail lines are 1px smaller, in the lighter annotation weight,
+and in a muted ink: the theme's `muted` on a neutral node, or the family's ink moved toward its
+fill on a colored one (at least 4.5:1). Later `\n` breaks start new detail lines. Group titles
+and connection labels draw every line alike.
+
 ### Families and shades
 
 Built-in families: `primary` and `secondary` (the theme's own accents),
@@ -775,8 +792,13 @@ never its shade. A node with neither color nor shade uses the theme's neutral su
 
 Drawing keeps an object apart from a container of its own family. A group inside a same-family
 group steps one shade toward emphasis per level (100, 200, 300 in light themes; 900, 800, 700 in
-Blueprint), so nested frames read as layers rather than one fill. A node whose shade is within
-two steps of its container's moves three steps past it. `check` notes a file with more than four
+Blueprint), so nested frames read as layers rather than one fill. A node in its container's
+family with no `shade=` of its own is a member card: shade 50 on the frame's tint (950 in
+Blueprint), with the family's outline and ink, so members stand apart from the frame by fill and
+a group of them stays calm. This holds while the frame is a pale surface shade (300 or lighter;
+700 or darker in Blueprint). A node that names a color keeps 500, so it can be the one strong
+highlight. Any other node whose shade is within two steps of its container's moves three steps
+past it. `check` notes a file with more than four
 accent families (`many-colors`; `slate` and `stone` don't count) and a member that names its
 container's family (`color-matches-container`).
 
@@ -788,7 +810,9 @@ not defined is an error on the referencing line. Each family and shade may be de
 ### Legend
 
 `legend family "meaning"` adds an entry to the diagram's key, in file order: a swatch of that
-family (`shade=` picks one; 500 by default) and its meaning. `legend line dashed "meaning"` and
+family (`shade=` picks one) and its meaning. With no `shade=`, the swatch draws what the
+family's nodes draw: 500 when a node names the family, or the member card's 50 (950 in
+Blueprint) when the family's nodes all inherit it from a group. `legend line dashed "meaning"` and
 `legend line solid "meaning"` add a short line in that style and its meaning, for files whose
 dashed lines say something. The viewer, `inspect --svg` and exports draw the key under the
 drawing, left to right, and start a new row only when the next entry would pass the drawing's
@@ -921,6 +945,12 @@ An edge with `constraint=false` is drawn and routed but takes no part in layout:
 ranks nor orders the objects it joins, as if it weren't there. Use it for a feedback edge (a
 sync that refetches, a retry back to the start) that would otherwise pull its target's section
 below its source.
+
+A dashed edge (`kind=async`) ranks its target only when no solid edge goes to that target. A
+solid edge already places the box, so a dashed side input such as "same shapes" or a progress
+feed doesn't push it, or its group, past the boxes that call it. A dashed edge into a box that
+only dashed edges reach, such as a queue's worker, still ranks it. This holds for the built-in
+layouts; `engine=` recipes see every edge except `constraint=false` ones.
 
 Where an engine has no reason from the connections to put one object before another, file order
 decides, and a scope's `order` line overrides file order. Under `layered` without groups, the
@@ -1109,7 +1139,7 @@ narrower. Remove the `order` line, and Orders goes back above Users.
 | `nudge id dx=0 dy=0`                     | soft     | Offset from the automatic position.                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | `stay id x= y= weight=8`                 | soft     | Prefer this position; resists movement when content changes. `weight=` 1–100. Layout tools write these.                                                                                                                                                                                                                                                                                                                                                         |
 | `pin id x= y=`                           | hard     | Exactly this position. Automatic layout never moves it.                                                                                                                                                                                                                                                                                                                                                                                                         |
-| `size id width= height=`                 | —        | Exact node size: `width=` 40–1200, `height=` 24–1200. A title that does not fit is reported, not grown. A diamond stays square at the larger side. `height=auto` fits the title at that width, so the line survives label edits; `min-height=` (24–1200, with `height=auto` only) is a floor under that height, for a host that draws more than the title inside the node.                                                                                      |
+| `size id width= height=`                 | —        | Exact node size: `width=` 40–1200, `height=` 24–1200. A title that does not fit is reported, not grown. A diamond stays square at the larger side. `height=auto` fits the title at that width, so the line survives label edits; `min-height=` (24–1200, with `height=auto` only) is a floor under that height, for a host that puts more than the title in the node. A width-only resize in the editor keeps both.                                             |
 | `order scope id...`                      | soft     | Preferred order of a scope's children.                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | `align x\|y id...`                       | soft     | Align centers of siblings. `strength=required` locks them.                                                                                                                                                                                                                                                                                                                                                                                                      |
 | `route id via=x1,y1;x2,y2`               | soft     | The points an edge's line passes through, in order, relative to the content area of the container that holds both its ends (the canvas for the root). Up to 40 points. A soft route gives way when a point lands inside a box or a group the line does not enter, or the router finds no way through it: the line is routed as if it had none, and `check` reports `route-gave-way` with the line. `strength=required` keeps the points whatever is in the way. |

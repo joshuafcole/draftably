@@ -10,8 +10,8 @@
   "dependencies": {
     "@astrojs/markdown-remark": "7.3.5",
     "@astrojs/starlight": "0.42.9",
-    "@draftably/markdown": "0.1.0",
-    "@draftably/runtime": "0.1.0",
+    "@draftably/markdown": "^0.2.1",
+    "@draftably/runtime": "^0.4.0",
     "astro": "7.4.5"
   }
 }

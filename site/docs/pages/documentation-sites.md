@@ -13,12 +13,12 @@ pnpm add @draftably/markdown
 | Docusaurus 3           | Remark plugin in the docs preset                     |
 | VitePress 1            | Prebuild script writes Markdown with SVG image links |
 
-All recipes below use `/manual/` as the site base. Change `base` or `baseUrl` and the matching
+Each setup below uses `/manual/` as the site base. Change `base` or `baseUrl` and the matching
 `publicPath` for your site. Keep generated assets outside source control.
 
 ## Astro and Starlight
 
-In an existing Astro 7/Starlight site, install the Unified processor used by this recipe:
+In an existing Astro 7/Starlight site, install the Unified processor this setup uses:
 
 ```sh
 pnpm add -D @astrojs/markdown-remark@7.3.5

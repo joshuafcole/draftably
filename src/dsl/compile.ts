@@ -21,6 +21,7 @@ import {
   SELF_LOOP,
   selfMessageInk,
   titleArea,
+  textHeight,
   titleHeight,
   wrapTitle,
 } from '../model/labels';
@@ -39,6 +40,7 @@ import type {
 import { withAuthoredRoutes } from './authored-routes';
 import { planChannels, trimChannels, type Channel } from './channels';
 import { returnLanes, type FlowScope } from './lanes';
+import { planRoutes, trackRoom, type PlanLine, type Planned, type Spacing } from './corridors';
 import {
   CELLS_TITLE_CHROME,
   GROUP_HEADER,
@@ -50,7 +52,7 @@ import {
 } from './frame';
 import { projectScene } from './project';
 import { placePortals, splitPortals, type PortalSplit } from './portals';
-import { legendNotes } from './legend-notes';
+import { legendNotes, settleLegendShades } from './legend-notes';
 import {
   DslError,
   FITS,
@@ -113,6 +115,8 @@ export interface Diagnostic {
 /** A connection as the file declares it, plus the lane a fold's wrap edge returns along. */
 export interface SceneEdge extends ModelEdge {
   lane?: Lane;
+  /** A forward line's route, planned from its scope's ranks and corridors (`planRoutes`). */
+  plan?: Planned;
   /** A sequence message: the height of its row; it is drawn straight between lifelines there. */
   row?: number;
   /** From `route`: the points it passes, made absolute (`authored-routes.ts`). */
@@ -441,10 +445,9 @@ function sequenced(scene: Scene): Scene {
       const members = parts.filter(p => p.parent === o.id),
         x = round(Math.min(...members.map(p => placed.get(p.id)!.x)) - SEQ_BAND_PAD),
         w = round(Math.max(...members.map(p => inkRight(p))) + SEQ_BAND_PAD - x);
-      // Paler than a group's usual tint, so the bands stay quieter than the headers' accents.
+      // A lane's default shade depends on the scheme, so the drawing picks it (`drawnShade`).
       return {
         ...o,
-        shade: o.shade ?? 50,
         x,
         y: 0,
         w,
@@ -970,17 +973,23 @@ function renamed(doc: Diagram, alias: Map<string, string>): Diagram {
 
 /** Narrowest frame a wrapped group title sets; a narrower group's title wraps to this width. */
 const GROUP_TITLE_WIDTH = 240;
+/**
+ * A one-line title up to this many times the frame's width still takes one line: the frame widens
+ * a little instead of wrapping a word or two onto a line of its own.
+ */
+const GROUP_TITLE_STRETCH = 1.25;
 
 /**
  * Width a group's title asks of a frame whose content needs `inner`, and its line count. A title
- * that fits on one line beside the content keeps one line; a longer one wraps to the content
- * width (at least `GROUP_TITLE_WIDTH`), and the frame widens only as far as it takes to keep the
- * title to `GROUP_TITLE_LINES` lines. The header grows a line for each extra line instead.
+ * that fits on one line beside the content, or nearly does (`GROUP_TITLE_STRETCH`), keeps one
+ * line; a longer one wraps to the content width (at least `GROUP_TITLE_WIDTH`), and the frame
+ * widens only as far as it takes to keep the title to `GROUP_TITLE_LINES` lines. The header grows
+ * a line for each extra line instead.
  */
 function titleFit(title: string, inner: number, look: ResolvedAppearance) {
   const full = Math.ceil(measureText(title, look.groupTitle)) + GROUP_TITLE_CHROME;
   let w = Math.max(inner, GROUP_TITLE_WIDTH);
-  if (full <= w) return { w: full, lines: 1 };
+  if (full <= w * GROUP_TITLE_STRETCH) return { w: full, lines: 1 };
   const lines = () => wrapLines(title, w - GROUP_TITLE_CHROME, look.groupTitle, true).length;
   while (lines() > GROUP_TITLE_LINES && w < full) w += 8;
   return { w: Math.min(w, full), lines: Math.min(lines(), GROUP_TITLE_LINES) };
@@ -1046,8 +1055,16 @@ const MAX_GROW = 2;
  * rewraps in balanced lines.
  */
 function fitWidth(o: ModelObject, base: { w: number; h: number }, look: ResolvedAppearance) {
+  // Each explicit line in the type it is drawn in: the name, then detail lines.
   const rows = o.label.includes('\n') && o.shape !== 'circle' ? o.label.split('\n') : [],
-    need = Math.max(widestPiece(o.label, look.title), ...rows.map(l => measureText(l, look.title)));
+    type = (i: number) => (i ? look.detail : look.title),
+    name = o.label.split('\n')[0],
+    rest = o.label.slice(name.length + 1),
+    need = Math.max(
+      widestPiece(name, look.title),
+      rest ? widestPiece(rest, look.detail) : 0,
+      ...rows.map((l, i) => measureText(l, type(i))),
+    );
   let w = base.w;
   while (titleArea(o.shape, w, base.h, look).width < need && w < base.w * MAX_GROW) w += 4;
   return Math.min(w, base.w * MAX_GROW);
@@ -1056,7 +1073,7 @@ function fitWidth(o: ModelObject, base: { w: number; h: number }, look: Resolved
 /**
  * Size of a node: its requested size, or the default width with a height that fits the title in
  * the theme's type and padding. A requested size is kept exactly; `overflow` reports a title that
- * no longer fits in it. With `height=auto`, a `min-height` is a floor under the title's height.
+ * no longer fits in it. With `height=auto`, `min-height` is a floor under the title's height.
  */
 export function leafSize(
   o: ModelObject,
@@ -1067,13 +1084,13 @@ export function leafSize(
   if (o.shape === 'diamond') return diamondSize(o, size, base, look);
   const w = size?.width ?? fitWidth(o, base, look);
   const area = titleArea(o.shape, w, size?.height ?? base.h, look),
-    lines = wrapTitle(o.label, area.width, look).length;
+    text = textHeight(wrapTitle(o.label, area.width, look), look);
   if (size?.height !== undefined)
-    return { w, h: size.height, overflow: lines * look.title.lineHeight > area.maxHeight + 0.5 };
+    return { w, h: size.height, overflow: text > area.maxHeight + 0.5 };
   return {
     w,
     h: Math.max(
-      titleHeight(o.shape, lines, o.shape === 'circle' ? base.h : 0, look),
+      titleHeight(o.shape, text, o.shape === 'circle' ? base.h : 0, look),
       size?.minHeight ?? 0,
     ),
     overflow: false,
@@ -1086,14 +1103,14 @@ export function leafSize(
  */
 function diamondSize(
   o: ModelObject,
-  size: { width: number; height?: number } | undefined,
+  size: { width: number; height?: number; minHeight?: number } | undefined,
   base: { w: number; h: number },
   look: ResolvedAppearance,
 ) {
   const need = widestPiece(o.label, look.title),
     fits = (s: number) => (diamondMeasure(o.label, s, look) ?? 0) >= need;
   if (size) {
-    const s = Math.max(size.width, size.height ?? 0);
+    const s = Math.max(size.width, size.height ?? size.minHeight ?? 0);
     return { w: s, h: s, overflow: !fits(s) };
   }
   let s = base.w;
@@ -2053,16 +2070,122 @@ function gapRoom(
   });
 }
 
+/**
+ * Move each rank's members across the run toward the members they connect to, keeping their
+ * order and the gaps between them (`start`, changed in place): a child sits beside its parent and
+ * a parent between its children, as a layered layout places nodes. Sweeps down by each member's
+ * links to earlier ranks, up by its links to later ranks, and down again. Each sweep places a
+ * rank as close to those wishes as the gaps allow, by least squares.
+ */
+function beside(
+  layers: string[][],
+  pairs: Array<[string, string]>,
+  rank: Map<string, number>,
+  start: Map<string, number>,
+  minor: (id: string) => number,
+) {
+  const before = new Map<string, string[]>(),
+    after = new Map<string, string[]>();
+  for (const [a, b] of pairs) {
+    const ra = rank.get(a),
+      rb = rank.get(b);
+    if (ra === undefined || rb === undefined || ra === rb) continue;
+    const [u, v] = ra < rb ? [a, b] : [b, a];
+    before.set(v, [...(before.get(v) ?? []), u]);
+    after.set(u, [...(after.get(u) ?? []), v]);
+  }
+  const centre = (id: string) => start.get(id)! + minor(id) / 2;
+  const place = (layer: string[], links: Map<string, string[]>) => {
+    if (!layer.some(id => links.get(id)?.length)) return;
+    // The gap each member keeps from the one before it, from the stacked layout.
+    const offset: number[] = [];
+    for (const [j, id] of layer.entries())
+      offset.push(j ? offset[j - 1] + start.get(id)! - start.get(layer[j - 1])! : 0);
+    const want = layer.map((id, j) => {
+      // The median neighbour (the first of two), so a member lines up with one of them and
+      // that line runs straight.
+      const cs = (links.get(id) ?? []).map(centre).sort((p, q) => p - q),
+        c = cs.length ? cs[(cs.length - 1) >> 1] : centre(id);
+      return c - minor(id) / 2 - offset[j];
+    });
+    // Pool adjacent violators: the non-decreasing fit to `want` with the least total move. A
+    // pooled run sits at its members' median wish, the first of the middle two: when siblings
+    // want one place, the first takes it and its line runs straight, and the rest hang after it.
+    const blocks: number[][] = [],
+      at = (b: number[]) => b[b.length >> 1];
+    for (const w of want) {
+      blocks.push([w]);
+      while (blocks.length > 1 && at(blocks.at(-2)!) > at(blocks.at(-1)!)) {
+        const b = blocks.pop()!;
+        blocks.push([...blocks.pop()!, ...b].sort((p, q) => p - q));
+      }
+    }
+    let j = 0;
+    for (const b of blocks)
+      for (let k = 0; k < b.length; k++, j++) start.set(layer[j], round(at(b) + offset[j]));
+  };
+  for (const layer of layers.slice(1)) place(layer, before);
+  for (const layer of [...layers].reverse().slice(1)) place(layer, after);
+  for (const layer of layers.slice(1)) place(layer, before);
+  const low = Math.min(...start.values());
+  for (const [id, v] of start) start.set(id, v - low);
+}
+
+/** Space between neighbouring lines that run along a gap, as the router keeps them (`edgeGap`). */
+const LINE_PITCH = 16;
+
+/**
+ * The room each gap between ranks needs for the lines that turn in it, as a layered layout
+ * leaves room for its edge channels. A line between ranks whose ends sit at different places
+ * across the run runs along the gap between them. Lines whose runs overlap need a lane each,
+ * `LINE_PITCH` apart and a standoff clear of the boxes on both sides; without that room the
+ * router takes them round other boxes and across each other.
+ */
+function laneRoom(
+  count: number,
+  pairs: Array<[string, string]>,
+  rank: Map<string, number>,
+  centre: (id: string) => number,
+): number[] {
+  const runs: Array<Array<[number, number]>> = Array.from({ length: count }, () => []);
+  for (const [a, b] of pairs) {
+    const ra = rank.get(a),
+      rb = rank.get(b);
+    if (ra === undefined || rb === undefined || ra === rb) continue;
+    const lo = Math.min(centre(a), centre(b)),
+      hi = Math.max(centre(a), centre(b));
+    if (hi - lo < 1) continue;
+    // A line turns in the gap it leaves its source by, or, over several ranks, the one it
+    // enters its target by.
+    runs[Math.min(ra, rb)].push([lo, hi]);
+    if (Math.abs(ra - rb) > 1) runs[Math.max(ra, rb) - 1].push([lo, hi]);
+  }
+  return runs.map(list => {
+    // The most runs that overlap at one place.
+    const ends = list.flatMap(([lo, hi]) => [
+      [lo, 1],
+      [hi, -1],
+    ]);
+    ends.sort((p, q) => p[0] - q[0] || p[1] - q[1]);
+    let open = 0,
+      most = 0;
+    for (const [, d] of ends) most = Math.max(most, (open += d));
+    return most > 1 ? 2 * GAP_STANDOFF + (most - 1) * LINE_PITCH : 0;
+  });
+}
+
 function baseLayout(
   items: Item[],
   layout: ModelLayout,
   pairs: Array<[string, string]>,
   rooms: LabelRoom[] = [],
   lines: ScopeLine[] = [],
+  spacing?: Spacing,
 ) {
   const out = new Map<string, Pos>(),
     gap = layout.gap,
     axis = axisOf(layout);
+  let corridors: Corridors | undefined;
   const by = new Map(items.map(n => [n.id, n]));
   if (layout.algorithm === 'row' || layout.algorithm === 'column') {
     const row = layout.algorithm === 'row',
@@ -2087,26 +2210,90 @@ function baseLayout(
   } else {
     const ids = items.map(n => n.id);
     const chainOf = (id: string) => by.get(id)!.soft;
-    const layers = pairs.length
-      ? byBarycenter(rankLayers(ids, pairs), pairs, layer => clustered(layer, chainOf))
-      : ids.map(id => [id]);
-    const major = (id: string) => (axis === 'right' ? by.get(id)!.w : by.get(id)!.h);
-    const minor = (id: string) => (axis === 'right' ? by.get(id)!.h : by.get(id)!.w);
+    const ordered = pairs.length
+      ? fewerCrossings(rankLayers(ids, pairs), pairs, layer => clustered(layer, chainOf))
+      : null;
+    const layers = ordered ? ordered.layers : ids.map(id => [id]);
+    // In a large scope, a line that skips ranks keeps a corridor through each rank it passes,
+    // where its stand-in sat when the ranks were ordered, as a layered layout routes long edges
+    // between its nodes; the lines then follow planned routes (`planRoutes`). Soft groups keep
+    // their members together, so they keep the ranks without corridors.
+    // A tangled order (over two crossings per line) keeps searched routes: its plan crosses more
+    // and needs more tracks than the router's detours.
+    const kept =
+      !!ordered &&
+      ordered.chains.size >= CORRIDOR_LINES &&
+      ordered.crossings <= 2 * ordered.chains.size &&
+      !items.some(n => n.soft?.length);
+    const all = kept ? ordered!.order : layers;
+    const links: Array<[string, string]> = kept
+      ? pairs.flatMap(([a, b], i) => {
+          const chain = [a, ...(ordered!.chains.get(i) ?? []), b];
+          return chain.slice(1).map((v, k) => [chain[k], v] as [string, string]);
+        })
+      : pairs;
+    const major = (id: string) =>
+      standIn(id) ? 0 : axis === 'right' ? by.get(id)!.w : by.get(id)!.h;
+    const minor = (id: string) =>
+      standIn(id) ? 0 : axis === 'right' ? by.get(id)!.h : by.get(id)!.w;
     // A gap between ranks grows to fit the labels on edges that cross it.
-    const rank = new Map(layers.flatMap((layer, i) => layer.map(id => [id, i] as const))),
+    const rank = new Map(all.flatMap((layer, i) => layer.map(id => [id, i] as const))),
       busy = gapRoom(layers, lines, rooms, axis);
+    // Each member's place across the run, then the lanes each gap needs for the lines that turn
+    // in it (`laneRoom`). A corridor keeps a standoff from the boxes beside it and a line's pitch
+    // from the next corridor; two boxes keep their own gap however many corridors lie between.
+    const start = new Map<string, number>();
+    for (const layer of all) {
+      let across = 0,
+        last: string | undefined;
+      for (const [j, id] of layer.entries()) {
+        const prev = layer[j - 1];
+        if (prev !== undefined && standIn(prev)) across += standIn(id) ? LINE_PITCH : GAP_STANDOFF;
+        else if (prev !== undefined && standIn(id)) across += GAP_STANDOFF;
+        if (!standIn(id) && last !== undefined)
+          across = Math.max(
+            across,
+            start.get(last)! +
+              minor(last) +
+              Math.max(
+                roomBetween(rooms, last, id, gap, axis !== 'right'),
+                softRoom(chainOf(last), chainOf(id), axis === 'right'),
+              ),
+          );
+        start.set(id, across);
+        across += minor(id);
+        if (!standIn(id)) last = id;
+      }
+    }
+    if (pairs.length) beside(all, links, rank, start, minor);
+    const lanes = laneRoom(all.length, links, rank, id => start.get(id)! + minor(id) / 2);
+    // With corridors, each gap fits the tracks its lines' planned routes take there.
+    if (kept) {
+      const tracksIn = trackRoom(
+        axis,
+        all,
+        pairs.flatMap(([a, b], i) =>
+          rank.get(a)! < rank.get(b)!
+            ? [{ id: String(i), chain: [a, ...(ordered!.chains.get(i) ?? []), b] }]
+            : [],
+        ),
+        id =>
+          standIn(id)
+            ? undefined
+            : axis === 'right'
+              ? { x: 0, y: start.get(id)!, w: major(id), h: minor(id) }
+              : { x: start.get(id)!, y: 0, w: minor(id), h: major(id) },
+        id => start.get(id),
+        spacing,
+      );
+      tracksIn.forEach((room, i) => (lanes[i] = Math.max(lanes[i] ?? 0, room)));
+    }
     let at = 0;
     for (const [i, layer] of layers.entries()) {
-      let across = 0,
-        after = Math.max(gap, busy[i] ?? 0);
-      for (const [j, id] of layer.entries()) {
+      let after = Math.max(gap, busy[i] ?? 0, lanes[i] ?? 0);
+      for (const id of layer) {
+        const across = start.get(id)!;
         out.set(id, axis === 'right' ? { x: at, y: across } : { x: across, y: at });
-        across +=
-          minor(id) +
-          Math.max(
-            roomBetween(rooms, id, layer[j + 1] ?? '', gap, axis !== 'right'),
-            layer[j + 1] ? softRoom(chainOf(id), chainOf(layer[j + 1]), axis === 'right') : 0,
-          );
       }
       if (layers[i + 1])
         after = Math.max(after, rankRoom(layer, layers[i + 1], chainOf, axis === 'down'));
@@ -2118,8 +2305,14 @@ function baseLayout(
           after = Math.max(after, axis === 'right' ? r.w : r.h);
       at += Math.max(...layer.map(major)) + after;
     }
+    if (kept)
+      corridors = {
+        order: all,
+        chains: ordered!.chains,
+        across: new Map(all.flat().flatMap(id => (standIn(id) ? [[id, start.get(id)!]] : []))),
+      };
   }
-  return { positions: out, axis };
+  return { positions: out, axis, corridors };
 }
 
 /**
@@ -2158,6 +2351,175 @@ function byBarycenter(
   }
   return out;
 }
+
+/** Sweeps up and down the ranks that `fewerCrossings` tries before it gives up on a better order. */
+const ORDER_SWEEPS = 8;
+
+/**
+ * Order each rank so fewer lines between ranks cross, as a layered layout minimises crossings.
+ * Starts from `byBarycenter`. A line that skips ranks gets a stand-in in each rank it passes, so
+ * it counts and moves like a chain of short lines. Then it sweeps down and up the ranks: each
+ * sweep sorts a rank by the mean place of its neighbours in the rank just set, and swaps
+ * neighbours in the rank while a swap removes crossings. It keeps the order with the fewest
+ * crossings, and the first such, so an order with none stays as it is. `group` keeps soft groups
+ * together: a swap that it would undo is not made.
+ */
+function fewerCrossings(
+  layers: string[][],
+  pairs: Array<[string, string]>,
+  group: (layer: string[]) => string[] = layer => layer,
+): Ordered {
+  const first = byBarycenter(layers, pairs, group);
+  const rank = new Map(first.flatMap((layer, i) => layer.map(id => [id, i] as const)));
+  // Each rank with stand-ins, and each node's neighbours in the rank before and after.
+  const order = first.map(layer => [...layer]),
+    up = new Map<string, string[]>(),
+    down = new Map<string, string[]>();
+  const link = (a: string, b: string) => {
+    down.set(a, [...(down.get(a) ?? []), b]);
+    up.set(b, [...(up.get(b) ?? []), a]);
+  };
+  const real = new Set(rank.keys()),
+    chains = new Map<number, string[]>();
+  for (const [i, [a, b]] of pairs.entries()) {
+    const ra = rank.get(a),
+      rb = rank.get(b);
+    // A line that runs back to an earlier rank goes round the run, not through its ranks.
+    if (ra === undefined || rb === undefined || ra >= rb) continue;
+    let prev = a;
+    chains.set(i, []);
+    for (let r = ra + 1; r < rb; r++) {
+      const id = `\0${i}:${r}`;
+      chains.get(i)!.push(id);
+      // A stand-in starts beside the end it leaves, so the first count is fair.
+      const at = order[r].indexOf(prev);
+      order[r].splice(at < 0 ? order[r].length : at + 1, 0, id);
+      link(prev, id);
+      prev = id;
+    }
+    link(prev, b);
+  }
+  if (order.length < 2) return { layers: first, order: first, chains, crossings: 0 };
+  const keep = (layer: string[]) => group(layer.filter(id => real.has(id)));
+  const regroup = (layer: string[]) => {
+    // Soft groups apply to real members; stand-ins keep their places among them.
+    const kept = keep(layer);
+    let k = 0;
+    return layer.map(id => (real.has(id) ? kept[k++] : id));
+  };
+
+  /** Crossings between rank `i` and the next, counting each pair of lines that swap order. */
+  const between = (i: number) => {
+    const at = new Map(order[i + 1].map((id, k) => [id, k]));
+    const ends = order[i].flatMap(id =>
+      (down.get(id) ?? []).map(w => at.get(w)!).sort((p, q) => p - q),
+    );
+    let n = 0;
+    for (let j = 0; j < ends.length; j++)
+      for (let k = j + 1; k < ends.length; k++) if (ends[j] > ends[k]) n++;
+    return n;
+  };
+  const total = () => order.slice(1).reduce((s, _, i) => s + between(i), 0);
+  /** Crossings among the lines of `a` and `b` to the rank whose places are `at`, `a` first. */
+  const pair = (a: string, b: string, links: Map<string, string[]>, at: Map<string, number>) => {
+    let n = 0;
+    for (const p of links.get(a) ?? [])
+      for (const q of links.get(b) ?? []) if (at.get(p)! > at.get(q)!) n++;
+    return n;
+  };
+  const places = (i: number) => new Map((order[i] ?? []).map((id, k) => [id, k]));
+  /** Swap neighbours in rank `i` while a swap removes crossings with the ranks either side. */
+  const transpose = (i: number) => {
+    const layer = order[i],
+      above = places(i - 1),
+      below = places(i + 1);
+    const cost = (a: string, b: string) => pair(a, b, up, above) + pair(a, b, down, below);
+    for (let better = true, n = 0; better && n < layer.length; n++) {
+      better = false;
+      for (let k = 0; k + 1 < layer.length; k++) {
+        const a = layer[k],
+          b = layer[k + 1];
+        if (cost(b, a) >= cost(a, b)) continue;
+        [layer[k], layer[k + 1]] = [b, a];
+        if (keep(layer).join('\n') !== layer.filter(id => real.has(id)).join('\n')) {
+          [layer[k], layer[k + 1]] = [a, b];
+          continue;
+        }
+        better = true;
+      }
+    }
+  };
+  /** Sort rank `i` by the mean place of its neighbours in the rank `links` points to. */
+  const sort = (i: number, links: Map<string, string[]>, at: Map<string, number>) => {
+    const keyed = order[i].map((id, k) => {
+      const ns = (links.get(id) ?? []).map(n => at.get(n)!);
+      return { id, k, key: ns.length ? ns.reduce((s, v) => s + v, 0) / ns.length : null };
+    });
+    const free = keyed.filter(x => x.key !== null),
+      slots = free.map(x => x.k),
+      layer = [...order[i]];
+    [...free]
+      .sort((a, b) => a.key! - b.key! || a.k - b.k)
+      .forEach((x, j) => (layer[slots[j]] = x.id));
+    order[i] = regroup(layer);
+  };
+
+  let best = order.map(layer => [...layer]),
+    fewest = total();
+  for (let s = 0, stale = 0; s < ORDER_SWEEPS && fewest && stale < 2; s++) {
+    const downward = s % 2 === 0;
+    const ranks = downward
+      ? order.map((_, i) => i).slice(1)
+      : order
+          .map((_, i) => i)
+          .reverse()
+          .slice(1);
+    for (const i of ranks) {
+      sort(i, downward ? up : down, places(downward ? i - 1 : i + 1));
+      transpose(i);
+    }
+    const n = total();
+    if (n < fewest) [best, fewest, stale] = [order.map(layer => [...layer]), n, 0];
+    else stale++;
+  }
+  return {
+    layers: best.map(layer => layer.filter(id => real.has(id))),
+    order: best,
+    chains,
+    crossings: fewest,
+  };
+}
+
+/**
+ * Ranks in their order, without and with the stand-ins of lines that skip ranks, and each such
+ * line's stand-ins by its index in the pairs.
+ */
+interface Ordered {
+  layers: string[][];
+  order: string[][];
+  chains: Map<number, string[]>;
+  crossings: number;
+}
+/**
+ * The corridors a `flow` scope keeps for lines that skip ranks: the ranks with their stand-ins,
+ * each line's stand-ins by its index in the scope's pairs, and each stand-in's place across the
+ * run, in the scope's coordinates.
+ */
+export interface Corridors {
+  order: string[][];
+  chains: Map<number, string[]>;
+  across: Map<string, number>;
+}
+/**
+ * Forward lines a `flow` scope needs before it keeps corridors and plans its routes. A hand-drawn
+ * diagram stays below this: there the router routes every line in a few milliseconds, and its
+ * routes read better round labels, diamonds and small groups than a layered plan. Above it the
+ * router's search grows with every line, and a plan takes milliseconds where search takes
+ * seconds.
+ */
+const CORRIDOR_LINES = 40;
+/** A stand-in's ID: it holds a long line's place in a rank it passes. */
+const standIn = (id: string) => id.charCodeAt(0) === 0;
 
 class Union {
   private parent: Map<string, string>;
@@ -2576,7 +2938,16 @@ function layoutPass(
   packFold?: PackFold,
 ): Scene {
   /** Only directed, constraining edges impose a reading order. Engines still see undirected links. */
-  const ranking = m.edges.filter(e => e.constraint !== false && e.directed !== false);
+  const ordering = m.edges.filter(e => e.constraint !== false && e.directed !== false),
+    // A dashed edge into a box that a solid edge already places is a side input, such as "same
+    // shapes" or a progress feed: ranking by it would push the box, and its group, past its callers.
+    placed = new Set(ordering.filter(e => !e.dashed).map(e => e.target)),
+    ranking = ordering.filter(e => !e.dashed || !placed.has(e.target)),
+    // Planned routes keep the router's spacing (`planRoutes`).
+    spacing: Spacing = {
+      port: Math.max(m.routing.portGap ?? 16, m.routing.edgeGap ?? 16),
+      track: m.routing.edgeGap ?? 16,
+    };
   const diagnostics: Diagnostic[] = [],
     children = new Map<string, ModelObject[]>([['root', []]]);
   for (const o of m.objects) {
@@ -2609,7 +2980,9 @@ function layoutPass(
   };
 
   const folds: Array<{ scope: string; fold: Fold }> = [],
-    flows: FlowScope[] = [];
+    flows: FlowScope[] = [],
+    // Scopes whose long lines keep corridors, laid out as planned (no fold, nothing moved).
+    corridorScopes = new Map<string, { axis: 'down' | 'right'; corridors: Corridors }>();
   /** Packed groups that fold their own long runs, and whether the drawing wraps: see below. */
   const foldGroups = new Set<string>(packFold?.groups);
   let wrapRoot = packFold?.wrap ?? false;
@@ -2802,6 +3175,32 @@ function layoutPass(
       : { w: total, h: list.length ? header + length + GROUP_INSET : 0 };
   }
 
+  /**
+   * A column's boxes share the widest one's width, so its edges line up. A member with a `size`
+   * line keeps it; one that wraps less at the wider width gets shorter. Diamonds, circles and
+   * groups keep their own shape.
+   */
+  function evenColumn(list: Item[], leaves: Map<string, { look: Size; ref: Size }>) {
+    const boxes = list.filter(o => o.type === 'node' && (o.shape === 'box' || o.shape === 'pill'));
+    if (boxes.length < 2) return;
+    const sized = (o: Item) => m.hints.some(h => h.type === 'size' && h.id === o.id),
+      w = Math.max(...boxes.map(o => o.w)),
+      refW = Math.max(...boxes.map(o => leaves.get(o.id)?.ref.w ?? o.w));
+    for (const o of boxes) {
+      if (sized(o) || o.w === w) continue;
+      const leaf = leafSize(o, { width: w }, look);
+      o.w = round(leaf.w);
+      o.h = round(leaf.h);
+      const l = leaves.get(o.id);
+      if (!l) continue;
+      const r = leafSize(o, { width: refW }, ref);
+      leaves.set(o.id, {
+        look: { w: o.w, h: o.h },
+        ref: { w: round(r.w), h: round(r.h) },
+      });
+    }
+  }
+
   function arrange(scope: string): { w: number; h: number } {
     const layout = layoutFor(m, scope),
       order = m.hints.find(h => h.type === 'order' && h.scope === scope);
@@ -2880,6 +3279,7 @@ function layoutPass(
       items.set(o.id, item);
       return item;
     });
+    if (layout.algorithm === 'column') evenColumn(list, leaves);
     if (scope === 'root' && layout.algorithm === 'lanes') return swimLanes(list, layout);
     const pairs = pairsIn(scope);
     // Every line with an end in this scope, for the room the gaps it runs through need.
@@ -3034,7 +3434,7 @@ function layoutPass(
             )
           : governing?.engine && list.every(n => arranged!.has(n.id))
             ? fromEngine(list, arranged!, axisOf(governing), with_)
-            : baseLayout(list, layout, pairs, with_, lines);
+            : baseLayout(list, layout, pairs, with_, lines, spacing);
       // Labels that fit in a pocket on their own edge leave their gap as it is; only the gaps
       // whose labels have nowhere else to go widen.
       const plain = rooms.length ? laidOut([]) : undefined;
@@ -3166,6 +3566,19 @@ function layoutPass(
       laid = lay({ w: 0, h: 0 });
     }
     if (laid.fold) folds.push({ scope, fold: laid.fold });
+    const kept = (laid.base as { corridors?: Corridors }).corridors;
+    if (
+      kept &&
+      scope === 'root' &&
+      !laid.fold &&
+      !channels?.get(scope) &&
+      list.every(n => {
+        const p = laid.pos.get(n.id),
+          q = laid.base.positions.get(n.id);
+        return p && q && Math.abs(p.x - q.x) < 0.01 && Math.abs(p.y - q.y) < 0.01;
+      })
+    )
+      corridorScopes.set(scope, { axis: laid.base.axis, corridors: kept });
     if (engine ? engine.algorithm === 'layered' : !governing?.engine && layout.algorithm === 'flow')
       flows.push({ scope, axis: laid.base.axis });
     // Drawn boxes, in this scope's coordinates. Group content starts at 0,0, so a box that spills
@@ -3217,7 +3630,9 @@ function layoutPass(
             label: o.label,
             marker: o.shape === 'marker',
             ...(typeof o.span === 'number' ? { span: o.span } : {}),
-            ...(hint?.type === 'size' ? { size: { width: hint.width, height: hint.height } } : {}),
+            ...(hint?.type === 'size'
+              ? { size: { width: hint.width, height: hint.height, minHeight: hint.minHeight } }
+              : {}),
           };
         }),
         {
@@ -3397,6 +3812,7 @@ function layoutPass(
     }
   };
   place('root', { x: 0, y: 0 }, 0);
+  const plans = planCorridors(corridorScopes, objects, ranking, immediate, spacing);
   const lanes = wrapLanes(
     folds,
     m.edges,
@@ -3426,6 +3842,7 @@ function layoutPass(
         ids: [g.id],
       });
   }
+  settleLegendShades(m);
   diagnostics.push(...paletteNotes(m), ...legendNotes(m));
   for (const w of m.warnings) diagnostics.push({ level: 'warning', ...w, ids: [] });
   // Keep declaration order so output is stable regardless of the arrangement order.
@@ -3436,11 +3853,62 @@ function layoutPass(
     title: m.title,
     objects,
     byId: new Map(objects.map(o => [o.id, o])),
-    edges: m.edges.map(e => (lanes.has(e.id) ? { ...e, lane: lanes.get(e.id) } : e)),
+    edges: m.edges.map(e => {
+      const lane = lanes.get(e.id),
+        plan = lane ? undefined : plans.get(e.id);
+      return lane ? { ...e, lane } : plan ? { ...e, plan } : e;
+    }),
     diagnostics,
     look,
     cells: chrome,
   };
   packFolds.set(scene, { groups: foldGroups, wrap: wrapRoot });
   return scene;
+}
+
+/**
+ * The planned routes of the forward lines in scopes that kept corridors. A scope's pairs follow
+ * `ranking` as `pairsIn` builds them, so a pair's index names its edge. Only lines between two
+ * plain boxes of the scope are planned; the router routes the rest.
+ */
+function planCorridors(
+  scopes: Map<string, { axis: 'down' | 'right'; corridors: Corridors }>,
+  objects: SceneObject[],
+  ranking: ModelEdge[],
+  immediate: (id: string, scope: string) => string | undefined,
+  spacing: Spacing,
+): Map<string, Planned> {
+  const plans = new Map<string, Planned>(),
+    byId = new Map(objects.map(o => [o.id, o]));
+  for (const [scope, { axis, corridors }] of scopes) {
+    const edges = ranking.filter(e => {
+      const a = immediate(e.source, scope),
+        b = immediate(e.target, scope);
+      return !!a && !!b && a !== b;
+    });
+    const rank = new Map(corridors.order.flatMap((layer, i) => layer.map(id => [id, i] as const)));
+    const plain = (id: string) => {
+      const o = byId.get(id);
+      return !!o && o.type === 'node' && (o.shape ?? 'box') === 'box';
+    };
+    const lines: PlanLine[] = [];
+    for (const [i, e] of edges.entries()) {
+      const a = e.source,
+        b = e.target;
+      if (immediate(a, scope) !== a || immediate(b, scope) !== b || !plain(a) || !plain(b))
+        continue;
+      if (!(rank.get(a)! < rank.get(b)!)) continue;
+      lines.push({ id: e.id, chain: [a, ...(corridors.chains.get(i) ?? []), b] });
+    }
+    for (const [id, plan] of planRoutes(
+      axis,
+      corridors.order,
+      lines,
+      id => byId.get(id),
+      id => corridors.across.get(id),
+      spacing,
+    ))
+      plans.set(id, plan);
+  }
+  return plans;
 }

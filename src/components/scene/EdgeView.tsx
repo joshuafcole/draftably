@@ -171,6 +171,9 @@ export function EdgeView(props: EdgeViewProps) {
       <path
         class="edge-line"
         d={props.route.path}
+        fill="none"
+        stroke-linecap="round"
+        stroke-linejoin="round"
         stroke={stroke()}
         stroke-width={paint().width ? paint().width! - 0.5 : edge().emphasis ? 2 : 1.4}
         stroke-dasharray={
@@ -223,6 +226,8 @@ export function EdgeView(props: EdgeViewProps) {
             </Show>
             <text
               class="edge-label"
+              text-anchor="middle"
+              dominant-baseline="central"
               x={label().x}
               y={label().y - ((labelLines().length - 1) * labelType().lineHeight) / 2}
               fill={stroke()}

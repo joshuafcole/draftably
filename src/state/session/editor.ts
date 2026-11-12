@@ -6,10 +6,10 @@ import { createSignal, onCleanup } from 'solid-js';
 import { clamp, rectUnion } from '../../model/geometry';
 import { findNode, objectRect } from '../../model/graph';
 import type { NodeGeometry, Point, PortSide, Rect } from '../../model/types';
-import type { CameraMover } from './camera';
 import type { DocumentPart } from './document';
 import type { ScenePart } from './scene';
 import type { EmphasisPart } from './emphasis';
+import { ZOOM_MAX, ZOOM_MIN, type CameraReason } from '../../runtime/camera';
 
 export type Tool =
   'select' | 'pan' | 'box' | 'diamond' | 'circle' | 'text' | 'container' | 'connect' | 'brush';
@@ -38,8 +38,9 @@ export interface DragFeedback {
   text?: { rect: Rect; near?: string };
 }
 
-export const MIN_ZOOM = 0.08;
-export const MAX_ZOOM = 4;
+/** The zoom range both handles share: `ZOOM_MIN`–`ZOOM_MAX` in `runtime/camera.ts`. */
+export const MIN_ZOOM = ZOOM_MIN;
+export const MAX_ZOOM = ZOOM_MAX;
 /** The share of the stage a fitted diagram fills. */
 const FIT_SHARE = 0.92;
 export { NodeGeometry };
@@ -165,7 +166,7 @@ export function createEditor(s: DocumentPart & ScenePart & EmphasisPart) {
    * large monitor. Before the canvas is laid out its size is unknown, so the fit waits for it rather
    * than zoom out to the minimum.
    */
-  function fitView(by: CameraMover = 'fit') {
+  function fitView(by: CameraReason = 'fit') {
     const { width: w, height: h } = stageSize();
     if (!s.doc.graph.nodes.length && !s.doc.graph.groups.length) return;
     fitPending = w <= 1 || h <= 1;

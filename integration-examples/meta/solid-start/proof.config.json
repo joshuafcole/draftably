@@ -1,0 +1,8 @@
+{
+  "framework": "solid",
+  "files": { "src/Proof.tsx": "src/components/Proof.tsx" },
+  "shared": "src/proof",
+  "build": ["pnpm", "build"],
+  "start": ["node", ".output/server/index.mjs"],
+  "path": "/"
+}

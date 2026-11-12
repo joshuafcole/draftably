@@ -1,3 +1,4 @@
+import type { Geometry } from './geometry';
 export type Severity = 'error' | 'warning' | 'info';
 
 export interface SourceLocation {
@@ -48,6 +49,13 @@ export interface CommonRenderOptions {
   sourceId?: string;
   signal?: AbortSignal;
   limits?: Partial<RenderLimits>;
+  /**
+   * `light` (default) draws the file's own colors. `dark` draws a file without a `theme` line in
+   * the default theme's dark variant. `auto` writes both as `light-dark()` colors, so the page's
+   * `color-scheme` picks one; the viewer and `<draft-diagram>` use it. A file's own theme line
+   * always wins.
+   */
+  colorScheme?: 'light' | 'dark' | 'auto';
 }
 
 export type RenderOptions = CommonRenderOptions &
@@ -85,6 +93,11 @@ export interface DiagramSummary {
 
 export interface RenderedDiagram extends DiagramSummary {
   svg: string;
+  /**
+   * Where each node, group and edge is drawn, in the SVG's own units (its `viewBox`), in the graph
+   * API's shapes. `null` for `compare` and `states` drawings, which repeat items across panels.
+   */
+  geometry: Geometry | null;
   provenance: {
     runtimeVersion: string;
     dslVersion: 1;

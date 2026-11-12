@@ -4,7 +4,7 @@
  * round the drawing is here too, since the drawn state decides which notes it holds.
  */
 import { createMemo, createSignal } from 'solid-js';
-import { resolveAppearance } from '../../model/appearance';
+import { forScheme, resolveAppearance } from '../../model/appearance';
 import { drawingBounds } from '../../model/bounds';
 import { diagramFrame, FRAME_PAD } from '../../model/frame';
 import { placeNotes } from '../../model/note';
@@ -73,12 +73,21 @@ export function createEmphasis(s: DocumentPart & ScenePart) {
     return true;
   }
 
-  /** The document as the canvas draws it: in the active state, or as it is, on the shown side. */
+  /** The page around the editor is dark: a file without a theme line draws dark too. */
+  const [dark, setDark] = createSignal(false);
+  /** The appearance the canvas draws: the file's own, or its dark variant on a dark page. */
+  const drawnAppearance = () => forScheme(s.doc.appearance, dark());
+  /**
+   * The document as the canvas draws it: in the active state, or as it is, on the shown side, in
+   * the page's scheme.
+   */
   const drawnDoc = () => {
     const id = activeState(),
-      doc = id ? withState(s.doc, id) : s.doc,
-      side = panel();
-    return side ? panelDoc(doc, side) : doc;
+      state = id ? withState(s.doc, id) : s.doc,
+      side = panel(),
+      doc = side ? panelDoc(state, side) : state,
+      appearance = forScheme(doc.appearance, dark());
+    return appearance === doc.appearance ? doc : { ...doc, appearance };
   };
   /**
    * The frame the viewer draws round the drawing, which the editor's exports draw as well. It
@@ -112,6 +121,9 @@ export function createEmphasis(s: DocumentPart & ScenePart) {
     showState,
     stepState,
     drawnDoc,
+    dark,
+    setDark,
+    drawnAppearance,
   };
 }
 

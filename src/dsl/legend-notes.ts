@@ -3,7 +3,14 @@
  * style unexplained, a `legend` swatch drawn in a shade that no node of its family uses, and
  * heading prose that the drawing should say instead.
  */
-import { NODE_SHADE, resolveAppearance } from '../model/appearance';
+import {
+  isBuiltInFamily,
+  memberShadeFor,
+  NODE_SHADE,
+  PRESETS,
+  resolveAppearance,
+  type Shade,
+} from '../model/appearance';
 import { wrapLines } from '../model/fonts';
 import { headingTypes, subtitleMeasure } from '../model/heading';
 import type { Diagnostic } from './compile';
@@ -53,6 +60,35 @@ function gapNotes(m: Model): Diagnostic[] {
       ids: dashed.map(e => e.id),
     });
   return out;
+}
+
+/**
+ * The shade a `legend family` swatch draws when its line sets none: what the family's nodes draw.
+ * When no node names the family and its nodes are all member cards (they inherit it from a group
+ * on a quiet surface shade), that is the member card's shade; otherwise it is a colored node's.
+ */
+export function legendShade(m: Model, family: string): Shade {
+  if (!isBuiltInFamily(family)) return NODE_SHADE;
+  const byId = new Map(m.objects.map(o => [o.id, o])),
+    dark = !!PRESETS[m.appearance.theme]?.dark;
+  const frameOf = (id: string) => {
+    for (let p = byId.get(byId.get(id)?.parent ?? ''); p; p = byId.get(p.parent))
+      if (p.color !== 'auto') return p;
+  };
+  const nodes = m.objects.filter(o => o.type === 'node');
+  if (nodes.some(o => o.color === family)) return NODE_SHADE;
+  const members = nodes.filter(o => o.color === 'auto' && frameOf(o.id)?.color === family);
+  const quiet = members.every(o => {
+    const shade = frameOf(o.id)!.shade;
+    return shade === undefined || (dark ? shade >= 700 : shade <= 300);
+  });
+  return members.length && quiet ? memberShadeFor(m.appearance.theme) : NODE_SHADE;
+}
+
+/** Give each `legend family` line with no `shade=` the shade its family's nodes draw. */
+export function settleLegendShades(m: Model) {
+  for (const e of m.appearance.legend ?? [])
+    if (e.family && e.shade === undefined) e.shade = legendShade(m, e.family);
 }
 
 function shadeNotes(m: Model): Diagnostic[] {

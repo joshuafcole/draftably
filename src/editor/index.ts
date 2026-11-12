@@ -50,4 +50,4 @@ export { registerFonts } from '../lib/font-data';
 // The clipboard, for a host that listens for `copy` and `paste` itself (`mountEditor` does).
 export { copyShapes, handleCanvasKey, handleKeyUp, pasteShapes } from '../state/canvas-keyboard';
 export { Editor } from './Editor';
-export { mountEditor, type MountedEditor, type MountOptions } from './mount';
+export { mountEditor, type EditorOptions, type MountedEditor, type MountOptions } from './mount';

@@ -265,7 +265,8 @@ function Install() {
           <p>
             A component for React, Solid, Vue and Svelte, an HTML element, or SVG from a build step.
             Add the editor and your users can drag too.{' '}
-            <DocLink href="/docs/embed">Pick a route</DocLink>.
+            <DocLink href="/docs/embed">Pick a route</DocLink>. Using React Flow, elkjs or dagre?{' '}
+            <DocLink href="/docs/layout-drop-in">Swap in the layout</DocLink>.
           </p>
           <CopyCommand text="pnpm add @draftably/react" />
         </div>

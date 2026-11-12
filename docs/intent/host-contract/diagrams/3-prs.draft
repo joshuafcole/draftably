@@ -1,0 +1,36 @@
+diagram "What happens to Callsheet's five PRs" version=1
+subtitle "Two merge; three move onto the shared contract"
+
+group prs "Callsheet PRs" color=amber
+node pr498 "#498 Canvas click activates" in=prs href="https://github.com/byronwall/draftably/pull/498"
+node pr499 "#499 Memoize viewerFrame" in=prs href="https://github.com/byronwall/draftably/pull/499"
+node pr502 "#502 Solid host entry" in=prs href="https://github.com/byronwall/draftably/pull/502"
+node pr500 "#500 Editor camera API" in=prs href="https://github.com/byronwall/draftably/pull/500"
+node pr501 "#501 nodeContent and min-height" in=prs href="https://github.com/byronwall/draftably/pull/501"
+
+group lands "Where each need lands" color=mint
+node small "Step 1: small fixes" in=lands
+node graph_api "Graph API layout(), today" in=lands
+node one_camera "Step 4: one camera" in=lands
+node slots "Step 6: body slots" in=lands
+node min_height "min-height, after 3 fixes [1]" in=lands
+
+legend amber "Callsheet's PR"
+legend mint "Where it lands in the plan"
+
+edge v498 pr498 -> small "merge"
+edge v499 pr499 -> small "merge"
+edge v502a pr502 -> small "close; land fixes"
+edge v502b pr502 -> graph_api "own-tree drawing [2]"
+edge v500 pr500 -> one_camera "rebuild on the handle"
+edge v501a pr501 -> slots "becomes body slots"
+edge v501b pr501 -> min_height "keep"
+
+footnote 1 "Diamonds skip the floor, a second cells path drops it, and a resize drops it."
+footnote 2 "No Solid scene or measureText export: host bodies use host fonts and CSS."
+
+state p500 "#500" pr500 one_camera
+state p501 "#501" pr501 slots min_height
+state p502 "#502" pr502 small graph_api
+
+layout root flow direction=right gap=140

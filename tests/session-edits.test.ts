@@ -93,6 +93,8 @@ async function settled(s: Session) {
 /** A stand-in element: `closest(selector)` finds the data each selector names. */
 const element = (data: Record<string, Record<string, string>> = {}) => ({
   closest: (selector: string) => (data[selector] ? { dataset: data[selector] } : null),
+  // The stubbed page (`document`) is the root a lookup starts from.
+  getRootNode: () => document,
 });
 const node = (id: string, extra: Record<string, Record<string, string>> = {}) =>
   element({

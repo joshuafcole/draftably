@@ -7,7 +7,7 @@
     "build": "node fallback.ts && vite build"
   },
   "dependencies": {
-    "@draftably/runtime": "0.1.0"
+    "@draftably/runtime": "^0.4.0"
   },
   "devDependencies": {
     "vite": "6.3.5"

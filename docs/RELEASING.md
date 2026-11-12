@@ -28,8 +28,13 @@ The release flow follows explorEDA and Product Grid:
 1. Add a changeset that names each changed package.
 2. Merge it into `main`.
 3. GitHub Actions opens or updates the **Version Packages** pull request.
-4. Review the version and changelog. Merge that pull request.
+4. Review the version and changelog. The action opens the pull request with the workflow token,
+   so CI does not run on it: close and reopen it to start the required checks. Merge it when
+   they pass.
 5. Actions checks, builds, tests and packs each package. Changesets publishes them and creates GitHub releases.
+6. After a publish, the release workflow deploys the docs site (draftably.dev), so the docs never
+   describe a version that npm does not have. Pushes to `main` do not deploy it. To ship a
+   docs-only fix between releases, run **Deploy to GitHub Pages** by hand.
 
 A pull request that changes shipped files (`src/`, `index.html`, `examples/`, `docs/DSL.md`,
 `packages/cli/`) must add a changeset; CI runs `pnpm changeset:check` to enforce it. Use

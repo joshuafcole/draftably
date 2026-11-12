@@ -9,6 +9,46 @@ components/  →  state/  →  model/  →  engines/
 cli/  →  dsl/
 ```
 
+## Design goal: one host contract, thin framework bindings
+
+A host app (React, Solid, Vue, Svelte or plain DOM) gets every capability from one
+framework-neutral layer: functions and JSON from `@draftably/runtime`, the `mountViewer` and
+`mountEditor` handles, and the `<draft-diagram>` and `<draft-editor>` elements. A framework package
+in `packages/` only maps that layer to its framework's idiom: props, a ref, event props and
+children. The packages differ only in that idiom.
+
+- **The element is the contract.** Each custom element exposes everything its handle has: an
+  `options` property for every mount option, and every handle event as a bubbling `draft-<name>` DOM
+  event. A wrapper adds no behavior that plain DOM cannot reach.
+- **One contract for the viewer and the editor.** Both use one camera shape (`centerX`, `centerY`,
+  `zoom` in world units), one set of methods (`fit`, `reveal`, `geometry`), one zoom range and one
+  event-reason union. A capability that both have uses the same types and the same behavior. The
+  editor adds editing; it does not change what the shared parts mean.
+- **Host content goes in slots.** A host puts content on an item by rendering an ordinary child,
+  such as `<div data-draft-slot="body:api">`. The element assigns it with manual slot assignment and
+  never writes to the host's DOM. Draftably keeps one element per anchored item across updates,
+  positions it and moves it with the camera. The child stays in the host's own tree, so it keeps the
+  host's framework, context, reactivity and CSS. Content never goes into the string renderer.
+- **Two ways in, by who draws.** When Draftably draws, a host uses the elements and puts content in
+  slots. When the host draws, it uses the graph API (`@draftably/runtime/graph`): a graph in,
+  boxes and routed lines out. Neither path has framework code.
+- **JSON at the boundary.** Geometry, diagnostics and the camera cross as plain data, in the shapes
+  the graph API already publishes. Internal types, such as `Diagram` or the session store, stay
+  internal.
+- **Layout never reads host content.** A host declares the room it needs in the source (for example
+  `size … min-height=`). The CLI, exports, server rendering and a page without the host draw the
+  same layout, with titles in place of host content. Exports never contain host content.
+- **Measure.** A new event, method, option or content kind adds no lines to any framework package,
+  in its source or its types. Each wrapper loops over one exported list of events. If a feature
+  needs wrapper lines, the neutral layer is missing a piece.
+- **The first hour has no stall.** Each framework has one complete, typed recipe that CI compiles
+  from the packed packages. The performance budgets in the plan hold for every change.
+
+A framework-native entry, such as a Solid scene in the host's own tree, is an exception. Add one only
+when a host shows a need that slots, events and JSON geometry cannot meet, and build it on the
+neutral layer. The review that set this goal is in
+[intent/host-contract/plan.md](intent/host-contract/plan.md).
+
 ## model/ — pure data and operations
 
 Plain TypeScript with no DOM or Solid dependencies, so it is unit tested directly.
@@ -22,6 +62,8 @@ Plain TypeScript with no DOM or Solid dependencies, so it is unit tested directl
 | `geometry.ts`     | Rectangles, rounding and SVG path helpers.                                                                        |
 | `labels.ts`       | Title area, wrapping and label placement for every shape, shared by the compiler and the canvas.                  |
 | `rich-text.ts`    | `[label](href)` links in notes and footnotes, wrapped as plain words wrap.                                        |
+| `link.ts`         | `href=` kinds (URL, `.draft`, file with `:line:col`), link-base joins, editor URLs and the ↗ mark's position.     |
+| `status.ts`       | One paint layer for diff marks and emphasis states. `withState` changes paint only, never geometry.               |
 | `footnote.ts`     | The footnote block between the drawing and the key.                                                               |
 | `appearance.ts`   | Five preset themes, color families with numeric shades, and `resolveAppearance` (preset, then file overrides).    |
 | `fonts.ts`        | The bundled faces and deterministic text measurement from `font-metrics.json` (see `pnpm font-metrics`).          |
@@ -138,7 +180,9 @@ source file is newer than `dist-cli/`.
 
 `packages/markdown/` owns shared fence metadata, local-source resolution, diagnostics, and static asset preparation. Its remark and markdown-it adapters map host syntax to that core. The optional browser client adds the independent viewer and owns its cleanup. Host adapters own file identity, asset publication, cache replay, and public URLs; they do not implement another compiler.
 
-The user guides live on the site: [Support](https://draftably.dev/docs/support), [Render SVG](https://draftably.dev/docs/render-svg), [Markdown](https://draftably.dev/docs/markdown), [Element and viewer](https://draftably.dev/docs/element) and [Build an adapter](https://draftably.dev/docs/build-an-adapter). Their source is in `site/docs/pages/`.
+`src/graph-api/` is `@draftably/runtime/graph`: `layout()` turns plain nodes, groups and edges into the statements a `.draft` file parses to, compiles them, and returns geometry under the caller's IDs with the file it built. `route()` routes lines between boxes the caller placed. `pnpm bench:graph` checks both against `scripts/bench/graph-corpus.mjs`.
+
+The user guides live on the site: [Support](https://draftably.dev/docs/support), [Render SVG](https://draftably.dev/docs/render-svg), [Markdown](https://draftably.dev/docs/markdown), [How embedding works](https://draftably.dev/docs/embed-concepts) and [Build an adapter](https://draftably.dev/docs/build-an-adapter). Their source is in `site/docs/pages/`.
 
 ## editor/ — the embeddable editor
 

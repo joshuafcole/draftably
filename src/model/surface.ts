@@ -1,4 +1,4 @@
-import { swatchFor, type ResolvedAppearance } from './appearance';
+import { bandSwatch, panelSwatch, type ResolvedAppearance } from './appearance';
 import { drawnSwatch } from './colors';
 import { visibleRects } from '../dsl/project';
 import type { Diagram, Point, Rect } from './types';
@@ -39,7 +39,7 @@ export function surfaces(doc: Diagram, look: ResolvedAppearance) {
     panel = !!seq && panelDrawn(doc);
   return (p: Point): Surface => {
     let fill = look.canvas;
-    if (seq && panel && within(p, seq.panel)) fill = swatchFor(look, 'slate', 50, 'group').fill;
+    if (seq && panel && within(p, seq.panel)) fill = panelSwatch(look).fill;
     for (const g of vg.groups) {
       const r = rects.get(g.id);
       if (!r || g.frame === 'none') continue;
@@ -52,7 +52,7 @@ export function surfaces(doc: Diagram, look: ResolvedAppearance) {
       ? { fill }
       : {
           fill,
-          tint: { fill: swatchFor(look, 'slate', 100, 'group').stroke, opacity: phaseOpacity(i) },
+          tint: { fill: bandSwatch(look).stroke, opacity: phaseOpacity(i) },
         };
   };
 }

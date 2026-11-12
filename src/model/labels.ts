@@ -34,17 +34,51 @@ export function titleArea(
   };
 }
 
-/** Height a shape needs for `lines` title lines; never less than `base`. */
-export function titleHeight(shape: ShapeKind, lines: number, base: number, r: ResolvedAppearance) {
-  const text = lines * r.title.lineHeight;
+/** Height a shape needs for a title block `text` px tall; never less than `base`. */
+export function titleHeight(shape: ShapeKind, text: number, base: number, r: ResolvedAppearance) {
   if (shape === 'circle') return Math.max(base, Math.ceil(text / 0.7));
   if (shape === 'text') return text + 2 * Math.min(r.paddingY, 11);
   return text + 2 * r.paddingY;
 }
 
-/** A shape's title in balanced lines no wider than `width` (see `wrapLines`). */
-export const wrapTitle = (text: string, width: number, r: ResolvedAppearance) =>
-  wrapLines(text, width, r.title, true);
+/** One line of a shape's title: part of its name, or of its detail. */
+export interface TitleLine {
+  text: string;
+  /** A detail line, from the text after the title's first `\n`, drawn in `r.detail`. */
+  detail: boolean;
+}
+
+/**
+ * A shape's title in balanced lines no wider than `width` (see `wrapLines`). The text before the
+ * first `\n` is the name, in the title type; the rest is detail, in the smaller detail type.
+ */
+export function wrapTitle(text: string, width: number, r: ResolvedAppearance): TitleLine[] {
+  const cut = text.indexOf('\n'),
+    name = cut < 0 ? text : text.slice(0, cut);
+  const lines = wrapLines(name, width, r.title, true).map(t => ({ text: t, detail: false }));
+  if (cut >= 0)
+    for (const t of wrapLines(text.slice(cut + 1), width, r.detail, true))
+      lines.push({ text: t, detail: true });
+  return lines;
+}
+
+/** The type a title line is set in. */
+export const lineType = (l: TitleLine, r: ResolvedAppearance) => (l.detail ? r.detail : r.title);
+
+/** Height of a block of title lines. */
+export const textHeight = (lines: TitleLine[], r: ResolvedAppearance) =>
+  lines.reduce((h, l) => h + lineType(l, r).lineHeight, 0);
+
+/** Each line's centre, measured from the middle of the block. */
+export function lineOffsets(lines: TitleLine[], r: ResolvedAppearance) {
+  let y = -textHeight(lines, r) / 2;
+  return lines.map(l => {
+    const lh = lineType(l, r).lineHeight,
+      at = y + lh / 2;
+    y += lh;
+    return at;
+  });
+}
 
 /** Room kept between a diamond's title and its outline. */
 const DIAMOND_PAD = 6;
@@ -58,7 +92,8 @@ export function diamondMeasure(title: string, s: number, r: ResolvedAppearance) 
   const room = s - 2 * DIAMOND_PAD;
   for (let n = 1; n * r.title.lineHeight < room; n++) {
     const width = room - n * r.title.lineHeight;
-    if (width >= 40 && wrapTitle(title, width, r).length <= n) return width;
+    if (width >= 40 && textHeight(wrapTitle(title, width, r), r) <= n * r.title.lineHeight)
+      return width;
   }
 }
 
@@ -88,9 +123,10 @@ export interface NodeLabel {
   y: number;
   width: number;
   height: number;
-  lines: string[];
+  lines: TitleLine[];
+  /** Each line's centre, relative to `y`. */
+  offsets: number[];
   mode: LabelMode;
-  lineHeight: number;
   leader: boolean;
 }
 
@@ -103,8 +139,7 @@ export function nodeLabel(doc: Diagram, id: string, title: string, r: Rect): Nod
     (style.shape === 'icon' || style.shape === 'image' || (style.shape === 'circle' && style.icon)
       ? 'bottom'
       : 'center');
-  const look = resolveAppearance(doc.appearance),
-    lineHeight = look.title.lineHeight;
+  const look = resolveAppearance(doc.appearance);
   const iconInside = mode === 'center' && !!style.icon && ['box', 'pill'].includes(style.shape);
   let x = r.w / 2 + (iconInside ? 15 : 0),
     y = r.h / 2,
@@ -114,7 +149,7 @@ export function nodeLabel(doc: Diagram, id: string, title: string, r: Rect): Nod
       titleArea(style.shape, r.w, r.h, look, iconInside).width;
   if (mode !== 'center') width = cfg.width || Math.max(142, r.w);
   const lines = wrapTitle(title, width, look),
-    height = lines.length * lineHeight;
+    height = textHeight(lines, look);
   if (mode === 'top') y = -16 - height / 2;
   if (mode === 'bottom') y = r.h + 15 + height / 2;
   if (mode === 'left') x = -20 - width / 2;
@@ -132,8 +167,8 @@ export function nodeLabel(doc: Diagram, id: string, title: string, r: Rect): Nod
     width,
     height,
     lines,
+    offsets: lineOffsets(lines, look),
     mode,
-    lineHeight,
     leader: cfg.leader ?? mode === 'detached',
   };
 }

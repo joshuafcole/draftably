@@ -56,8 +56,137 @@ pnpm bench --only cli --files xl               # one part, some diagrams
 pnpm bench --out tmp/bench/after.json --compare tmp/bench/before.json   # before → after cells
 ```
 
+`pnpm bench:graph` builds the runtime and lays out each graph in `scripts/bench/graph-corpus.mjs`
+through `@draftably/runtime/graph`: edge cases (empty, self loops, awkward IDs, nested groups) and
+chains, trees, DAGs and architectures of up to 100 nodes. It fails on a throw, a missing ID,
+overlapping boxes, a child outside its group, a line that misses its boxes, or different output
+for the same input. It reports blocked lines and times over the 1 s load budget. Add
+`--quality full|quick` to time one router mode, and `--only <name>` for some graphs.
+
+`pnpm bench:fresh` times `layout()` on a new random graph for every call (a tree of 100 nodes and
+DAGs of 50, 100 and 200 nodes), so the router's cache never helps, as with a host that lays out a
+graph once. It reports the median time and drawing measures (crossings, bends, length, lines
+through boxes, blocked lines, area) and a digest of every drawing. The graphs come from fixed
+seeds, so an equal digest proves a speedup changed no drawing. Keep the default 5 runs when you
+compare digests. Add `--quality quick|full`, `--only <name>`, `--out <file>` and
+`--compare <file>` for a before → after table.
+
 CI runs it once per change as a non-blocking `bench` job and puts the table in the job summary.
 Performance PRs paste a before → after table.
+
+### Host contract budgets
+
+`pnpm bench:host` (also the last part of `pnpm bench`, or `pnpm bench --only host`) builds the
+runtime and loads the built `<draft-diagram>` on plain pages in Chromium, with no bundler. It
+measures the budgets in [the host contract plan](intent/host-contract/plan.md#performance) and
+prints median and p95 per row with ✓ or ✗. Add `--runs N` (default 5) and `--strict` to fail on ✗.
+
+| Area                                         | Budget                                                    |
+| -------------------------------------------- | --------------------------------------------------------- |
+| Main-thread JS, viewer-only page             | ≤ 40 KB gz; no editor request                             |
+| First diagram, 28-box file, cold (4× CPU)    | ≤ 1 s                                                     |
+| First diagram, 28-box file, warm             | ≤ 300 ms (not met: see below)                             |
+| 20 instances of the 28-box file              | every diagram commits; no timeouts                        |
+| Source update to commit, 28 boxes            | ≤ 200 ms                                                  |
+| Workers, 20 instances × 20 updates           | ≤ min(4, cores − 1) render workers per page               |
+| 20 instances: stylesheets, fonts, long tasks | 1 sheet; 1 font set; no long task over 200 ms             |
+| `geometry()` at 200 nodes                    | ≤ 1 ms; the same object for one revision                  |
+| Camera frame, 10 / 100 / 500 slot targets    | ≤ 8 ms p95 at 500; 0 forced layouts                       |
+| Target reconcile per update, 500 targets     | ≤ 10 ms; no target re-created for an unchanged ID         |
+| Editor drag frame, 200 nodes, 400 targets    | ≤ no slots + 5 %; no anchors event, re-observe or assign  |
+| Mount and destroy, 50 cycles                 | heap within 5 %; listeners, workers and fonts at baseline |
+
+Each change from the host contract on must keep every ✓ row ✓ and must not make a ✗ row slower.
+The warm first diagram is bound by a fresh layout of the 28-box file (about 600 ms of router work
+on an M3 Pro, before any cache), not by the runtime. The CPU throttle slows the page, not the
+worker, so the cold row mostly measures the same layout.
+
+The slot rows use a 250-node file with a body and an overlay on the first N / 2 nodes. A camera
+frame is one `setCamera` plus the style and layout it causes; the bench reads layout once after
+the move to include that cost. Forced layouts are counted as layout reads during 100 moves: the
+bench wraps every DOM API that reads layout, and a forced layout needs one. Reconcile times `viewer.anchor()` with the same 500 slots, which runs the
+pass a commit runs over every target. A source update that moves every node must then add and
+remove no target.
+
+The drag rows load one `<draft-editor>` of a 200-node file, with no slots and then with a body and
+an overlay on each node, and drag a node 60 moves. A frame is the `pointermove` dispatch plus the
+style and layout it causes. With slots it must fire no `anchors` event, call no
+`ResizeObserver.observe` and no `slot.assign`, and stay within 5 % of the frame with no slots. The
+frame is slow at 200 nodes either way (about 215 ms on an M3 Pro): each edge view scans every edge
+on each move.
+
+## Slots
+
+`pnpm prove:slots` loads the built `<draft-diagram>` and `<draft-editor>` on one plain page in
+Chromium, Firefox and WebKit, each with host children marked `data-draft-slot`. Build first with
+`pnpm runtime:build && pnpm editor:build`; pass `chromium`, `firefox` or `webkit` to run one. For
+both elements it checks: `host.css` hides content before the elements define; each marked child is
+assigned to its target; targets follow drawing order; an unknown slot is a `DRAFT_SLOT_UNKNOWN`
+warning; a body fills its node and scales with the camera; an overlay sits at its item's screen box
+at screen scale; host CSS styles the content; a click on body text reaches the drawing, not the
+card; a
+`data-draft-input` button takes its click and only it; a caret survives a source update; content
+follows an update and keeps its target; `overflow: clip` never scrolls on focus; focus in a body
+reveals it; low detail hides bodies and shows titles; a commit made below zoom 0.4 still hides the
+titles under bodies at zoom 1; content larger than its node, assigned after its target exists, is a
+`DRAFT_SLOT_OVERFLOW` warning. For the editor also: its styles are adopted in
+its shadow root; a page value for a token wins; `data-theme="dark"` switches the tokens; ports and
+resize handles of a body node sit above the body and resize it; typing **N** in a marked input adds
+no node; and both send `anchors` with `[]` on removal. Screenshots go to `tmp/proof-slots/`.
+
+`pnpm prove:color-scheme` loads the built elements on one plain page in Chromium, Firefox and
+WebKit: a viewer and an editor of a source with no `theme` line, a viewer forced light with
+`color-scheme: light`, a viewer of a source with `theme fieldnotes`, and one with
+`theme drafting`. A light page draws all of them light. `color-scheme: dark` on the page draws the
+viewer, the editor and the `theme drafting` one dark, with no new render and no moved box, and the
+forced and fieldnotes ones keep their colors. With no `color-scheme` on the page, a dark system
+setting leaves all of them light; `color-scheme: light dark` or `dark` on the page then draws them
+dark. It also checks a host hidden while the page turns dark, a viewer and an editor mounted
+detached with no shadow root, the light-DOM editor's `data-theme`, and a page with
+`* { transition: none !important }`. Build first, as for slots. Screenshots go to `tmp/proof-color-scheme/`.
+`pnpm prove:frameworks` also checks that each wrapper's diagrams stay light on a dark system
+setting until the page sets `color-scheme: light dark`, then draw dark, and saves `tmp/frameworks/<framework>-dark.png`.
+
+`pnpm prove:frameworks` (CI) runs the checks that depend on the host through the React, Solid,
+Vue and Svelte wrappers in Chromium, with the content rendered and updated by each framework:
+pass-through and assignment, the unknown-slot warning, geometry and camera scale, host CSS, orphan
+content, pointer pass-through, a marked button, a caret across an update, content that follows a
+framework update with the same target, `overflow: clip`, and in the editor assignment, body
+placement, selection through body text and no shortcut from a marked input.
+
+## Hosts
+
+Every host runs one list of checks, `scripts/lib/host-proof.ts`, against a server-rendered page
+that shows the proof page in `integration-examples/frameworks/proof.js`. With real mouse and
+keyboard input in Chromium it checks: the server HTML holds the diagram's SVG, the slot content
+and both editors; hydration keeps the server's nodes, with no console errors or hydration
+warnings; a body reads the framework's context and page CSS and fills its node; a marked button
+takes its click and the drawing does not; a caret survives a source update; **Delete** in one
+editor changes only that editor; a failed update keeps the drawing and shows its message; the
+page is served with a strict nonce CSP (no `'unsafe-inline'`) and reports no violation; and 50
+mount cycles of a viewer and an editor end with heap within 5 % and listeners, workers and fonts
+at baseline. Screenshots and the server HTML go next to each run's output.
+
+- `pnpm prove:frameworks` (CI) runs it on each Vite app's `proof.html`, after the app's own
+  checks.
+- `pnpm prove:meta [next solid-start nuxt sveltekit]` builds each app in
+  `integration-examples/meta/` for production with the packed packages, starts its server and
+  runs it there. Each app holds a copy of its proof page, so it runs on its own;
+  `proof.config.json` names the copies and the build and start commands. A copy that differs from
+  its source in `integration-examples/frameworks/` fails the run: `pnpm prove:meta --write`
+  refreshes them. Installs take minutes (Next.js downloads about 80 MB), so run it in the
+  background. It is not in CI. Output goes to `tmp/meta/`.
+
+`pnpm prove:recipes` (CI) copies every named code block in the "Build the app" section of each
+framework page (`site/docs/pages/react.md`, `solid.md`, `vue.md`, `svelte.md`, `plain-html.md`)
+into a fresh Vite app, and installs only the packed packages that the recipe's `pnpm add` line names. It type-checks (`tsc`, `vue-tsc` or `svelte-check`),
+builds, calls the recipe's server `render()`, and loads the page: the diagram and the editor must
+reach `status="ready"` with the body assigned, the dark frame applied, and no console errors. Then it
+starts `vite` in development and deletes a node in the editor, which fails on a worker 404. A
+recipe that stops compiling fails CI. Screenshots go to `tmp/recipes/`.
+
+`tests/site-docs.test.ts` keeps the meta-framework CSP and config code on each framework page the
+same as the files in `integration-examples/meta/`, which `pnpm prove:meta` builds and checks.
 
 ## File-backed editing
 
@@ -147,6 +276,13 @@ the saved file, and the arranged region away from the addition must not move. Sc
 editors with `mountEditor`. The proof drags, selects, adds a node and undoes in one editor with real
 mouse and keys. The other editor's document, selection and source must not change. Screenshots go to
 `tmp/proof-editors/`.
+
+## Links in file mode
+
+No script covers this. Run `pnpm draftably open tests/fixtures/links.draft` and click each ↗
+mark. A URL opens as written in a new tab, `examples/theme-proof.draft` opens in the viewer, and a
+file path opens the editor at its line, from the git root. A click on a box away from its mark only
+selects it.
 
 ## Browser
 

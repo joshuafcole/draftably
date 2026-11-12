@@ -8,8 +8,9 @@ host-specific limits. Their source is in
   or a framework component
 - [Switch from Mermaid](https://draftably.dev/docs/from-mermaid): replace Mermaid in an app, a CDN
   page, a Markdown build, or hosted Markdown
-- [Frameworks](https://draftably.dev/docs/frameworks): React, Solid, Vue and Svelte
-- [Element and viewer](https://draftably.dev/docs/element)
+- [Choose how to embed](https://draftably.dev/docs/embed): React, Solid, Vue, Svelte and plain HTML
+- [How embedding works](https://draftably.dev/docs/embed-concepts) and the
+  [API reference](https://draftably.dev/docs/api-reference)
 - [Editor component](https://draftably.dev/docs/editor-component)
 - [Render SVG](https://draftably.dev/docs/render-svg)
 - [Markdown](https://draftably.dev/docs/markdown): Unified, MDX and markdown-it build pipelines,

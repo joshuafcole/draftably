@@ -31,6 +31,7 @@ import type { NodeLayout, Point, Rect, Side } from '../../model/types';
 import { isDrawTool, MAX_ZOOM, MIN_ZOOM, type DrawTool, type Guide } from './editor';
 import { noteAnchor, noteSide } from '../../model/note';
 import { parseTextId } from './canvas-text';
+import { rootOf } from '../dom-root';
 import { toast } from '../toast';
 import type { EditorPart } from './editor';
 import type { EmphasisPart } from './emphasis';
@@ -283,10 +284,10 @@ export function createPointer(
       special = collapse || resize || waypoint;
     // Leaving the title field commits it before the canvas handles the click.
     if (
-      document.activeElement instanceof HTMLInputElement &&
-      document.activeElement.classList.contains('title-input')
+      rootOf(t).activeElement instanceof HTMLInputElement &&
+      rootOf(t).activeElement!.classList.contains('title-input')
     ) {
-      document.activeElement.blur();
+      (rootOf(t).activeElement as HTMLInputElement).blur();
       s.focusCanvas();
     }
     if (e.button === 1 || s.spaceHeld()) {
@@ -296,6 +297,7 @@ export function createPointer(
     }
     if (link) {
       e.preventDefault();
+      if (s.options.onLink?.({ href: link.openLink!, itemId: objectId })) return;
       if (s.options.openLink) s.options.openLink(link.openLink!);
       else if (/^[a-z][a-z0-9+.-]*:/i.test(link.openLink!))
         window.open(link.openLink!, '_blank', 'noopener');
@@ -739,7 +741,7 @@ export function createPointer(
   }
 
   function finishConnect(g: Gesture, e: PointerEvent | null) {
-    const target = e ? document.elementFromPoint(e.clientX, e.clientY) : null,
+    const target = e ? rootOf(e.target as Node).elementFromPoint(e.clientX, e.clientY) : null,
       node = target?.closest('[data-kind="node"]') as SVGElement | null,
       port = (target?.closest('[data-port]') as SVGElement | null)?.dataset.port as
         Side | undefined;
@@ -786,7 +788,7 @@ export function createPointer(
   function onDoubleClick(e: MouseEvent) {
     if (s.readOnly()) {
       // The canvas holds the pointer during a pan, so the object is also found by position.
-      const under = document.elementFromPoint(e.clientX, e.clientY);
+      const under = rootOf(e.target as Node).elementFromPoint(e.clientX, e.clientY);
       const id =
         targetData(e.target as Element, '[data-kind]')?.id ??
         (under && targetData(under, '[data-kind]')?.id);
@@ -796,7 +798,7 @@ export function createPointer(
     if (s.inlineEditId() || performance.now() < suppressDoubleClickUntil) return;
     const t = e.target as Element,
       // The canvas holds the pointer during a background gesture, so the heading is found by position.
-      under = document.elementFromPoint(e.clientX, e.clientY) ?? t,
+      under = rootOf(t).elementFromPoint(e.clientX, e.clientY) ?? t,
       text = targetData(under, '[data-text]')?.text,
       hint = targetData(under, '[data-text-hint]')?.textHint,
       waypoint = targetData(t, '[data-waypoint]'),

@@ -10,6 +10,7 @@ import {
   html,
   inlineHtml,
   isDraft,
+  MOVED,
   PAGES,
   type Page,
 } from './content';
@@ -85,6 +86,11 @@ export function Docs() {
       // A DSL.md heading anchor, such as the playground's help links, opens its page there.
       const anchor = !next && anchorPath(s);
       if (anchor) return navigate(anchor, { replace: true });
+      const moved = !next && MOVED[s];
+      if (moved) {
+        const hash = location.hash.slice(1);
+        return navigate((hash && anchorPath(hash)) || docsPath(moved), { replace: true });
+      }
       if (!next) {
         document.title = 'No such page · draftably docs';
         return setMissing(true);

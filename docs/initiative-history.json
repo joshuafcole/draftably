@@ -51,5 +51,26 @@
       "Merge the four package proof scripts and the duplicate viewer examples.",
       "Explore items EMB-017 to EMB-020: VS Code preview, custom iframe, Kroki, native host proposals."
     ]
+  },
+  {
+    "title": "Interactive links and emphasis states",
+    "slug": "diagram-emphasis",
+    "outcome": "completed",
+    "retired_at": "2026-11-10",
+    "summary": "Links (a ↗ mark that opens URLs as written, .draft files in the viewer and file paths in the editor from the git root), the config line with link-base and editor, check suggestions for missing files, static SVG links, and emphasis states (state lines, --state, --states panels and the viewer's state chips) shipped in PR 140 to PR 145 on 2026-10-27, with PR 189 and PR 198 after. The hover chip became the mark as the open button, and PR 441 later removed hover tooltips. Reconciled against f1c6a981; the planning files are at 51269c20.",
+    "reason": "Byron approved retirement on 2026-11-10 after a check found the work already shipped while the map still said planned.",
+    "documentation": [
+      "docs/DSL.md",
+      "docs/ARCHITECTURE.md",
+      "docs/CHECKS.md",
+      "skills/draftably/SKILL.md",
+      "tests/fixtures/links.draft"
+    ],
+    "revision": "51269c20",
+    "follow_ups": [
+      "Several diagrams at once (multi-file sheets or boards, overlays) stays a later question from Byron's memo; start a new initiative when wanted.",
+      "Optional: show a link's target without hover tooltips (for example in the status bar on selection), since PR 441 removed the hover tooltip that named it.",
+      "Below the cut line, not planned: editing states in the viewer, captions and playback, tags, per-state camera, a project-wide config file, rewriting SVG links for any output folder."
+    ]
   }
 ]

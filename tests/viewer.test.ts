@@ -1,5 +1,14 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
+// Three cores: the page's worker pool holds two workers (cores − 1).
+vi.hoisted(() =>
+  Object.defineProperty(globalThis.navigator, 'hardwareConcurrency', {
+    value: 3,
+    configurable: true,
+  }),
+);
+import { resetPageShared } from '../src/runtime/page-shared';
 import { mountViewer } from '../src/runtime/viewer';
 import { renderSvg } from '../src/runtime/render';
 import type { RenderOptions } from '../src/runtime/types';
@@ -102,8 +111,11 @@ class ResizeObserverMock {
   disconnect() {
     this.disconnected = true;
   }
-  trigger() {
-    this.callback([], this as unknown as ResizeObserver);
+  trigger(width: number, height: number) {
+    this.callback(
+      [{ contentRect: { width, height } } as ResizeObserverEntry],
+      this as unknown as ResizeObserver,
+    );
   }
 }
 
@@ -112,29 +124,19 @@ Object.defineProperty(window, 'ResizeObserver', { value: ResizeObserverMock, con
 Object.defineProperty(window, 'FontFace', { value: FontFaceMock, configurable: true });
 const fontSet = new FontSetMock();
 Object.defineProperty(document, 'fonts', { value: fontSet, configurable: true });
+/** Answer a held job with a real render. */
+const reply = async (job: (typeof jobs)[number]) =>
+  job.worker.fire('message', {
+    data: { id: job.id, result: await renderSvg(job.source, job.options) },
+  });
 const host = () => {
   const el = document.createElement('div');
   document.body.append(el);
   return el;
 };
-const size = (el: Element, width: number, height: number) =>
-  Object.defineProperty(el, 'getBoundingClientRect', {
-    configurable: true,
-    value: () => ({
-      x: 0,
-      y: 0,
-      top: 0,
-      left: 0,
-      right: width,
-      bottom: height,
-      width,
-      height,
-      toJSON: () => ({}),
-    }),
-  });
-
 afterEach(() => {
   document.body.replaceChildren();
+  resetPageShared();
   jobs.length = 0;
   workers.length = 0;
   ResizeObserverMock.current.length = 0;
@@ -200,34 +202,54 @@ describe('independent viewer lifecycle', () => {
     viewer.destroy();
   });
 
-  it('settles superseded and destroyed work and cleans up worker listeners', async () => {
+  it('shares a pool of two workers, drops superseded work, and settles destroyed work', async () => {
     workerMode = 'hold';
     const element = host(),
-      viewer = mountViewer(element);
+      viewer = mountViewer(element),
+      other = mountViewer(host());
     const old = viewer.update(source);
-    const oldWorker = workers[0];
     const latest = viewer.update(source);
+    void other.update(source);
+    void other.update(source);
     await expect(old).resolves.toMatchObject({ status: 'superseded' });
-    expect(oldWorker.terminated).toBe(true);
-    expect(Array.from(oldWorker.listeners.values()).every(set => set.size === 0)).toBe(true);
-    const active = jobs[jobs.length - 1];
-    const result = await renderSvg(active.source, active.options);
-    active.worker.fire('message', { data: { id: active.id, result } });
+    expect(workers).toHaveLength(2);
+    // Both workers are busy; the other viewer's superseded queued job never reaches a worker.
+    expect(jobs).toHaveLength(2);
+    await reply(jobs[0]);
+    await reply(jobs[1]);
+    await reply(jobs[2]);
     await expect(latest).resolves.toMatchObject({ status: 'committed' });
-    workerMode = 'hold';
+    expect(jobs).toHaveLength(3);
     const controller = new AbortController();
     const aborted = viewer.update(source, { signal: controller.signal });
-    const abortedWorker = workers.at(-1)!;
     controller.abort();
     await expect(aborted).resolves.toMatchObject({ status: 'aborted' });
-    expect(abortedWorker.terminated).toBe(true);
-    expect(Array.from(abortedWorker.listeners.values()).every(set => set.size === 0)).toBe(true);
     const pending = viewer.update(source);
     viewer.destroy();
+    other.destroy();
     await expect(pending).resolves.toMatchObject({ status: 'destroyed' });
-    expect(workers.at(-1)?.terminated).toBe(true);
-    expect(Array.from(workers.at(-1)!.listeners.values()).every(set => set.size === 0)).toBe(true);
+    expect(workers).toHaveLength(2);
     expect(element.childNodes).toHaveLength(0);
+  });
+
+  it('times a job from dispatch, so a job that waited in the queue still draws', async () => {
+    workerMode = 'hold';
+    // Wide margins: a slow CI runner adds tens of milliseconds to each wait.
+    const options = { execution: { mode: 'worker' as const, timeoutMs: 400 } };
+    const viewers = [0, 1, 2].map(() => mountViewer(host(), options));
+    const results = viewers.map(v => v.update(source));
+    expect(jobs).toHaveLength(2);
+    await new Promise(r => setTimeout(r, 250));
+    await reply(jobs[0]);
+    await reply(jobs[1]);
+    expect(jobs).toHaveLength(3);
+    // The third job waited 250 ms and runs 250 more: past 400 ms in all, within it once dispatched.
+    await new Promise(r => setTimeout(r, 250));
+    await reply(jobs[2]);
+    for (const result of results)
+      await expect(result).resolves.toMatchObject({ status: 'committed' });
+    expect(workers.every(w => !w.terminated)).toBe(true);
+    for (const v of viewers) v.destroy();
   });
 
   it('reports worker errors and timeouts without falling back to the main thread', async () => {
@@ -285,11 +307,31 @@ describe('independent viewer lifecycle', () => {
     viewer.destroy();
   });
 
+  it('keeps focus on the same outline item across an update', async () => {
+    const element = host(),
+      viewer = mountViewer(element);
+    await viewer.update(source);
+    const button = (id: string) =>
+      element.querySelector<HTMLButtonElement>(
+        `.draft-viewer__outline button[data-item-id="${id}"]`,
+      );
+    button('b')!.focus();
+    await viewer.update(source.replace('"Store"', '"Orders"'));
+    expect(document.activeElement).toBe(button('b'));
+    expect(document.activeElement?.textContent).toBe('node: Orders');
+    // The focused item is removed: focus moves to the drawing, not to the page.
+    await viewer.update('diagram "viewer" version=1\nnode a "API"\n');
+    expect(document.activeElement).toBe(element.querySelector('.draft-viewer__viewport'));
+    viewer.destroy();
+  });
+
   it('rejects blocked embedded faces and keeps the last committed view', async () => {
     const element = host();
     const viewer = mountViewer(element);
     expect((await viewer.update(source)).status).toBe('committed');
     const prior = element.querySelector('svg');
+    // A new page: the shared faces are gone, and the font source is now blocked.
+    resetPageShared();
     fontSet.faces.clear();
     fontMode = 'blocked';
     const result = await viewer.update(source.replace('"Store"', '"Archive"'));
@@ -305,21 +347,34 @@ describe('independent viewer lifecycle', () => {
   it('fits a hidden host after resize without recompiling and preserves camera scale', async () => {
     const element = host(),
       viewer = mountViewer(element);
-    const viewport = element.querySelector('.draft-viewer__viewport')!;
-    size(viewport, 0, 0);
     expect((await viewer.update(source)).status).toBe('committed');
     expect(viewer.getCamera().centerX).toBe(0);
     const count = workers.length;
-    size(viewport, 600, 400);
-    ResizeObserverMock.current.at(-1)!.trigger();
+    ResizeObserverMock.current.at(-1)!.trigger(600, 400);
     expect(viewer.getCamera().centerX).toBeGreaterThan(0);
     expect(viewer.getCamera().zoom).toBeLessThanOrEqual(1);
     expect(workers).toHaveLength(count);
     const camera = { centerX: 40, centerY: 20, zoom: 0.37 };
     viewer.setCamera(camera);
-    size(viewport, 300, 200);
-    ResizeObserverMock.current.at(-1)!.trigger();
+    ResizeObserverMock.current.at(-1)!.trigger(300, 200);
     expect(viewer.getCamera()).toEqual(camera);
+    viewer.destroy();
+  });
+
+  it('runs a fit asked for before the viewport has a size, and sends one camera event a frame', async () => {
+    const viewer = mountViewer(host());
+    const events: string[] = [];
+    viewer.on('camera', e => events.push(e.reason));
+    expect(viewer.fit()).toBe('pending');
+    expect((await viewer.update(source)).status).toBe('committed');
+    ResizeObserverMock.current.at(-1)!.trigger(600, 400);
+    expect(viewer.getCamera().centerX).toBeGreaterThan(0);
+    expect(viewer.fit()).toBe('unchanged');
+    expect(viewer.reveal('nope')).toBe('missing');
+    for (const zoom of [0.5, 0.6, 0.7, 20]) viewer.setCamera({ centerX: 1, centerY: 2, zoom });
+    expect(viewer.getCamera().zoom).toBe(8);
+    await new Promise(r => requestAnimationFrame(() => r(null)));
+    expect(events).toEqual(['api']);
     viewer.destroy();
   });
 });

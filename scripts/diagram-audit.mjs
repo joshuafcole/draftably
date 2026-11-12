@@ -203,10 +203,17 @@ function parseLabels(svg) {
     const c = center(label);
     label.ink = { x: c.x - w / 2, y: c.y - size / 2, w, h: size };
   }
-  // The label's own path is the last <path d="M…"> before it in document order.
+  // The label's own path is the line in the edge's group, which holds the line and its label
+  // (the halo paths before it, where the line breaks a frame, have no line cap). A line with
+  // `head=none` has no end marker, so the last marked path before the label would be another
+  // edge's.
   for (const label of labels) {
-    const before = svg.slice(0, label.at);
-    const d = [...before.matchAll(/<path d="(M[^"]+)"[^>]*marker-end/g)].pop()?.[1];
+    const before = svg.slice(0, label.at),
+      group = before.slice(before.lastIndexOf('<g data-id="'));
+    label.edge = group.match(/^<g data-id="([^"]+)"/)?.[1];
+    const d =
+      group.match(/<path d="(M[^"]+)"[^>]*stroke-linecap/)?.[1] ??
+      [...before.matchAll(/<path d="(M[^"]+)"[^>]*marker-end/g)].pop()?.[1];
     label.path = d
       ? [...d.matchAll(/(-?[\d.]+),(-?[\d.]+)/g)].map(p => ({ x: +p[1], y: +p[2] }))
       : [];
@@ -936,8 +943,13 @@ function measure(file) {
     // as on it; for a label beside a level line the two measures agree.)
     const dist = Math.min(...segs(l.path).map(sg => rectSegDist(l, sg)));
     if (dist > l.h / 2) note('label-detached', `"${l.text}" ${Math.round(dist)}px from its edge`);
+    // Beside its line: clear of it, though near. Labels read as one set when every line runs
+    // through its own (FEEL.md), so one that steps aside is a mild defect.
+    else if (dist > 0.5)
+      note('label-beside-line', `"${l.text}" ${Math.round(dist)}px off its edge`);
     // Another edge running under the label.
     for (const r of routes) {
+      if (r.id === l.edge) continue;
       if (
         r.points[0] &&
         l.path[0] &&
@@ -1157,6 +1169,7 @@ function measure(file) {
       'uneven-group-gap',
       'label-through-text',
       'labels-too-close',
+      'label-beside-line',
       'empty-area',
       'wide-aspect',
     ].map(k => [k, count(k)]),
@@ -1202,6 +1215,7 @@ function measure(file) {
     'uneven-group-gap': 1,
     'label-through-text': 6,
     'labels-too-close': 2,
+    'label-beside-line': 1,
     'empty-area': 3,
     'wide-aspect': 2,
   };
@@ -1666,7 +1680,8 @@ const lines = [
       c['label-detached'] +
       c['label-on-group-border'] +
       c['label-through-text'] +
-      c['labels-too-close'];
+      c['labels-too-close'] +
+      c['label-beside-line'];
     const route =
       c['shared-segment'] +
       c['edge-through-group'] +

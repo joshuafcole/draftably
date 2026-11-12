@@ -1,6 +1,6 @@
 {
   "name": "@draftably/editor",
-  "version": "0.2.0",
+  "version": "0.4.0",
   "description": "The Draftably diagram editor: drag boxes and lines, and get the .draft source back.",
   "license": "MIT",
   "type": "module",

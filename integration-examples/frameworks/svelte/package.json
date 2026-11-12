@@ -7,8 +7,8 @@
     "build": "vite build"
   },
   "dependencies": {
-    "@draftably/svelte": "^0.1.0",
-    "@draftably/runtime": "^0.1.0",
+    "@draftably/svelte": "^0.4.0",
+    "@draftably/runtime": "^0.4.0",
     "svelte": "5.57.3"
   },
   "devDependencies": {

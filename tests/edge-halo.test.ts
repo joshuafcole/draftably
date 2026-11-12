@@ -49,10 +49,23 @@ edge edge_4 Api -> Db ""
 edge edge_5 Worker -> Queue "" head=circle tail=circle
 edge edge_6 Api -> Admin "" head=cross tail=cross
 layout root flow direction=right
+pin Client x=0 y=0
+pin Api x=400 y=0
+pin Cache x=800 y=0
+pin Legacy x=800 y=100
+pin Db x=800 y=200
+pin Worker x=304 y=320
+pin Queue x=496 y=320
+pin Admin x=400 y=480
 `),
       ),
       { vg, rects } = visibleRects(doc),
-      ids = computeRoutes(doc, vg, rects, { previous: [] }).routes.map(r => r.id);
+      routes = computeRoutes(doc, vg, rects, { previous: [] }).routes,
+      ids = routes.map(r => r.id);
+    // The pins make API → Admin run straight down through the short gap from Worker to Queue.
+    expect(
+      haloPath(routes[ids.indexOf('edge_5')].points, [routes[ids.indexOf('edge_6')].points], []),
+    ).not.toBe('');
     expect(ids.indexOf('edge_5')).toBeGreaterThan(ids.indexOf('edge_6'));
   });
 });

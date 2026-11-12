@@ -22,6 +22,8 @@ export function assertOptions(options: RenderOptions) {
     throw new TypeError('state must be a string or null.');
   if (options.includeSource !== undefined && typeof options.includeSource !== 'boolean')
     throw new TypeError('includeSource must be a boolean.');
+  if (options.colorScheme !== undefined && !['light', 'dark', 'auto'].includes(options.colorScheme))
+    throw new TypeError('colorScheme must be light, dark or auto.');
   const links = options.links;
   if (links !== undefined) {
     if (!links || !['none', 'safe'].includes(links.mode))

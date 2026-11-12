@@ -1,5 +1,5 @@
 import { PHASE_TAB } from '../../cli/svg';
-import { resolveAppearance, swatchFor, type ResolvedAppearance } from '../../model/appearance';
+import { panelSwatch, resolveAppearance, type ResolvedAppearance } from '../../model/appearance';
 import type { DiagramFrame } from '../../model/frame';
 import { measureText } from '../../model/fonts';
 import { NOTE_PAD } from '../../model/note';
@@ -36,7 +36,7 @@ const linkBoxes = (lines: Run[][], x: number, y: number, lineHeight: number) =>
 export function textBoxes(doc: Diagram, frame: DiagramFrame): TextBox[] {
   const look = resolveAppearance(doc.appearance),
     type = look.annotation,
-    panel = swatchFor(look, 'slate', 50, 'group').fill,
+    panel = panelSwatch(look).fill,
     out: TextBox[] = [];
   // A note the drawn state leaves out can't be clicked; the others keep their index as their id.
   frame.notes.forEach((n, i) => {

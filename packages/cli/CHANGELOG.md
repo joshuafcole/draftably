@@ -1,5 +1,43 @@
 # draftably
 
+## 0.13.0
+
+### Minor Changes
+
+- f98d285: Draw group members that inherit the group's color as pale cards, and key their legend swatch to match
+- e539e30: Draw the lines after a node title's first line break as a smaller, muted detail line
+- 7348833: Give the boxes in a column layout the widest one's width, so the column's edges line up
+- e46dd29: `size id width= height=auto min-height=N` puts a floor under a node's auto height, for a host that puts more than the title in a node. It works for boxes, diamonds and `cells` members, and an editor resize that changes only the width keeps `height=auto` and the floor. The editor's scene draws its lines unfilled and its labels centred without the editor's stylesheet, and its link marks no longer load the editor's state.
+
+### Patch Changes
+
+- 34c0845: Keep near-fitting group titles on one line, and stop a dashed side input from ranking a box a solid edge already places
+- c0f7e7c: Nest the ports of lines that share a box side, so a fan in or out does not cross itself
+- 244f9e3: Correct the SVG link docs: exported links show no tooltip
+- 0f0df75: Draw notes and sequence panels on a dark panel in dark themes, so their text reads
+- 54a5098: Keep each edge label on its own line, sliding along it first, and step beside it only when another line or label would crowd it
+
+## 0.12.0
+
+### Minor Changes
+
+- 544be76: `layout` and `route` from `@draftably/runtime/graph` take React Flow and Svelte Flow graphs under `reactFlow` and `svelteFlow`, and return them in the same shape: nodes with positions relative to their group and sizes, edges with routed paths and label boxes in `data.draftably`. `route` routes the lines again where the nodes are now, so lines follow a dragged node.
+- dbf251a: Add drop-ins for other layout libraries to `@draftably/runtime/graph`: `DraftablyELK` takes and returns ELK JSON like elkjs's `ELK` class, `dagreLayout(g)` lays out a graphlib graph in place like `dagre.layout(g)`, and `draftablyLayout` registers a Cytoscape.js layout. `layoutSync` lays out without a promise, and `fold: 'never'` keeps a long drawing in one row.
+- f170a08: A large `flow` (40 or more forward lines) now lays out and routes like a layered layout: each line that skips ranks gets its own corridor between the boxes of the ranks it passes, and every forward line follows a planned route, out of the bottom (or right) of its source and along its own track in each gap. `layout()` on a new 100-node graph with 127 lines takes about 20 ms instead of 280 ms, with fewer crossings and bends, and full routing of the same graph about 0.1 s instead of 2.6 s. A flow whose ranks cross more than twice per line keeps the router's searched routes, which cross less there. Smaller diagrams draw as before.
+- 9260ac2: `flow` lines each object up with what it connects to in the rank before, and widens a gap between ranks until each line that turns in it has its own lane. Trees and dense graphs draw with far fewer crossings and bends, and route several times faster: a 63-node tree has no crossings and lays out in about 0.3 s instead of 5 s. The router's grid search is also about a third faster, with the same routes.
+
+### Patch Changes
+
+- a998382: `draftably pdf` and the viewer's PDF export no longer start Chrome. PDFKit draws each page from the same SVG, with the bundled fonts, selectable text, working links, bookmarks and attached sources, so PDF export needs no browser. A contents page now holds only the rows that fit, so `--page fit` and `--page slide` covers no longer cut off the last entries.
+- 2f625b2: Route lines faster, with the same routes as before. The router skips line pairs that are too far apart to meet, compares segments as plain numbers, scores a candidate against other lines only while it can still win, and counts totals once per pass. A 100-node chain routes about 7 times faster, a 60-node tree and a 100-node DAG about 5 times faster, and a node with 16 children about 2.4 times faster.
+- 6a10c1e: PNG export (`inspect --png`, `compare --png`, `--clipboard` and `vary`) no longer starts Chrome. The CLI draws PNG files itself with resvg and the bundled fonts, so the export works with no browser installed and no Chrome window flashes open.
+- 7259d8c: `flow` orders the objects in each rank so fewer lines cross. It sweeps down and up the ranks and swaps neighbours while a swap removes crossings, as layered layouts do. A 100-node graph with 127 lines now draws 77 crossings instead of 113.
+- c3e8f25: New app icon: two nodes joined by an elbow edge, which reads clearly at favicon size.
+- 1ff30f9: The router skips detours that must cross other lines sooner. It counts the crossings a detour cannot avoid before it scores the detour, so `layout()` on a new 100-node graph with 127 lines takes about 30% less time again, with the same lines.
+- e8754d1: The router draws the same lines faster. It tries candidate paths best first, builds a side's detours only when they can still win, and stops scoring a path once it has lost. `layout()` on a new 100-node graph with 127 lines takes about 40% less time.
+- 3eba208: Route fresh graphs faster with the same drawings. The router reuses crossing bounds for each port pair and counts crossings once per search grid line.
+- b4a84ab: `layout({ svelteFlow })` keeps each node's CSS `style` string and takes Svelte Flow's own `Node` and `Edge` types. Before, it spread a style string into an object, and Svelte Flow lost the node's style. The `@draftably/react` README now links to the drop-in layout guide.
+
 ## 0.11.0
 
 ### Minor Changes

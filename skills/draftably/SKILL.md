@@ -1,6 +1,6 @@
 ---
 name: draftably
-description: Create, edit, check and render draftably `.draft` diagram files — a readable text DSL for architecture, flow, pipeline, event and container diagrams with automatic layout. Use when the user asks for a diagram, an architecture or system drawing, a flowchart, or mentions a `.draft` file or draftably.
+description: Create, edit, check and render draftably `.draft` diagram files — a readable text DSL for architecture, flow, pipeline, event and container diagrams with automatic layout — and embed them in web apps. Use when the user asks for a diagram, an architecture or system drawing, a flowchart, mentions a `.draft` file or draftably, or wants interactive diagrams or a diagram editor in React, Solid, Vue, Svelte or plain HTML.
 ---
 
 # draftably diagrams
@@ -93,7 +93,9 @@ engine=layered,flow --try rank-gap` sweeps exact values (12 at most; `same as v1
 ## Syntax
 
 One statement per line. Indentation means nothing. Strings use JSON double quotes; escape an
-inner quote as `\"` (`node n "Says \"hi\""`), a backslash as `\\`, and a line break as `\n`. IDs match
+inner quote as `\"` (`node n "Says \"hi\""`), a backslash as `\\`, and a line break as `\n`. In a node
+title, the text after the first `\n` draws as a smaller, muted detail line under the name
+(`node gh "GitHub\nopen PRs, CI"`), so keep the name first and short. IDs match
 `[A-Za-z_][A-Za-z0-9_.-]*` and are unique across nodes and groups (edges have their own IDs).
 References may point to later lines. Comments start with `#` or `//`.
 
@@ -156,11 +158,15 @@ layout services row gap=56
 `scope` is `root` or a group ID. Colors: `auto` (inherit the family of the nearest colored
 group), `primary` and `secondary` (the theme's accents), `slate`, `stone`, `blue`, `sky`, `teal`,
 `mint`, `green`, `amber`, `orange`, `red`, `rose`, `violet`. `shade=` picks `50` (palest) to `950`
-(darkest); a colored node defaults to `500`. Without `layout` lines, `root` uses `flow gap=48`
-and groups use `column gap=24`.
+(darkest); a colored node defaults to `500`, and a member that inherits its group's family
+draws as a pale card (`50`) on the group's tint. Without `layout` lines, `root` uses `flow gap=48`
+and groups use `column gap=24`. A `column` gives its boxes the widest one's width, so you rarely
+need `size` lines to line them up.
 
 Themes: `drafting` (the default), `fieldnotes`, `signal` (color-blind-safe), `ink`, `blueprint`
-(dark). A `theme` line may also set `padding-x=`, `padding-y=`, `radius=`, `title-font=sans|serif|mono` and
+(dark). The default theme, with no `theme` line or with `theme drafting`, follows a dark page
+(one whose `color-scheme` allows dark; a page that declares none stays light). Another theme, a
+`theme-color` line or a color on the `theme` line keeps its colors on every page. A `theme` line may also set `padding-x=`, `padding-y=`, `radius=`, `title-font=sans|serif|mono` and
 `annotation-font=`. Padding and fonts change node sizes and so the layout; colors never move
 anything. Hex colors go in double quotes (`fill="#405D48"`), since `#` starts a comment.
 
@@ -284,7 +290,7 @@ content area.
 | `near id ref side=right\|left\|above\|below gap=28` | Place beside a sibling, or beside the sibling group holding `ref`, lined up with `ref`. `strength=required` enforces it.                                                                                                |
 | `order scope id1 id2 ...`                           | Preferred order of a scope's children.                                                                                                                                                                                  |
 | `align x\|y id1 id2 ...`                            | Align sibling centers. `strength=required` locks them.                                                                                                                                                                  |
-| `size id width=164 height=56`                       | Requested node size; `height=auto` fits the title; a diamond stays square.                                                                                                                                              |
+| `size id width=164 height=56`                       | Requested node size; `height=auto` fits the title, `min-height=` sets a floor under it; a diamond stays square.                                                                                                         |
 | `nudge id dx= dy=`                                  | Offset from the automatic position.                                                                                                                                                                                     |
 | `pin id x= y=`                                      | Exact position; layout never moves it. Use sparingly.                                                                                                                                                                   |
 | `stay id x= y= weight=8`                            | Soft position. The viewer's tools write these; leave them.                                                                                                                                                              |
@@ -303,6 +309,8 @@ content area.
   and `soft-overlap` when its tint covers an object outside it; soften leaf groups first.
 - Keep labels short (two to four words). Put detail in edge labels or comments, not in boxes.
 - Use `kind=async` for events, queues and background work, so sync and async paths read apart.
+  A dashed edge into a box that a solid edge also reaches does not rank it, so a dashed side
+  input never pushes its target past the boxes that call it.
 - Use `directed=false` on an `edge` for an undirected connection. Keep the `->` endpoint
   separator; no arrowhead is drawn. It does not impose a flow/swim-lane rank, but layout engines
   may use it as adjacency. Omission or `directed=true` means the usual directed edge.
@@ -325,15 +333,17 @@ content area.
   - Say what each color means with one `legend family "meaning"` line per accent color; the
     viewer and exports draw them as a key under the drawing. A key that names some colors and
     not others misleads, so give every accent color a row (`check` warns `legend-missing`). The
-    swatch is shade 500 unless the line sets `shade=`, so match it to the nodes' shade; `check`
-    warns when no node of that family uses it.
+    swatch draws what the family's nodes draw unless the line sets `shade=`: 500 when a node
+    names the family, the pale member card when all of them inherit it. `check` warns when no
+    node of that family uses the swatch's shade.
   - When dashed (`kind=async`) and solid lines both mean something, say what with
     `legend line dashed "meaning"` and `legend line solid "meaning"` (`check` notes
     `legend-lines` when they are missing).
   - Avoid red next to green and complementary pairs side by side (red and blue, orange and blue)
     unless they encode opposites.
-  - Color the outer group and let members inherit (`color=auto`); nested groups of one family
-    are drawn in stepped shades. Never give a member its container's family at a pale shade.
+  - Color the outer group and let members inherit (`color=auto`): members draw as pale cards on
+    the group's tint, and a node that names a color stands out at 500. Nested groups of one
+    family are drawn in stepped shades. Never give a member its container's family at a pale shade.
   - `check` reports `many-colors` and `color-matches-container`; fix both before handing back.
 - To show a change, write one file with both versions merged and mark only the lines that
   differ: `+` added, `-` removed, `~` changed (`was="old label"`, `was-shape=circle`,
@@ -390,6 +400,75 @@ content area.
 - Always run `check` after editing and fix what it reports before handing the file back.
 - Not supported yet: views, checkpoints, edge bends, label positions and images. `view`,
   `snapshot` and `box` statements are errors.
+
+## Embed diagrams in an app
+
+When the user wants diagrams in a web app, not a file, pick the route by who draws:
+
+- **Draftably draws** (pan, zoom, editing, the user's components on nodes): the
+  `<draft-diagram>` and `<draft-editor>` elements, or the React, Solid, Vue and Svelte components
+  around them.
+- **The app draws with its own components:** `layout()` from `@draftably/runtime/graph` returns
+  boxes and routed lines as data.
+- **No runtime:** `renderSvg()` from `@draftably/runtime`, or `draftably inspect f.draft --svg`.
+
+Install the framework package and the runtime together. The app imports `host.css` itself, and
+pnpm does not let it import a package it does not list:
+
+```sh
+pnpm add @draftably/react @draftably/runtime   # or solid, vue, svelte
+```
+
+```tsx
+import '@draftably/runtime/host.css'; // once per page: heights, slot rules, pointer for marked content
+import { DraftDiagram } from '@draftably/react';
+import { DraftEditor } from '@draftably/react/editor';
+
+<DraftDiagram source={source} label="Checkout" onItemactivate={({ id }) => select(id)} />
+<DraftEditor source={source} onChange={({ source }) => setSource(source)} data-theme="dark" />
+```
+
+Rules that save a debugging round:
+
+- **Vite 5–7** needs `optimizeDeps: { exclude: ['@draftably/runtime', '@draftably/editor'] }`, or
+  the workers 404 in development. Vite 8 and production builds need nothing. With React, add
+  `include: ['@draftably/react', '@draftably/react/editor']`.
+- Event props are `on` plus the lowercase event name: `onItemactivate`, `onContextmenu`
+  (`@itemactivate` in Vue, `onitemactivate` in Svelte). Each receives the event's `detail`.
+  `onLink` and `onContextmenu` also get `preventDefault()`. Any other attribute, such as
+  `data-theme`, goes to the element.
+- Diagrams follow the page's `color-scheme`: a page that declares none draws light; add
+  `:root { color-scheme: light dark }` to follow the user's setting, or `color-scheme: light` on
+  the element to keep one light.
+- Content on a node: a child marked `data-draft-slot="body:api"` fills node `api`;
+  `overlay:api` sits over it at screen size. Mark buttons and fields `data-draft-input` so they
+  take the pointer. Layout never measures this content: give the node room in the source with
+  `size api width=220 height=auto min-height=120`.
+- The element mounts in a microtask. `el.viewer` and `el.editor` are `undefined` until then:
+  `await el.updateComplete` first. `status` is `loading`, `ready` or `error`; a later failed
+  update keeps `ready` and the last drawing, so read the `diagnostics` event.
+- Server rendering: `renderSvg(source, { target: 'inline', idPrefix, colorScheme: 'auto' })` and
+  pass its `svg` to the component. `'auto'` writes both schemes as `light-dark()` colors, so a dark
+  page shows the fallback dark. In a Next.js server component, import it from
+  `@draftably/react/server`.
+- Debug in the page with `el.viewer.geometry()`, `el.viewer.getCamera()` and the
+  `draft-diagnostics` event. `window.diagramStudio` exists only on `draftably open` pages.
+
+Without a bundler, serve each package's `dist` folder from the page's own origin and load the
+element with a module script:
+
+```html
+<link rel="stylesheet" href="/draftably/runtime/dist/host.css" />
+<script type="module" src="/draftably/runtime/dist/element.js"></script>
+<draft-diagram source='node web "Web"&#10;node api "API"&#10;edge e1 web -> api'></draft-diagram>
+```
+
+A module worker must come from the page's origin. From a CDN, the element says its render worker
+could not start: set `el.options = { execution: { mode: 'main' } }` in the same task as the import,
+which compiles on the main thread (fine for small diagrams), or serve `dist` yourself.
+
+The embedding docs have a page per framework with a complete app, SSR and strict-CSP code:
+https://draftably.dev/docs/embed.
 
 The full language guide ships with the CLI package as `DSL.md`: `draftably docs` lists its
 sections and `draftably docs legend` prints one. The package's `examples/` folder holds more than

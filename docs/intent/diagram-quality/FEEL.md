@@ -40,6 +40,9 @@ and the tool responds the instant you touch it.
   have gone below this other one" means the crossing was not needed.
 - **Labels sit clear of boxes.** An edge label tight against a node is hard to read; move it
   along the line.
+- **A label sits on its own line.** The line runs through it, at a corner or mid-run, the same
+  for every label. A label slides along its line before it steps beside it, and steps beside it
+  only when another line would run through it. Half on and half beside reads as two systems.
 
 ## Placement
 

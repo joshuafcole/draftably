@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Both handles</title>
+    <style>
+      body {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+        height: 100vh;
+        margin: 0;
+        padding: 12px;
+        box-sizing: border-box;
+      }
+      .host {
+        display: flex;
+        min-height: 0;
+        border: 1px solid #ccc;
+      }
+      #viewer {
+        display: block;
+      }
+      #hidden {
+        display: none;
+        height: 200px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="host" id="viewer"></div>
+    <div class="host" id="editor"></div>
+    <div id="hidden"></div>
+    <script type="module" src="./handles.ts"></script>
+  </body>
+</html>

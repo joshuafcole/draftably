@@ -3,7 +3,7 @@
  * Performance benchmark: CLI commands and viewer interactions on five generic diagrams, against
  * two budgets: interactive actions under 200 ms and document load under 1 s.
  *
- * Usage: pnpm bench [--runs 3] [--only cli|ui] [--files xl,l] [--out tmp/bench/latest.json]
+ * Usage: pnpm bench [--runs 3] [--only cli|ui|host] [--files xl,l] [--out tmp/bench/latest.json]
  *                   [--compare tmp/bench/before.json]
  *
  * Viewer times run from input until the drawing is settled: not compiling, layout idle, saved,
@@ -68,6 +68,12 @@ execFileSync(process.execPath, [path.join(root, 'scripts/draftably.mjs'), '--ver
   stdio: 'ignore',
 });
 const cli = path.join(root, 'dist-cli/main.js');
+
+if (only === 'host') {
+  // The host contract budgets have their own script; `pnpm bench:host` runs it alone.
+  execFileSync('pnpm', ['bench:host', '--runs', String(runs)], { cwd: root, stdio: 'inherit' });
+  process.exit(0);
+}
 
 if (only !== 'ui') {
   const time = args => {
@@ -401,3 +407,7 @@ function helpers() {
     return Math.max(0, ...gaps);
   };
 }
+
+// The host contract budgets run after the CLI and viewer rows.
+if (!only)
+  execFileSync('pnpm', ['bench:host', '--runs', String(runs)], { cwd: root, stdio: 'inherit' });

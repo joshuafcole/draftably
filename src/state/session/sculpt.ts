@@ -19,6 +19,7 @@ import { clamp, clone } from '../../model/geometry';
 import type { Diagram, NodeGeometry, Point } from '../../model/types';
 import { CancelledError, startEngineTask, type RunningTask } from '../../lib/engine-tasks';
 import { downloadText, fileName } from '../../lib/svg-export';
+import { eventTarget } from '../dom-root';
 import { shortcutKey } from '../keys';
 import { toast } from '../toast';
 import type { DocumentPart } from './document';
@@ -824,7 +825,7 @@ export function createSculpt(s: DocumentPart & LayoutPart & ActionsPart & Editor
   function sculptKey(e: KeyboardEvent): boolean {
     const key = shortcutKey(e),
       mod = e.metaKey || e.ctrlKey,
-      target = e.target as HTMLElement,
+      target = eventTarget(e) as HTMLElement,
       onSlider = target.id === 'timeline-slider';
     if (key === 'escape') {
       if (cancelStroke()) return (e.preventDefault(), true);

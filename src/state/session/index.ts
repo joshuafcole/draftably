@@ -121,6 +121,8 @@ export interface SessionOptions {
   drag?: DragTranslation;
   /** Give each new object and connection its id; without it ids are made from labels. */
   newId?: (request: NewIdRequest) => string;
+  /** A link was pressed, before it opens. Return true to stop it opening. */
+  onLink?: (link: { href: string; itemId: string | undefined }) => boolean;
 }
 
 export function createDiagramSession(options: SessionOptions = {}) {

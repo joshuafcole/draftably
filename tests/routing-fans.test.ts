@@ -44,3 +44,47 @@ describe('fans on facing sides', () => {
     expect(routes.map(r => r.toSide)).toEqual(['left', 'left', 'left']);
   });
 });
+
+describe('fan order on a shared side', () => {
+  it('nests a fan-in whose last line would take a middle port', () => {
+    // From a review of five PRs: three lines enter one short side, and the line from the
+    // farthest box is routed last. Its port has to sit past the others, or it crosses one.
+    const into = (id: string, from: string, to: string, label: string) => ({
+      id,
+      from,
+      to,
+      label,
+      directed: true,
+      cfg: { flow: 'right' as const },
+    });
+    const input: RouteInput = {
+      nodes: [
+        { ...box('pr498', 24, 48, 164, 72), parentId: 'prs' },
+        { ...box('pr499', 24, 144, 164, 72), parentId: 'prs' },
+        { ...box('pr502', 24, 240, 164, 56), parentId: 'prs' },
+        { ...box('pr500', 24, 320, 164, 72), parentId: 'prs' },
+        { ...box('small', 392, 64, 164, 56), parentId: 'lands' },
+        { ...box('api', 392, 144, 164, 72), parentId: 'lands' },
+        { ...box('camera', 392, 240, 164, 56), parentId: 'lands' },
+      ],
+      groups: [
+        { id: 'prs', x: 0, y: 0, w: 212, h: 416, collapsed: false, titleWidth: 127 },
+        { id: 'lands', x: 368, y: 16, w: 245, h: 384, collapsed: false, titleWidth: 189 },
+      ],
+      edges: [
+        into('v498', 'pr498', 'small', 'merge'),
+        into('v499', 'pr499', 'small', 'merge'),
+        into('v502a', 'pr502', 'small', 'close; land fixes'),
+        into('v502b', 'pr502', 'api', 'own-tree drawing [2]'),
+        into('v500', 'pr500', 'camera', 'rebuild on the handle'),
+      ],
+    };
+    const { routes, report } = RouteLab.compute(input, { standoff: 20 });
+    expect(report.crossings).toBe(0);
+    const order = routes
+      .filter(r => r.to === 'small')
+      .sort((a, b) => a.toOffset - b.toOffset)
+      .map(r => r.id);
+    expect(order).toEqual(['v498', 'v499', 'v502a']);
+  });
+});

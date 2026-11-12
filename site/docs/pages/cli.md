@@ -86,19 +86,19 @@ draftably inspect architecture.draft --png architecture.png --scale 2
 Prints the canonical geometry of every node and route, or draws the diagram. SVG and PNG output
 embed the source.
 
-| Option             | Effect                                                                                   |
-| ------------------ | ---------------------------------------------------------------------------------------- |
-| `--json`           | Print the geometry on one line.                                                          |
-| `--hints`          | With `--json`, add the raw position of every node a refinement moved.                    |
-| `--metrics`        | Add the measurements `vary` uses.                                                        |
-| `--svg`            | Print an SVG drawing.                                                                    |
-| `--png <out.png>`  | Save a PNG. Needs Chrome, Chromium or Edge.                                              |
-| `--clipboard`      | Put a PNG and the SVG text on the clipboard. macOS only. Needs Chrome, Chromium or Edge. |
-| `--scale N`        | PNG scale, 2 by default.                                                                 |
-| `--max-width <px>` | Lower the scale so the PNG is at most this wide.                                         |
-| `--state <id>`     | Draw one [emphasis state](#emphasis-states).                                             |
-| `--states`         | Draw every state as its own aligned panel.                                               |
-| `--no-source`      | Don't embed the source.                                                                  |
+| Option             | Effect                                                                |
+| ------------------ | --------------------------------------------------------------------- |
+| `--json`           | Print the geometry on one line.                                       |
+| `--hints`          | With `--json`, add the raw position of every node a refinement moved. |
+| `--metrics`        | Add the measurements `vary` uses.                                     |
+| `--svg`            | Print an SVG drawing.                                                 |
+| `--png <out.png>`  | Save a PNG.                                                           |
+| `--clipboard`      | Put a PNG and the SVG text on the clipboard. macOS only.              |
+| `--scale N`        | PNG scale, 2 by default.                                              |
+| `--max-width <px>` | Lower the scale so the PNG is at most this wide.                      |
+| `--state <id>`     | Draw one [emphasis state](#emphasis-states).                          |
+| `--states`         | Draw every state as its own aligned panel.                            |
+| `--no-source`      | Don't embed the source.                                               |
 
 ## pdf
 
@@ -107,8 +107,8 @@ draftably pdf architecture.draft -o architecture.pdf
 draftably pdf diagrams/ -o diagrams.pdf --title "System notes" --page letter
 ```
 
-Saves diagrams as one vector PDF, with one diagram per page and its heading and key. Needs Chrome,
-Chromium or Edge. A folder adds each `.draft` in it, in name order. It stops on a file with errors.
+Saves diagrams as one vector PDF, with one diagram per page and its heading and key. A folder adds
+each `.draft` in it, in name order. It stops on a file with errors.
 Each file's source is attached, so `check`, `extract` and `open` can read the PDF.
 
 | Option          | Effect                                                                                                                          |
@@ -268,16 +268,17 @@ Use `draftably open --status` to see which folders and versions are running.
 
 ### PNG or PDF output fails
 
-`inspect --png`, `inspect --clipboard`, `compare --png`, `pdf` and `vary` need a browser to draw.
-With no browser they stop with `PNG and PDF output need Chrome or Chromium.` Install Chrome,
-Chromium or Edge, or point `CHROME_PATH` at one:
+PNG and PDF output need no browser. PNG output uses resvg, and `pdf` uses PDFKit. Both use the
+fonts that come with Draftably.
 
-```sh
-CHROME_PATH=/path/to/chrome draftably inspect architecture.draft --png architecture.png
-```
+resvg loads a native package for your system, such as `@resvg/resvg-js-linux-x64-gnu`. The package
+manager installs it as an optional dependency. If the install skipped optional dependencies,
+`inspect --png`, `compare --png` and `vary` stop with `Cannot find module '@resvg/resvg-…'`.
+Install again without `--no-optional` or `--omit=optional`. `inspect --svg` and `pdf` do not use
+resvg.
 
-`spawn … ENOENT` means that `CHROME_PATH` names a file that does not exist. `inspect --svg` needs no
-browser.
+`--clipboard works on macOS only.` means that you used `--clipboard` on another system. Use `--png`
+or `--svg` to write a file.
 
 ### Port 5180 is busy
 

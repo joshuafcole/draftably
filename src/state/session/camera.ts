@@ -11,6 +11,7 @@ import { createEffect, on } from 'solid-js';
 import { clamp, rectUnion } from '../../model/geometry';
 import { drawnRect } from './overlay';
 import type { Camera, Rect } from '../../model/types';
+import type { CameraReason } from '../../runtime/camera';
 import type { DocumentPart } from './document';
 import type { EmphasisPart } from './emphasis';
 import { MAX_ZOOM, MIN_ZOOM, type EditorPart } from './editor';
@@ -22,6 +23,13 @@ import type { ScenePart } from './scene';
  * reveals (the first fit once the canvas has a size, a fit after a layout or an opened diagram).
  */
 export type CameraMover = 'user' | 'host' | 'fit';
+
+/**
+ * Who made a move, from its reason: `api` is the host's, `fit` and `resize` the editor's own, and
+ * `restore` (an undo, a cancelled drag) the reader's.
+ */
+export const moverOf = (reason: CameraReason): CameraMover =>
+  reason === 'api' ? 'host' : reason === 'fit' || reason === 'resize' ? 'fit' : 'user';
 
 export interface FitOptions {
   /** Zoom no further out than this; the objects may then not all fit. MIN_ZOOM by default. */
@@ -49,7 +57,7 @@ export function createCamera(s: DocumentPart & ScenePart & EmphasisPart & Editor
   /** Move the camera for the host. Reports `by: 'host'`; returns whether it moved. */
   function moveCamera(next: Camera) {
     if (sameCamera(next, s.doc.camera)) return false;
-    s.setCamera(next, 'host');
+    s.setCamera(next, 'api');
     return true;
   }
 

@@ -1,26 +1,41 @@
 /** `<DraftEditor>` for Vue 3: drag boxes and lines, and get the `.draft` source back. */
-import type { DraftEditorElement } from '@draftably/editor/element';
-import { defineComponent, h, onBeforeUnmount, onMounted, ref } from 'vue';
+import type { DraftEditorElement, EditorOptions } from '@draftably/editor/element';
+import { defineComponent, h, onMounted, ref, type PropType } from 'vue';
+import { hostEmits, listenHostEvents } from './events.js';
 
-export type { DraftEditorElement };
+export type { DraftEditorElement, EditorOptions };
 
 export const DraftEditor = defineComponent({
   name: 'DraftEditor',
   props: {
-    /** `.draft` source. Passing back the text from `change` does not redraw. */
+    /** `.draft` source. Passing back the source from `change` does not redraw. */
     source: { type: String, required: true },
+    /** Every `mountEditor` option but `source` and `onChange`. Callbacks apply live. */
+    options: { type: Object as PropType<EditorOptions>, default: undefined },
   },
-  emits: { change: (_source: string) => true },
-  setup(props, { emit, expose }) {
+  emits: hostEmits,
+  setup(props, { emit, expose, slots }) {
     const el = ref<DraftEditorElement>();
-    const listen = (event: Event) => emit('change', (event as CustomEvent<string>).detail);
     onMounted(() => {
+      listenHostEvents(el.value!, emit as (name: string, detail: unknown) => void);
       // The editor loads in the browser only, so server rendering and viewer-only pages skip it.
-      void import('@draftably/editor/element');
-      el.value?.addEventListener('draft-change', listen);
+      import('@draftably/editor/element').catch((error: unknown) => {
+        el.value?.setAttribute('status', 'error');
+        el.value?.setAttribute('data-error', String(error));
+      });
     });
-    onBeforeUnmount(() => el.value?.removeEventListener('draft-change', listen));
     expose({ element: el });
-    return () => h('draft-editor', { ref: el, source: props.source });
+    // The default slot holds slot content: children marked `data-draft-slot`.
+    return () =>
+      h(
+        'draft-editor',
+        {
+          ref: el,
+          source: props.source,
+          // Only when set, so options a host set through the ref survive.
+          ...(props.options === undefined ? {} : { '.options': props.options }),
+        },
+        slots.default?.(),
+      );
   },
 });

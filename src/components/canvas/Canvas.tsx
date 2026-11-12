@@ -5,7 +5,7 @@ import { TimelineDeck } from '../sculpt/TimelineDeck';
 import { CrossingView, EdgeView } from '../scene/EdgeView';
 import { BundleView } from '../scene/BundleView';
 import { GroupView } from '../scene/GroupView';
-import { NodeView } from '../scene/NodeView';
+import { NodeChrome, NodeView } from '../scene/NodeView';
 import { Lifelines, SequenceBackdrop } from '../scene/Lifelines';
 import { PositionMarks } from '../scene/PositionMarks';
 import { InlineEditor } from './InlineEditor';
@@ -31,6 +31,10 @@ export interface CanvasProps {
   onDropFiles?: (files: File[]) => Promise<void> | void;
   /** Shown under the hint on an empty canvas, such as a button that builds from a list. */
   emptyAction?: JSX.Element;
+  /** The host's slot targets, above the drawing and below the chrome layer. */
+  anchorLayer?: HTMLElement;
+  /** Nodes a host body covers: their titles hide, and their ports and handles draw on top. */
+  bodies?: () => ReadonlySet<string>;
   /**
    * A host's marks that move and zoom with the drawing, above it: an HTML layer whose origin is
    * the drawing's, so a child positioned at an object's `rectOf(id)` sits on it at any camera.
@@ -44,6 +48,9 @@ export interface CanvasProps {
    */
   screenLayer?: JSX.Element;
 }
+
+/** Host content and form fields that take their own focus and keys. */
+const FIELD = '[data-draft-input], input, textarea, select, [contenteditable]';
 
 /**
  * The canvas for the session in context: drawing, selection, dragging, inline editing, layout
@@ -66,7 +73,18 @@ export function Canvas(props: CanvasProps) {
     svg.addEventListener('wheel', s.onWheel, { passive: false });
     // Before any handler inside it runs, so menus, shortcuts and commands act on this session.
     const activate = () => setActiveSession(s);
-    stage.addEventListener('pointerdown', activate, true);
+    // A press on the drawing takes focus from anything outside it, such as a host's field in a
+    // viewer's slot, so the next key reaches this editor. Most presses call preventDefault, so
+    // the browser would leave focus where it was. A press on a field keeps the field's focus.
+    const press = (e: PointerEvent) => {
+      activate();
+      if (e.composedPath().some(n => n instanceof Element && n.matches(FIELD))) return;
+      // The page's focus, through every shadow root: it may sit far outside this editor.
+      let active = stage.ownerDocument.activeElement;
+      while (active?.shadowRoot?.activeElement) active = active.shadowRoot.activeElement;
+      if (active && active !== stage.ownerDocument.body && !stage.contains(active)) s.focusCanvas();
+    };
+    stage.addEventListener('pointerdown', press, true);
     stage.addEventListener('focusin', activate, true);
     // A click with no press before it (assistive tech, a host's script) acts on this session too:
     // the zoom controls run on the active session, and none, or a closed map's, is a Fit that
@@ -75,7 +93,7 @@ export function Canvas(props: CanvasProps) {
     onCleanup(() => {
       observer.disconnect();
       svg.removeEventListener('wheel', s.onWheel);
-      stage.removeEventListener('pointerdown', activate, true);
+      stage.removeEventListener('pointerdown', press, true);
       stage.removeEventListener('focusin', activate, true);
       stage.removeEventListener('click', activate, true);
     });
@@ -261,6 +279,7 @@ export function Canvas(props: CanvasProps) {
                   editing={s.inlineEditId() === id}
                   interactive
                   zoom={camera().k}
+                  body={props.bodies?.().has(id)}
                 />
               )}
             </For>
@@ -284,6 +303,35 @@ export function Canvas(props: CanvasProps) {
           <Overlay />
         </g>
       </svg>
+      {props.anchorLayer}
+      <Show when={props.bodies?.().size}>
+        {/* Above the host's bodies: the ports and handles of the nodes they cover. A gesture
+            that starts here captures the pointer here, so this layer takes the canvas's
+            handlers too. */}
+        <svg
+          class="canvas-chrome"
+          aria-hidden="true"
+          onPointerDown={s.onPointerDown}
+          onPointerMove={s.onPointerMove}
+          onPointerUp={onPointerUp}
+          onPointerCancel={() => s.resetModifiers()}
+          onDblClick={s.onDoubleClick}
+        >
+          <g transform={`translate(${camera().x},${camera().y}) scale(${camera().k})`}>
+            <For each={s.nodeIds().filter(id => props.bodies!().has(id))}>
+              {id => (
+                <NodeChrome
+                  doc={shown()}
+                  id={id}
+                  rect={s.geometry(id)}
+                  selected={isSelected(id)}
+                  zoom={camera().k}
+                />
+              )}
+            </For>
+          </g>
+        </svg>
+      </Show>
       <div class="host-layers" onWheel={e => s.onWheel(e)}>
         <div
           class="host-layer host-layer--scene"

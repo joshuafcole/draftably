@@ -4,13 +4,20 @@
  *
  * - A container inside a container of the same family steps one shade toward emphasis per level
  *   (lighter frames underneath, smaller and stronger ones on top), instead of repeating the fill.
- * - A shape whose shade is within two steps of its container's, in the same family, moves three
- *   steps past the container, so a member never melts into its frame.
+ * - A member card: a shape in its container's family with no shade of its own draws as a pale
+ *   card on the frame's tint (`memberShadeFor`), so a group of members reads as calm cards
+ *   rather than a column of dark slabs. This holds while the frame is a quiet surface shade.
+ * - Any other shape whose shade is within two steps of its container's, in the same family, moves
+ *   three steps past the container, so a member never melts into its frame.
  *
  * The canvas, the CLI's SVG and exports all draw through `drawnSwatch`.
  */
 import {
+  CONTRAST,
+  ensureContrast,
   groupShadeFor,
+  mixColors,
+  memberShadeFor,
   NODE_SHADE,
   SHADES,
   shadesOf,
@@ -27,20 +34,36 @@ import type { Diagram } from './types';
 const GROUP_STEP = 1,
   NODE_STEP = 3;
 
+/**
+ * A sequence lane's default shade: the canvas end of the ramp, paler than a group's usual tint in
+ * a light theme and darker in a dark one, so the bands stay quieter than the headers' accents.
+ */
+const laneShade = (look: ResolvedAppearance): Shade => (look.dark ? 950 : 50);
+
 /** The shade an object is drawn at, or undefined for the theme's neutral surface. */
 export function drawnShade(doc: Diagram, look: ResolvedAppearance, id: string): Shade | undefined {
   const style = styleOf(doc, id),
     group = isGroup(doc, id),
-    family = style.color;
-  if (!family || family === 'auto') return style.shade;
-  const own = style.shade ?? (group ? groupShadeFor(look.theme, look.dark) : NODE_SHADE);
+    family = style.color,
+    lane = group && !!doc.layout.sequence && style.shade === undefined;
+  if (!family || family === 'auto') return lane ? laneShade(look) : style.shade;
+  const own =
+    style.shade ??
+    nearestShade(
+      look,
+      family,
+      lane ? laneShade(look) : group ? groupShadeFor(look.theme, look.dark) : NODE_SHADE,
+    );
   const parentId = findObject(doc, id)?.parentId,
     parent = parentId ? findGroup(doc, parentId) : undefined;
   if (!parent || styleOf(doc, parent.id).color !== family) return own;
   const outer = drawnShade(doc, look, parent.id);
   if (outer === undefined) return own;
+  const dark = look.dark;
+  if (!group && style.shade === undefined && (dark ? outer >= 700 : outer <= 300))
+    return nearestShade(look, family, memberShadeFor(look.theme, look.dark));
   const need = group ? GROUP_STEP : NODE_STEP,
-    toward = look.dark ? -1 : 1,
+    toward = dark ? -1 : 1,
     at = SHADES.indexOf(own),
     from = SHADES.indexOf(outer);
   // Far enough from the frame already, on the emphasis side or well past it on the other.
@@ -90,6 +113,16 @@ export function participantAccent(
     family = styleOf(doc, id).color;
   if ((!family || family === 'auto') && shade === undefined) return undefined;
   return swatchFor(look, family, shade, 'node').fill;
+}
+
+/**
+ * Ink for a title's detail lines on a swatch: the theme's muted ink on the neutral surface, or the
+ * swatch's own ink moved toward its fill on a colored one, held to 4.5:1 on the fill.
+ */
+export function detailInk(look: ResolvedAppearance, swatch: Swatch): string {
+  if (swatch.fill === look.node.fill && swatch.ink === look.node.ink)
+    return ensureContrast(look.muted, swatch.fill, CONTRAST.connection);
+  return ensureContrast(mixColors(swatch.ink, swatch.fill, 0.3), swatch.fill, CONTRAST.connection);
 }
 
 const clampIndex = (i: number) => Math.max(0, Math.min(SHADES.length - 1, i));

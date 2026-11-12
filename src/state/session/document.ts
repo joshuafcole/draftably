@@ -9,10 +9,11 @@ import { emptyDiagram, normalize } from '../../model/document';
 import { findEntity } from '../../model/graph';
 import { DEFAULT_SAMPLE, loadSample } from '../../model/samples';
 import type { Camera, Diagram } from '../../model/types';
+import type { CameraReason } from '../../runtime/camera';
 import { toast } from '../toast';
 import type { CanvasTextPart } from './canvas-text';
 import type { SessionOptions } from '.';
-import type { CameraMover } from './camera';
+import { moverOf, type CameraMover } from './camera';
 
 const LEGACY_KEYS = ['diagram-studio-v4', 'diagram-studio-v3', 'diagram-studio-v2'];
 const HISTORY_LIMIT = 80;
@@ -221,9 +222,13 @@ export function createDocument(s: CanvasTextPart, options: SessionOptions) {
       if (keepCamera) state.setDoc('camera', camera);
       state.setRevision(r => r + 1);
     });
-    const now = state.doc.camera;
-    if (by && (now.x !== camera.x || now.y !== camera.y || now.k !== camera.k))
-      options.onCamera?.({ ...now }, by);
+    // Undo and restored documents bring their own camera back. Its listeners always hear it;
+    // `SessionOptions.onCamera` hears it only with `by` (not a first load).
+    const c = state.doc.camera;
+    if (c.x !== camera.x || c.y !== camera.y || c.k !== camera.k) {
+      tellCamera('restore');
+      if (by) options.onCamera?.({ ...c }, by);
+    }
   }
 
   const historyHandlers: Array<(entry: HistoryEntry, direction: 'undo' | 'redo') => void> = [];
@@ -262,18 +267,29 @@ export function createDocument(s: CanvasTextPart, options: SessionOptions) {
 
   // --- Camera ----------------------------------------------------------------------------------
 
+  const cameraListeners = new Set<(reason: CameraReason) => void>();
+  const tellCamera = (reason: CameraReason) => {
+    for (const listener of cameraListeners) listener(reason);
+  };
+  /** Hear every camera change, with its reason. */
+  function onCamera(listener: (reason: CameraReason) => void) {
+    cameraListeners.add(listener);
+    return () => cameraListeners.delete(listener);
+  }
+
   /**
-   * Move the camera. `by` says who moved it, for `SessionOptions.onCamera`: the host through the
-   * camera part, the editor's own automatic fits as `'fit'`, and the reader (a drag, a pinch, the
-   * wheel, a key or button) as `'user'`. Every camera change goes through here, so every one is
-   * reported.
+   * Every camera write goes through here, so every one is reported: to `onCamera` listeners with
+   * its reason, and to `SessionOptions.onCamera` with who moved it (`moverOf`): the host through
+   * the camera part or a handle (`api`), the editor's own automatic fits (`fit`), and the reader
+   * (a drag, a pinch, the wheel, a key or button) as `user`.
    */
-  function setCamera(camera: Camera, by: CameraMover = 'user') {
+  function setCamera(camera: Camera, reason: CameraReason = 'user') {
     const c = state.doc.camera;
     if (c.x === camera.x && c.y === camera.y && c.k === camera.k) return;
     state.setDoc('camera', camera);
     persist();
-    options.onCamera?.({ ...camera }, by);
+    tellCamera(reason);
+    options.onCamera?.({ ...camera }, moverOf(reason));
   }
 
   // --- Persistence -----------------------------------------------------------------------------
@@ -403,6 +419,7 @@ export function createDocument(s: CanvasTextPart, options: SessionOptions) {
     canUndo,
     canRedo,
     setCamera,
+    onCamera,
     disableBrowserStorage,
     setPersistenceBlocked,
     persist,

@@ -123,3 +123,23 @@ colors are hard to tell apart.
   brown at any hue.
 - Many-family files such as `examples/aws-vpc-network.draft` still look busy. That is authoring;
   `check` flags it as `many-colors`.
+
+## Follow-up: member cards (November 2026)
+
+A side-by-side test against a hand-placed drawing of the same diagram found the draftably render
+harder to read. The main cause was this page's first finding, still live: a member that inherits
+its group's family drew at 500, so a group of seven sources became seven dark slabs. Dark pixels
+covered 21.6% of the render against 3.5% in the hand-placed drawing.
+
+- **Inherited members are pale cards.** A node in its container's family with no shade of its own
+  draws at 50 (950 in Blueprint) on the frame's tint, with the family's outline and ink. Fill sets
+  it apart from the frame, not distance in shade. This only applies while the frame is a quiet
+  surface shade; a member of a dark frame still steps past it.
+- **A node that names a color keeps 500.** The comps above wanted "pale services, one gold
+  highlight". The most common role is the inherited member, so it goes pale. A node that names a
+  family is the author picking it out, which is the highlight, so it keeps the strong fill. A pale
+  default there too would leave no default way to mark the one thing that matters.
+- **The legend follows.** A `legend family` line with no `shade=` draws what the family's nodes
+  draw: 500 when a node names the family, the card shade when all of them inherit it.
+
+On the test diagram the change took dark area from 21.6% to about 3%, with no file edit.

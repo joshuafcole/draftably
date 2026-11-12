@@ -1,0 +1,11 @@
+{
+  "framework": "svelte",
+  "files": {
+    "src/Proof.svelte": "src/lib/proof/Proof.svelte",
+    "src/Card.svelte": "src/lib/proof/Card.svelte"
+  },
+  "shared": "src/lib/proof",
+  "build": ["pnpm", "build"],
+  "start": ["node", "build"],
+  "path": "/"
+}

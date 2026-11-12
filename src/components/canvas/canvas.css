@@ -5,7 +5,8 @@
   flex: 1;
   min-width: 0;
   min-height: 0;
-  overflow: hidden;
+  /* clip, not hidden: focus on off-screen slot content must not scroll the canvas away. */
+  overflow: clip;
   background: var(--diagram-canvas, var(--canvas));
   touch-action: none;
 }
@@ -910,4 +911,64 @@
   border-radius: 14px;
   background: var(--surface);
   color: inherit;
+}
+
+/* Host slots (see runtime/anchors.ts): targets above the drawing. Slot content takes no pointer
+   input unless it is marked data-draft-input (host.css). */
+.draft-anchors {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: visible;
+}
+.draft-anchors__bodies {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  transform-origin: 0 0;
+}
+.draft-anchors__overlays {
+  position: absolute;
+  inset: 0;
+}
+.draft-anchor {
+  position: absolute;
+  box-sizing: border-box;
+  pointer-events: none;
+}
+.draft-anchor--body {
+  overflow: clip;
+}
+.draft-anchor--overlay {
+  left: 0;
+  top: 0;
+  overflow: visible;
+}
+.draft-anchors[data-draft-detail='low'] .draft-anchors__bodies {
+  visibility: hidden;
+}
+/* A body replaces its node's drawn title; the title stays the node's accessible name. */
+.stage[data-draft-detail='full'] .canvas .node[data-draft-body] text {
+  opacity: 0;
+}
+/* Its ports and handles move to the chrome layer, above the body. Zoomed out, the body hides and
+   they stay in the drawing. */
+.stage[data-draft-detail='full'] .canvas .node[data-draft-body] .port,
+.stage[data-draft-detail='full'] .canvas .node[data-draft-body] .resize-handle,
+.stage[data-draft-detail='low'] .canvas-chrome {
+  display: none;
+}
+.canvas-chrome {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  overflow: visible;
+}
+.canvas-chrome .port,
+.canvas-chrome .resize-handle {
+  pointer-events: auto;
 }

@@ -77,6 +77,25 @@ Compile time over the corpus and held-out went 23.9 → 51.2ms per file. The def
   re-packed (no second layout pass), or
 - compile time has headroom (an incremental re-pack of only the scopes whose channels changed).
 
+### Kept: Drafting `padding-y=20`
+
+A hand-placed comparison of one daily-plan diagram (TASK-0028 in the planning workspace) found
+draftably's 72px two-line nodes airy, against 56px in the reference. Lowering Drafting's
+`padding-y` failed the corpus check, measured with
+`pnpm audit:compare --base <column-widths layer>` on 10 November 2026:
+
+| `padding-y` | Corpus DI | Held-out DI | Examples DI | `edge-hugs-node` (corpus / examples) |
+| ----------- | --------- | ----------- | ----------- | ------------------------------------ |
+| 20 (kept)   | 7.9       | 8.9         | 11.1        | 62 / 47                              |
+| 16          | 8.3       | 8.8         | 12.5        | 83 / 63                              |
+| 12          | 8.4       | 8.6         | 13.9        | 87 / 76                              |
+
+At 12, ten unit tests that pin geometry also failed. One-line nodes shrink from 56 to 40px, but the
+router's standoffs and the audit's 15px "beside a box" band are fixed in pixels. Lines then run
+close along the shorter sides, and some group folds change (srcly-scan-lifecycle e2: 9.3 → 16.1).
+Revisit together with item 6 (corridor pitch): scale standoffs with node height first, then
+lower the padding. A file can still set `theme drafting padding-y=10` for a dense drawing.
+
 ## 1. Detours that leave the far side and come back under
 
 > **Progress (viewer feedback, 23 October):** a far side now also pays half the route's length

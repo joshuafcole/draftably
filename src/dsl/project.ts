@@ -109,6 +109,7 @@ export function projectScene(scene: Scene, view: ViewState = {}): Diagram {
       ...(e.to !== 'auto' ? { toSide: e.to } : {}),
       ...(flow(e.source, e.target) ? { flow: flow(e.source, e.target) } : {}),
       ...(e.lane ? { lane: e.lane } : {}),
+      ...(e.plan ? { plan: e.plan } : {}),
       ...(e.row !== undefined ? { row: e.row } : {}),
       // An authored route: bends the router passes through; a soft one gives way when blocked.
       ...(e.route

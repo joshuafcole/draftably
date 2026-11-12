@@ -1,0 +1,68 @@
+diagram "One host contract for every framework" version=1
+subtitle "Wrappers map idiom only; the elements and graph API hold every capability"
+
+# Who uses Draftably.
+group hosts "Host apps" color=blue
+node fw "React, Solid, Vue, Svelte" in=hosts
+node plain "Plain HTML" in=hosts
+node flowlib "Flow libraries" in=hosts
+
+# The only per-framework code.
+group wrappers "Framework packages" color=slate
+node wrap "Thin wrappers" in=wrappers count=4 href="packages/react/src/index.ts"
+node events_list "HOST_EVENTS list" in=wrappers
+
+# The neutral layer: Draftably draws.
+group elements "Draftably draws: the elements" color=mint
+node viewer_el "<draft-diagram>" in=elements href="src/runtime/element.ts"
+node editor_el "<draft-editor>" in=elements href="src/editor/element.ts"
+node slots "Slots · data-draft-slot" in=elements
+
+group handle "One handle for viewer and editor" color=auto in=elements
+node camera "One camera" in=handle
+node moves "fit and reveal" in=handle
+node geometry "geometry()" in=handle
+node dom_events "draft-<name> events" in=handle
+
+# The neutral layer: the host draws.
+group graph "The host draws: graph API" color=teal
+node layout_fn "layout(graph)" in=graph href="src/graph-api/core.ts:398"
+node route_fn "route(boxes)" in=graph href="src/graph-api/core.ts:435"
+node dropins "Drop-ins" in=graph
+
+group engine "Engine" color=violet
+node worker "Render worker" in=engine
+node scene "Editor canvas" in=engine
+node core "Compile, layout, route" in=engine
+
+legend blue "Host apps"
+legend slate "Framework idiom only"
+legend mint "Draftably draws"
+legend teal "The host draws"
+legend violet "Engine"
+legend line solid "Calls or renders"
+legend line dashed "Same data shapes"
+
+edge use fw -> wrap "props, ref, slot content"
+edge direct plain -> elements "same elements"
+edge loop events_list -> wrap "one loop"
+edge mount wrap -> elements "options, events, children"
+edge draw_v viewer_el -> worker
+edge draw_e editor_el -> scene
+edge own fw -> layout_fn "host draws"
+edge flows flowlib -> dropins
+edge lay layout_fn -> core
+edge rt route_fn -> core
+edge rw worker -> core
+edge rs scene -> core
+edge shapes geometry -> layout_fn "same shapes" kind=async
+
+state draftdraws "Draftably draws" fw plain wrap events_list elements worker scene core
+state hostdraws "Host draws" fw flowlib graph core
+state wrappers_only "Per-framework code" wrappers fw
+
+footnote "Measure: a new event, method, option or slot kind adds no lines to any framework package."
+footnote "Plan: [docs/intent/host-contract/plan.md](docs/intent/host-contract/plan.md)"
+
+layout root flow direction=right fit=slide
+routing crossing-penalty=900

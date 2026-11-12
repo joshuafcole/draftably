@@ -34,7 +34,7 @@ jobs:
     # Drives the real editor in Chromium against `draftably open`. Failure screenshots and
     # failure.json are uploaded as an artifact.
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -42,9 +42,10 @@ jobs:
         with:
           node-version: 24
       - run: pnpm install --frozen-lockfile
-      - run: pnpm exec playwright-core install --with-deps chromium
+      # The runner's apt mirror sometimes fails to resolve; retry before failing the job.
+      - run: for i in 1 2 3; do pnpm exec playwright-core install --with-deps chromium firefox webkit && exit 0; sleep 30; done; exit 1
       - run: pnpm site:build
-      - run: pnpm runtime:build && pnpm runtime:pack-check && pnpm viewer:pack-check && pnpm prove:runtime && pnpm prove:viewer && pnpm prove:element && pnpm markdown:build && pnpm markdown:pack-check && pnpm markdown:browser-check && pnpm mermaid:build && pnpm editor:build && pnpm frameworks:build && pnpm prove:frameworks
+      - run: pnpm runtime:build && pnpm runtime:pack-check && pnpm viewer:pack-check && pnpm prove:runtime && pnpm prove:viewer && pnpm prove:element && pnpm markdown:build && pnpm markdown:pack-check && pnpm markdown:browser-check && pnpm mermaid:build && pnpm editor:build && pnpm frameworks:build && pnpm prove:frameworks && pnpm prove:recipes && pnpm prove:slots && pnpm prove:color-scheme
       - run: pnpm prove:file
       - run: pnpm prove:layout
       - run: pnpm prove:site
@@ -56,10 +57,13 @@ jobs:
             tmp/proof/
             tmp/proof-layout/
             tmp/proof-site/
+            tmp/proof-slots/
 
   bench:
     # A report, not a gate: times CLI commands and viewer actions against the 200 ms interactive
-    # and 1 s load budgets and writes the table to the job summary.
+    # and 1 s load budgets and writes the table to the job summary. It runs on main only, so a
+    # slow runner never marks a pull request red.
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     continue-on-error: true
@@ -70,7 +74,8 @@ jobs:
         with:
           node-version: 24
       - run: pnpm install --frozen-lockfile
-      - run: pnpm exec playwright-core install --with-deps chromium
+      # The runner's apt mirror sometimes fails to resolve; retry before failing the job.
+      - run: for i in 1 2 3; do pnpm exec playwright-core install --with-deps chromium && exit 0; sleep 30; done; exit 1
       - run: pnpm build
       - run: pnpm bench --runs 1
 

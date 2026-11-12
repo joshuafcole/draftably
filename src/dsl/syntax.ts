@@ -345,11 +345,8 @@ export type Hint =
   | { type: 'nudge'; id: string; dx: number; dy: number; line: number }
   | { type: 'stay'; id: string; x: number; y: number; weight: number; line: number }
   | { type: 'pin'; id: string; x: number; y: number; line: number }
-  /**
-   * `height` is unset for `height=auto`: the title's height at that width, as without a size.
-   * `minHeight` (`min-height=`, with `height=auto` only) is a floor under that height, for a
-   * host that draws more than the title in the node and has measured what it draws.
-   */
+  /** `height` is unset for `height=auto`: the title's height at that width, as without a size. */
+  /** `minHeight` is a floor under `height=auto`, for a host that draws more than the title. */
   | { type: 'size'; id: string; width: number; height?: number; minHeight?: number; line: number };
 
 export type Strength = 'prefer' | 'required';

@@ -1,0 +1,39 @@
+diagram "Order of work: one stack, one release" version=1
+subtitle "Each step ships its docs and its proof"
+
+group stack "Stacked PRs, in order" color=slate
+node s1 "1. Small fixes\n#498, #499, #502 scene fixes" in=stack
+node s2 "2. Element parity\noptions, events, mount once, Svelte ref" in=stack
+node s3 "3. Runtime cost\nlazy compiler, 1 worker, shared styles" in=stack
+node s4 "4. One camera\nfit, reveal, MoveResult; no session" in=stack
+node s5 "5. Geometry and events\ngeometry(), select, contextmenu" in=stack
+node s6 "6. Slots\ndata-draft-slot, editor in shadow root" in=stack
+node s7 "7. Recipes and proofs\nper framework and meta-framework" in=stack
+node release "One minor release\nwith a breaking-change table" in=stack color=amber shade=400
+
+group later "Deferred until a host asks" color=stone
+node hover "hover event" in=later
+node draft_layout "layout({ draft })" in=later
+node flow_edges "Vue Flow and Svelte Flow edges" in=later
+
+legend slate "Stack layer"
+legend amber "Release" shade=400
+legend stone "Deferred"
+
+edge n1 s1 -> s2
+edge n2 s2 -> s3
+edge n3 s3 -> s4
+edge n4 s4 -> s5
+edge n5 s5 -> s6
+edge n6 s6 -> s7
+edge n7 s7 -> release
+
+footnote "Budgets every step holds: 40 KB gz or less on the main thread, 1 worker per page, first diagram in 1 s cold, update in 200 ms, camera frame in 8 ms at 500 targets."
+
+state cost "Performance work" s3 s7
+state dx "Developer experience" s2 s5 s7
+state ux "End-user experience" s4 s6 s7
+
+layout root flow direction=down
+layout stack flow direction=right fold=auto
+layout later row gap=24

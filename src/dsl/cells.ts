@@ -3,7 +3,7 @@
  * request in order. Pure geometry, shared by the compiler for every theme.
  */
 import { measureText } from '../model/fonts';
-import { wrapTitle } from '../model/labels';
+import { textHeight, wrapTitle } from '../model/labels';
 import type { ResolvedAppearance } from '../model/appearance';
 
 /** Width of a marker's bar, centred on the seam it marks. */
@@ -26,7 +26,7 @@ export interface CellInput {
   /** Columns the cell covers in a grid. */
   span?: number;
   /** From a `size` line. */
-  size?: { width: number; height?: number };
+  size?: { width: number; height?: number; minHeight?: number };
 }
 
 export interface CellBox {
@@ -40,16 +40,16 @@ export interface CellBox {
 export function cellSize(c: CellInput, look: ResolvedAppearance) {
   if (c.size?.height !== undefined) return { w: c.size.width, h: c.size.height };
   if (c.size) {
-    const lines = wrapTitle(c.label, c.size.width - 2 * look.paddingX, look).length;
+    const text = textHeight(wrapTitle(c.label, c.size.width - 2 * look.paddingX, look), look);
     return {
       w: c.size.width,
-      h: lines * look.title.lineHeight + 2 * Math.min(look.paddingY, CELL_PAD_Y),
+      h: Math.max(text + 2 * Math.min(look.paddingY, CELL_PAD_Y), c.size.minHeight ?? 0),
     };
   }
   const pad = 2 * look.paddingX,
     w = Math.min(MAX_CELL, Math.max(MIN_CELL, Math.ceil(measureText(c.label, look.title)) + pad)),
-    lines = wrapTitle(c.label, w - pad, look).length;
-  return { w, h: lines * look.title.lineHeight + 2 * Math.min(look.paddingY, CELL_PAD_Y) };
+    text = textHeight(wrapTitle(c.label, w - pad, look), look);
+  return { w, h: text + 2 * Math.min(look.paddingY, CELL_PAD_Y) };
 }
 
 /**
@@ -192,8 +192,8 @@ export function layoutUnits(
   const h = Math.max(
     0,
     ...cells.map(c => {
-      const lines = wrapTitle(c.label, Math.max(8, longest(c.id).span * unit - pad), look).length;
-      return lines * look.title.lineHeight + 2 * Math.min(look.paddingY, CELL_PAD_Y);
+      const lines = wrapTitle(c.label, Math.max(8, longest(c.id).span * unit - pad), look);
+      return textHeight(lines, look) + 2 * Math.min(look.paddingY, CELL_PAD_Y);
     }),
   );
   const box = (p: { row: number; col: number; span: number }) => ({

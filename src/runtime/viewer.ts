@@ -1,4 +1,18 @@
-import { renderSvg } from './render';
+import {
+  clampZoom,
+  fitCamera,
+  revealCamera,
+  sameCamera,
+  unionBox,
+  type Camera,
+  type CameraReason,
+  type FrameOptions,
+  type MoveResult,
+} from './camera';
+import { createAnchorLayer, type Anchor, type DraftSlot } from './anchors';
+import { watchColorScheme } from './color-scheme';
+import { itemBox, type Geometry } from './geometry';
+import { releaseFace, renderInWorker, retainFace, sharedFace } from './page-shared';
 import { fontMetricsVersion, runtimeVersion } from './version';
 import { FACES } from '../model/font-faces';
 import type {
@@ -12,11 +26,10 @@ import type {
 
 export { fontMetricsVersion, runtimeVersion };
 
-export interface Camera {
-  centerX: number;
-  centerY: number;
-  zoom: number;
-}
+export type { Camera, CameraReason, FrameOptions, MoveResult } from './camera';
+export type { Box, EdgeOut, Geometry, PlacedBox } from './geometry';
+export type { Anchor, DraftSlot } from './anchors';
+export { ZOOM_MAX, ZOOM_MIN } from './camera';
 
 export type ViewerExecution =
   { mode: 'worker'; createWorker?: () => Worker; timeoutMs?: number } | { mode: 'main' };
@@ -34,6 +47,8 @@ export interface ViewerOptions {
    */
   outline?: 'visible' | 'hidden';
   execution?: ViewerExecution;
+  /** `auto` (default) hides slot bodies and shows titles again below a zoom of 0.4. */
+  detail?: 'auto' | 'full';
   render?: ViewerRenderOptions;
 }
 
@@ -54,37 +69,61 @@ export type UpdateResult =
   | { status: 'superseded' | 'destroyed' | 'aborted'; revision: number };
 
 export interface ViewerEvents {
-  render: { revision: number; value: Extract<RenderResult, { ok: true }>['value'] };
+  /** After each commit, after `anchor()`, and with `[]` before `destroy` detaches the targets. */
+  anchors: { anchors: readonly Anchor[] };
+  /** After each commit: the drawing, and where each item is (`null` for compare and states). */
+  render: {
+    revision: number;
+    value: Extract<RenderResult, { ok: true }>['value'];
+    geometry: Geometry | null;
+  };
   diagnostics: { revision: number; diagnostics: readonly Diagnostic[]; stale: boolean };
-  camera: { camera: Camera; reason: 'user' | 'resize' | 'fit' | 'api' };
+  /** At most once per animation frame, with the latest reason. */
+  camera: { camera: Camera; reason: CameraReason };
   itemactivate: {
     id: string;
     kind: 'node' | 'group' | 'edge';
     input: 'pointer' | 'keyboard';
     revision: number;
   };
+  /** `preventDefault()` stops the viewer opening the link. */
   link: { itemId: string; href: string; target: '_self' | '_blank'; preventDefault(): void };
+  /** A right-click or the menu key; `id` is null on the background. `preventDefault()` stops the browser's menu. */
+  contextmenu: {
+    id: string | null;
+    kind?: ItemKind;
+    clientX: number;
+    clientY: number;
+    preventDefault(): void;
+  };
 }
 
+export type ItemKind = 'node' | 'group' | 'edge';
+
 export interface ViewerHandle {
+  /** Resolves after the first commit or failure; then after each later one. */
+  readonly ready: Promise<UpdateResult>;
   update(source: string, options?: UpdateOptions): Promise<UpdateResult>;
+  /** Where each item is drawn, in world units. `null` before the first commit, and for compare and states. The same object for one revision. */
+  geometry(): Geometry | null;
   on<K extends keyof ViewerEvents>(type: K, listener: (event: ViewerEvents[K]) => void): () => void;
   getCamera(): Camera;
+  /** Zoom is clamped to `ZOOM_MIN`–`ZOOM_MAX`. */
   setCamera(camera: Camera): void;
-  fit(): void;
+  /** Frame these items, or the whole drawing without ids. At most actual size by default. */
+  fit(ids?: readonly string[], options?: FrameOptions): MoveResult;
+  /** The least move that shows the item; zooms out only if it does not fit. */
+  reveal(id: string, options?: FrameOptions): MoveResult;
   focusItem(id: string): boolean;
+  /**
+   * Plain-DOM hosts only: keep a target for each slot (`body:<id>`, `overlay:<id>`). Targets come
+   * in the `anchors` event; put content in them. The elements set this from their marked children.
+   */
+  anchor(slots: readonly DraftSlot[]): void;
   destroy(): void;
 }
 
 type Drawing = Extract<RenderResult, { ok: true }>['value'];
-type WorkerRequest = { id: number; source: string; options: RenderOptions };
-type WorkerReply = { id: number; result: RenderResult };
-type WorkerJob = {
-  id: number;
-  timer: number;
-  finish: (result?: RenderResult, error?: Error) => void;
-  cleanup: () => void;
-};
 type FontSpec = { family: string; weight: string };
 type EmbeddedFace = FontSpec & { data: string };
 type PreparedFace = { key: string; face: FontFace };
@@ -102,8 +141,11 @@ const ATTRS = new Set(
 );
 let instanceCount = 0;
 
-function fontSpecs(doc: Document, svg: string): FontSpec[] {
-  const parsed = new doc.defaultView!.DOMParser().parseFromString(svg, 'image/svg+xml');
+function parseSvg(doc: Document, svg: string): XMLDocument {
+  return new doc.defaultView!.DOMParser().parseFromString(svg, 'image/svg+xml');
+}
+
+function fontSpecs(parsed: XMLDocument): FontSpec[] {
   const specs = new Map<string, FontSpec>();
   for (const text of Array.from(parsed.querySelectorAll('text[font-family]'))) {
     const family = (text.getAttribute('font-family') ?? '')
@@ -121,8 +163,7 @@ function fontSpecs(doc: Document, svg: string): FontSpec[] {
   return [...specs.values()];
 }
 
-function embeddedFaces(doc: Document, svg: string, required: readonly FontSpec[]): EmbeddedFace[] {
-  const parsed = new doc.defaultView!.DOMParser().parseFromString(svg, 'image/svg+xml');
+function embeddedFaces(parsed: XMLDocument, required: readonly FontSpec[]): EmbeddedFace[] {
   const found = new Map<string, EmbeddedFace>();
   for (const style of Array.from(parsed.querySelectorAll('style'))) {
     const css = style.textContent ?? '';
@@ -147,12 +188,11 @@ function embeddedFaces(doc: Document, svg: string, required: readonly FontSpec[]
 
 function safeSvg(
   doc: Document,
-  svg: string,
+  parsed: XMLDocument,
   stripFontRules: boolean,
   maxNodes = 100_000,
 ): SVGSVGElement {
   // The renderer owns this bounded SVG vocabulary; copy it through DOM APIs without parsing host markup.
-  const parsed = new doc.defaultView!.DOMParser().parseFromString(svg, 'image/svg+xml');
   if (parsed.querySelector('parsererror') || parsed.documentElement.localName !== 'svg') {
     throw new Error('Runtime returned invalid SVG.');
   }
@@ -249,6 +289,15 @@ export function mountViewer(host: HTMLElement, options: ViewerOptions = {}): Vie
   outline.className = 'draft-viewer__outline';
   outline.setAttribute('aria-label', 'Diagram outline');
   root.append(toolbar, viewport, live, outline);
+  // The drawing and the frame follow the page's scheme: the SVG holds both in light-dark()
+  // colors, so a change restyles it and draws nothing again.
+  const scheme = watchColorScheme(host, dark => (root.style.colorScheme = dark ? 'dark' : 'light'));
+  // The anchor layer sits above the drawing and is never detached while the viewer lives.
+  const anchorLayer = createAnchorLayer(doc, {
+    detail: options.detail,
+    onOverflow: () => tellDiagnostics(),
+  });
+  viewport.append(anchorLayer.el);
   host.append(root);
 
   const idPrefix = `draftViewer${(++instanceCount).toString(36)}${Math.random().toString(36).slice(2, 9)}`;
@@ -257,10 +306,10 @@ export function mountViewer(host: HTMLElement, options: ViewerOptions = {}): Vie
   let camera: Camera = { centerX: 0, centerY: 0, zoom: 1 };
   let userCamera = false;
   let drawing: Drawing | undefined;
-  let worker: Worker | undefined;
-  let workerJob: WorkerJob | undefined;
-  let nextWorkId = 0;
-  const ownedFonts = new Map<string, FontFace>();
+  /** The viewport's size, from the ResizeObserver: no layout read per camera move. */
+  let size = { width: 0, height: 0 };
+  /** Keys of the page's font faces this viewer holds. */
+  const heldFonts = new Set<string>();
   const listeners = new Map<keyof ViewerEvents, Set<(event: never) => void>>();
   const pending = new Map<number, { resolve: (result: UpdateResult) => void }>();
   const emit = <K extends keyof ViewerEvents>(type: K, event: ViewerEvents[K]) => {
@@ -280,17 +329,11 @@ export function mountViewer(host: HTMLElement, options: ViewerOptions = {}): Vie
     button.addEventListener('click', action);
     toolbar.append(button);
   };
-  const fitScale = () => {
-    if (!drawing) return 1;
-    const rect = viewport.getBoundingClientRect();
-    const [, , width, height] = drawing.viewBox;
-    return Math.min(rect.width / width, rect.height / height);
-  };
   const applyCamera = () => {
     const svg = viewport.querySelector('svg');
     if (!svg || !drawing) return;
     const [x, y] = drawing.viewBox;
-    const rect = viewport.getBoundingClientRect();
+    const rect = size;
     const scale = camera.zoom;
     const tx = rect.width / 2 - (camera.centerX - x) * scale;
     const ty = rect.height / 2 - (camera.centerY - y) * scale;
@@ -299,43 +342,94 @@ export function mountViewer(host: HTMLElement, options: ViewerOptions = {}): Vie
     svg.style.width = `${drawing.width}px`;
     svg.style.height = `${drawing.height}px`;
     svg.style.maxWidth = 'none';
+    anchorLayer.place(tx - x * scale, ty - y * scale, scale);
+    const detail = anchorLayer.el.dataset.draftDetail;
+    if (viewport.dataset.draftDetail !== detail) viewport.dataset.draftDetail = detail;
   };
-  const fit = (reason: 'fit' | 'resize' = 'fit') => {
-    if (!drawing) return;
-    const rect = viewport.getBoundingClientRect();
-    if (!rect.width || !rect.height) return;
-    const [x, y, width, height] = drawing.viewBox;
-    camera = {
-      centerX: x + width / 2,
-      centerY: y + height / 2,
-      zoom: Math.min(1, fitScale() * 0.92),
-    };
-    userCamera = false;
+  /** Nodes with a body hide their drawn title; the anchors event names every target. */
+  const tellAnchors = () => {
+    const ids = new Set(anchorLayer.bodyIds());
+    for (const g of viewport.querySelectorAll<SVGElement>(':scope > svg [data-id]'))
+      g.toggleAttribute('data-draft-body', ids.has(g.getAttribute('data-id')!));
+    emit('anchors', { anchors: anchorLayer.anchors() });
+  };
+  let lastDiagnostics: { revision: number; diagnostics: readonly Diagnostic[]; stale: boolean } = {
+    revision: 0,
+    diagnostics: [],
+    stale: false,
+  };
+  /** Diagnostics with the slot warnings of this moment. */
+  const tellDiagnostics = () =>
+    emit('diagnostics', {
+      ...lastDiagnostics,
+      diagnostics: [...lastDiagnostics.diagnostics, ...anchorLayer.warnings()],
+    });
+  /** Camera events go out at most once per animation frame, with the latest reason. */
+  let cameraReason: CameraReason = 'user',
+    cameraFrame = 0;
+  const frameLater = (fn: () => void) =>
+    win.requestAnimationFrame ? win.requestAnimationFrame(fn) : win.setTimeout(fn, 16);
+  const noteCamera = (reason: CameraReason) => {
+    cameraReason = reason;
+    if (cameraFrame) return;
+    cameraFrame = frameLater(() => {
+      cameraFrame = 0;
+      if (!destroyed) emit('camera', { camera: { ...camera }, reason: cameraReason });
+    });
+  };
+  const move = (next: Camera, reason: CameraReason, user: boolean): MoveResult => {
+    const clamped = { ...next, zoom: clampZoom(next.zoom) };
+    userCamera = user;
+    if (sameCamera(camera, clamped)) return 'unchanged';
+    camera = clamped;
     applyCamera();
-    emit('camera', { camera: { ...camera }, reason });
+    noteCamera(reason);
+    return 'moved';
   };
-  const zoomBy = (factor: number) => {
-    camera.zoom = Math.max(0.02, Math.min(8, camera.zoom * factor));
-    userCamera = true;
-    applyCamera();
-    emit('camera', { camera: { ...camera }, reason: 'user' });
+  const frameBox = () => {
+    const [x, y, width, height] = drawing!.viewBox;
+    return { x, y, width, height };
   };
-  const actualSize = () => {
-    camera.zoom = 1;
-    userCamera = true;
-    applyCamera();
-    emit('camera', { camera: { ...camera }, reason: 'user' });
+  /** The committed drawing's geometry, with its revision; one object per revision. */
+  let geometry: Geometry | null = null;
+  const boxOf = (id: string) => (geometry ? itemBox(geometry, id) : undefined);
+  /** The latest fit or reveal asked for before the viewport had a size or a drawing. */
+  let pendingMove: (() => MoveResult) | undefined;
+  const whenSized = (run: () => MoveResult): MoveResult => {
+    if (destroyed) return 'unchanged';
+    if (!drawing || !size.width || !size.height) {
+      pendingMove = run;
+      return 'pending';
+    }
+    pendingMove = undefined;
+    return run();
   };
-  if (options.toolbar !== false) {
-    addButton('Zoom in', () => zoomBy(1.2));
-    addButton('Zoom out', () => zoomBy(1 / 1.2));
-    addButton('Fit diagram', () => fit());
-    addButton('Actual size', actualSize);
-  }
+  const fitTo = (
+    ids: readonly string[] | undefined,
+    frameOptions: FrameOptions | undefined,
+    reason: CameraReason,
+  ): MoveResult =>
+    whenSized(() => {
+      const box = ids ? unionBox(ids.flatMap(id => boxOf(id) ?? [])) : frameBox();
+      if (!box) return 'missing';
+      // A whole-drawing fit follows later resizes; a framed selection stays put.
+      return move(fitCamera(box, size, frameOptions), reason, !!ids);
+    });
+  const fit = (reason: CameraReason = 'fit') => fitTo(undefined, undefined, reason);
+  const zoomBy = (factor: number) => move({ ...camera, zoom: camera.zoom * factor }, 'user', true);
+  const actualSize = () => move({ ...camera, zoom: 1 }, 'user', true);
+  addButton('Zoom in', () => zoomBy(1.2));
+  addButton('Zoom out', () => zoomBy(1 / 1.2));
+  addButton('Fit diagram', () => fit());
+  addButton('Actual size', actualSize);
+  toolbar.hidden = options.toolbar === false;
 
-  const resize = new win.ResizeObserver(() => {
-    if (drawing && !viewport.getBoundingClientRect().width) return;
-    if (!userCamera) fit('resize');
+  const resize = new win.ResizeObserver(entries => {
+    const box = entries.at(-1)?.contentRect;
+    if (box) size = { width: box.width, height: box.height };
+    if (drawing && !size.width) return;
+    if (pendingMove) whenSized(pendingMove);
+    else if (!userCamera) fit('resize');
     else applyCamera();
   });
   resize.observe(viewport);
@@ -343,10 +437,14 @@ export function mountViewer(host: HTMLElement, options: ViewerOptions = {}): Vie
   const setError = (at: number, diagnostics: readonly Diagnostic[]) => {
     live.textContent = diagnostics.map(diagnostic => diagnostic.message).join(' ');
     root.classList.add('draft-viewer--stale');
-    emit('diagnostics', { revision: at, diagnostics, stale: !!drawing });
+    lastDiagnostics = { revision: at, diagnostics, stale: !!drawing };
+    tellDiagnostics();
   };
-  const prepareFonts = async (svg: string, mode: 'host' | 'embed'): Promise<PreparedFace[]> => {
-    const required = fontSpecs(doc, svg);
+  const prepareFonts = async (
+    parsed: XMLDocument,
+    mode: 'host' | 'embed',
+  ): Promise<PreparedFace[]> => {
+    const required = fontSpecs(parsed);
     if (!required.length) return [];
     if (!doc.fonts) throw new Error('The host document cannot load diagram fonts.');
     if (mode === 'host') {
@@ -365,15 +463,18 @@ export function mountViewer(host: HTMLElement, options: ViewerOptions = {}): Vie
       return [];
     }
 
-    const fonts = embeddedFaces(doc, svg, required);
+    // Faces the page already holds need no decoding.
+    const keys = required.map(spec => `${spec.family}:${spec.weight}`);
+    if (keys.every(key => sharedFace(doc, key)))
+      return keys.map(key => ({ key, face: sharedFace(doc, key)! }));
+    const fonts = embeddedFaces(parsed, required);
     const FontFaceCtor = (win as Window & typeof globalThis).FontFace;
     if (!FontFaceCtor) throw new Error('The browser cannot load embedded diagram fonts.');
     return Promise.all(
       fonts.map(async font => {
         const key = `${font.family}:${font.weight}`;
-        const existing = ownedFonts.get(key);
-        if (existing?.status === 'loaded' && Array.from(doc.fonts).includes(existing))
-          return { key, face: existing };
+        const existing = sharedFace(doc, key);
+        if (existing) return { key, face: existing };
         const face = new FontFaceCtor(font.family, `url("${font.data}")`, { weight: font.weight });
         await face.load();
         if (face.status !== 'loaded')
@@ -382,80 +483,21 @@ export function mountViewer(host: HTMLElement, options: ViewerOptions = {}): Vie
       }),
     );
   };
-  const stopWorker = (error?: Error) => {
-    const active = workerJob;
-    workerJob = undefined;
-    if (active) {
-      win.clearTimeout(active.timer);
-      active.cleanup();
-      active.finish(undefined, error ?? new Error('Viewer render was cancelled.'));
-    }
-    worker?.terminate();
-    worker = undefined;
-  };
-  const render = (
+  const render = async (
     source: string,
     renderOptions: RenderOptions,
     signal?: AbortSignal,
   ): Promise<RenderResult> => {
-    if ((options.execution ?? { mode: 'worker' }).mode === 'main') {
+    const execution = options.execution ?? { mode: 'worker' };
+    if (execution.mode === 'main') {
+      // The compiler loads only for main-thread rendering, so a worker page never downloads it.
+      const { renderSvg } = await import('./render');
       return renderSvg(source, { ...renderOptions, signal });
     }
-    return new Promise((resolve, reject) => {
-      const id = ++nextWorkId;
-      let completed = false;
-      const cleanup = () => {
-        if (!worker) return;
-        worker.removeEventListener('message', onMessage);
-        worker.removeEventListener('error', onError);
-        worker.removeEventListener('messageerror', onMessageError);
-        signal?.removeEventListener('abort', onAbort);
-      };
-      const finish = (result?: RenderResult, error?: Error) => {
-        if (completed) return;
-        completed = true;
-        const active = workerJob;
-        if (active?.id === id) {
-          workerJob = undefined;
-          win.clearTimeout(active.timer);
-          active.cleanup();
-        }
-        if (error) reject(error);
-        else resolve(result!);
-      };
-      const onMessage = (event: MessageEvent<WorkerReply>) => {
-        if (event.data?.id === id) finish(event.data.result);
-      };
-      const onError = (event: ErrorEvent) => {
-        event.preventDefault();
-        stopWorker(new Error(event.message || 'Viewer render worker failed.'));
-      };
-      const onMessageError = () =>
-        stopWorker(new Error('Viewer render worker returned an unreadable result.'));
-      const onAbort = () => stopWorker(new Error('Viewer render was aborted.'));
-      try {
-        worker ??=
-          options.execution?.mode === 'worker' && options.execution.createWorker
-            ? options.execution.createWorker()
-            : new Worker(new URL('./render.worker.ts', import.meta.url), { type: 'module' });
-        worker.addEventListener('message', onMessage);
-        worker.addEventListener('error', onError);
-        worker.addEventListener('messageerror', onMessageError);
-        signal?.addEventListener('abort', onAbort, { once: true });
-        const timeoutMs =
-          options.execution?.mode === 'worker' ? (options.execution.timeoutMs ?? 5000) : 5000;
-        const timer = win.setTimeout(
-          () => stopWorker(new Error('Viewer render worker timed out.')),
-          timeoutMs,
-        );
-        workerJob = { id, timer, finish, cleanup };
-        worker.postMessage({ id, source, options: renderOptions } satisfies WorkerRequest);
-      } catch (error) {
-        stopWorker(
-          error instanceof Error ? error : new Error('Viewer render worker could not start.'),
-        );
-        reject(error);
-      }
+    return renderInWorker(source, renderOptions, {
+      create: execution.createWorker,
+      timeoutMs: execution.timeoutMs,
+      signal,
     });
   };
 
@@ -467,9 +509,20 @@ export function mountViewer(host: HTMLElement, options: ViewerOptions = {}): Vie
     const background = svg?.querySelector(':scope > rect');
     return target === viewport || target === svg || target === background;
   };
+  /** Slot content is the host's: its nodes are never drawing items. */
+  const fromHost = (event: Event) =>
+    !(event.target instanceof win.Node) ||
+    !viewport.contains(event.target) ||
+    anchorLayer.el.contains(event.target);
+  /** Marked content (`data-draft-input`) takes its own pointer, wheel and keys. */
+  const hostInput = (event: Event) =>
+    event
+      .composedPath()
+      .some(node => node instanceof win.Element && node.hasAttribute('data-draft-input'));
   viewport.addEventListener(
     'wheel',
     event => {
+      if (hostInput(event)) return;
       event.preventDefault();
       zoomBy(event.deltaY < 0 ? 1.1 : 1 / 1.1);
     },
@@ -489,10 +542,15 @@ export function mountViewer(host: HTMLElement, options: ViewerOptions = {}): Vie
   });
   viewport.addEventListener('pointermove', event => {
     if (!pan) return;
-    camera.centerX = pan.centerX - (event.clientX - pan.x) / pan.scale;
-    camera.centerY = pan.centerY - (event.clientY - pan.y) / pan.scale;
-    userCamera = true;
-    applyCamera();
+    move(
+      {
+        centerX: pan.centerX - (event.clientX - pan.x) / pan.scale,
+        centerY: pan.centerY - (event.clientY - pan.y) / pan.scale,
+        zoom: camera.zoom,
+      },
+      'user',
+      true,
+    );
   });
   const endPan = () => {
     if (!pan) return;
@@ -502,11 +560,11 @@ export function mountViewer(host: HTMLElement, options: ViewerOptions = {}): Vie
       // Pointer capture can already be released by the browser.
     }
     pan = undefined;
-    emit('camera', { camera: { ...camera }, reason: 'user' });
   };
   viewport.addEventListener('pointerup', endPan);
   viewport.addEventListener('pointercancel', endPan);
   viewport.addEventListener('click', event => {
+    if (fromHost(event)) return;
     const target = event.target instanceof win.Element ? event.target : null;
     const anchor = target?.closest('a[href]');
     if (anchor && viewport.contains(anchor)) {
@@ -526,6 +584,32 @@ export function mountViewer(host: HTMLElement, options: ViewerOptions = {}): Vie
     const item = drawing?.items.find(value => value.id === id);
     if (item) emit('itemactivate', { id: item.id, kind: item.kind, input: 'pointer', revision });
   });
+  viewport.addEventListener('contextmenu', event => {
+    if (fromHost(event)) return;
+    const target = event.target instanceof win.Element ? event.target : null;
+    const id = target?.closest('[data-id]')?.getAttribute('data-id') ?? null;
+    const item = id ? drawing?.items.find(value => value.id === id) : undefined;
+    emit('contextmenu', {
+      id: item?.id ?? null,
+      ...(item ? { kind: item.kind } : {}),
+      clientX: event.clientX,
+      clientY: event.clientY,
+      preventDefault: () => event.preventDefault(),
+    });
+  });
+  // Focus that enters a body or overlay brings its item into view; Escape from marked content
+  // returns to the drawing, and so does losing the item that held focus.
+  anchorLayer.el.addEventListener('focusin', event => {
+    const id = event.target instanceof win.Node ? anchorLayer.idOf(event.target) : undefined;
+    // A press on marked content focuses it too; a camera move then could lose its click.
+    if (id && !anchorLayer.pressed()) handle.reveal(id);
+  });
+  anchorLayer.el.addEventListener('keydown', event => {
+    if (event.key === 'Escape') viewport.focus({ preventScroll: true });
+  });
+  anchorLayer.el.addEventListener('draft-anchor-focus-lost', () =>
+    viewport.focus({ preventScroll: true }),
+  );
   viewport.addEventListener('keydown', event => {
     if (event.target !== viewport || event.altKey || event.ctrlKey || event.metaKey) return;
     if (event.key === '+' || event.key === '=') zoomBy(1.2);
@@ -538,11 +622,15 @@ export function mountViewer(host: HTMLElement, options: ViewerOptions = {}): Vie
       if (request !== at) work.resolve({ status, revision: request });
     }
   };
+  /** Cancels the render in flight; a newer update or destroy calls it. */
+  let cancelRender = () => {};
   const update = (source: string, updateOptions: UpdateOptions = {}): Promise<UpdateResult> => {
     const id = ++revision;
     if (destroyed) return Promise.resolve({ status: 'destroyed', revision: id });
     finishPending(id, 'superseded');
-    stopWorker(new Error('Viewer update was superseded.'));
+    cancelRender();
+    const job = new AbortController();
+    cancelRender = () => job.abort();
     return new Promise(resolve => {
       let settled = false;
       const finish = (result: UpdateResult) => {
@@ -560,9 +648,7 @@ export function mountViewer(host: HTMLElement, options: ViewerOptions = {}): Vie
         resolve(terminal);
       };
       const abort = () => {
-        if (id === revision && (options.execution ?? { mode: 'worker' }).mode === 'worker') {
-          stopWorker(new Error('Viewer render was aborted.'));
-        }
+        job.abort();
         finish({ status: 'aborted', revision: id });
       };
       pending.set(id, { resolve: finish });
@@ -576,9 +662,10 @@ export function mountViewer(host: HTMLElement, options: ViewerOptions = {}): Vie
         target: 'inline',
         idPrefix,
         fonts: options.render?.fonts ?? 'embed',
+        colorScheme: 'auto',
         ...(updateOptions.state !== undefined ? { state: updateOptions.state } : {}),
       } satisfies RenderOptions;
-      void render(source, renderOptions, updateOptions.signal)
+      void render(source, renderOptions, job.signal)
         .then(async result => {
           if (destroyed || id !== revision || updateOptions.signal?.aborted) {
             finish({ status: 'superseded', revision: id });
@@ -590,8 +677,10 @@ export function mountViewer(host: HTMLElement, options: ViewerOptions = {}): Vie
             return;
           }
           let preparedFonts: PreparedFace[];
+          let parsed: XMLDocument;
           try {
-            preparedFonts = await prepareFonts(result.value.svg, renderOptions.fonts ?? 'embed');
+            parsed = parseSvg(doc, result.value.svg);
+            preparedFonts = await prepareFonts(parsed, renderOptions.fonts ?? 'embed');
           } catch (fontError) {
             if (destroyed || id !== revision || updateOptions.signal?.aborted) {
               finish({
@@ -615,7 +704,7 @@ export function mountViewer(host: HTMLElement, options: ViewerOptions = {}): Vie
           }
           let svg: SVGSVGElement;
           try {
-            svg = safeSvg(doc, result.value.svg, renderOptions.fonts !== 'host');
+            svg = safeSvg(doc, parsed, renderOptions.fonts !== 'host');
           } catch (error) {
             const message = error instanceof Error ? error.message : 'Could not build safe SVG.';
             const failure = fail('internal', 'DRAFT_VIEWER_DOM', message);
@@ -623,18 +712,18 @@ export function mountViewer(host: HTMLElement, options: ViewerOptions = {}): Vie
             finish({ status: 'error', revision: id, error: failure });
             return;
           }
-          const addedFonts: PreparedFace[] = [];
+          const addedFonts: string[] = [];
           try {
             for (const prepared of preparedFonts) {
-              if (ownedFonts.has(prepared.key)) continue;
-              doc.fonts.add(prepared.face);
-              ownedFonts.set(prepared.key, prepared.face);
-              addedFonts.push(prepared);
+              if (heldFonts.has(prepared.key)) continue;
+              retainFace(doc, prepared.key, prepared.face);
+              heldFonts.add(prepared.key);
+              addedFonts.push(prepared.key);
             }
           } catch (fontError) {
-            for (const { key, face } of addedFonts) {
-              doc.fonts.delete(face);
-              ownedFonts.delete(key);
+            for (const key of addedFonts) {
+              releaseFace(doc, key);
+              heldFonts.delete(key);
             }
             const error = fail(
               'environment',
@@ -649,7 +738,18 @@ export function mountViewer(host: HTMLElement, options: ViewerOptions = {}): Vie
           }
           const hadDrawing = !!drawing;
           drawing = result.value;
-          viewport.replaceChildren(svg);
+          geometry = drawing.geometry ? { ...drawing.geometry, revision: id } : null;
+          // Replace only the drawing: the anchor layer beside it keeps its targets.
+          const old = viewport.querySelector(':scope > svg');
+          if (old) old.replaceWith(svg);
+          else viewport.prepend(svg);
+          anchorLayer.setGeometry(geometry);
+          // The rebuild drops a focused outline button: give focus back to the same item's
+          // button, or to the drawing when that item is gone, so a screen reader keeps its place.
+          const focused = (outline.getRootNode() as Document | ShadowRoot).activeElement;
+          const focusedId = outline.contains(focused)
+            ? (focused as HTMLElement).dataset.itemId
+            : undefined;
           outline.replaceChildren(
             ...drawing.items.map(item => {
               const li = doc.createElement('li');
@@ -674,20 +774,21 @@ export function mountViewer(host: HTMLElement, options: ViewerOptions = {}): Vie
                   const target = mark.getBoundingClientRect();
                   const frame = viewport.getBoundingClientRect();
                   if ((target.width || target.height) && frame.width && frame.height) {
-                    camera = {
-                      centerX:
-                        camera.centerX +
-                        (target.left + target.width / 2 - (frame.left + frame.width / 2)) /
-                          camera.zoom,
-                      centerY:
-                        camera.centerY +
-                        (target.top + target.height / 2 - (frame.top + frame.height / 2)) /
-                          camera.zoom,
-                      zoom: Math.max(1, camera.zoom),
-                    };
-                    userCamera = true;
-                    applyCamera();
-                    emit('camera', { camera: { ...camera }, reason: 'user' });
+                    move(
+                      {
+                        centerX:
+                          camera.centerX +
+                          (target.left + target.width / 2 - (frame.left + frame.width / 2)) /
+                            camera.zoom,
+                        centerY:
+                          camera.centerY +
+                          (target.top + target.height / 2 - (frame.top + frame.height / 2)) /
+                            camera.zoom,
+                        zoom: Math.max(1, camera.zoom),
+                      },
+                      'user',
+                      true,
+                    );
                   }
                 }
               });
@@ -695,15 +796,22 @@ export function mountViewer(host: HTMLElement, options: ViewerOptions = {}): Vie
               return li;
             }),
           );
+          if (focusedId !== undefined) {
+            const again = Array.from(outline.querySelectorAll<HTMLButtonElement>('button')).find(
+              button => button.dataset.itemId === focusedId,
+            );
+            (again ?? viewport).focus({ preventScroll: true });
+          }
           const retainedFonts = new Set(preparedFonts.map(font => font.key));
-          for (const [key, face] of ownedFonts) {
+          for (const key of heldFonts) {
             if (retainedFonts.has(key)) continue;
-            doc.fonts.delete(face);
-            ownedFonts.delete(key);
+            releaseFace(doc, key);
+            heldFonts.delete(key);
           }
           root.classList.remove('draft-viewer--stale');
           live.textContent = result.diagnostics.map(diagnostic => diagnostic.message).join(' ');
-          if (!hadDrawing || updateOptions.camera === 'fit') fit();
+          if (pendingMove) whenSized(pendingMove);
+          else if (!hadDrawing || updateOptions.camera === 'fit') fit();
           else applyCamera();
           const committed: UpdateResult = {
             status: 'committed',
@@ -711,9 +819,14 @@ export function mountViewer(host: HTMLElement, options: ViewerOptions = {}): Vie
             value: drawing,
             diagnostics: result.diagnostics,
           };
+          // A host hidden until now could not see a scheme change; read it again.
+          scheme.check();
+          // Listeners hear the commit before `update` and `ready` resolve.
+          emit('render', { revision: id, value: drawing, geometry });
+          lastDiagnostics = { revision: id, diagnostics: result.diagnostics, stale: false };
+          tellDiagnostics();
+          tellAnchors();
           finish(committed);
-          emit('render', { revision: id, value: drawing });
-          emit('diagnostics', { revision: id, diagnostics: result.diagnostics, stale: false });
         })
         .catch(error => {
           if (destroyed || id !== revision || updateOptions.signal?.aborted) {
@@ -734,8 +847,34 @@ export function mountViewer(host: HTMLElement, options: ViewerOptions = {}): Vie
     });
   };
 
-  return {
-    update,
+  /** The latest update's settled result; a superseded one waits for the update that replaced it. */
+  let latest: Promise<UpdateResult> | undefined;
+  let firstSettled!: (result: UpdateResult) => void;
+  const first = new Promise<UpdateResult>(resolve => (firstSettled = resolve));
+  const tracked = (source: string, updateOptions?: UpdateOptions) => {
+    const result = update(source, updateOptions);
+    const settled: Promise<UpdateResult> = result.then(r =>
+      r.status === 'superseded' && latest !== settled ? latest! : r,
+    );
+    latest = settled;
+    void settled.then(firstSettled);
+    return result;
+  };
+
+  const handle: ViewerHandle = {
+    get ready() {
+      return latest ?? first;
+    },
+    update: tracked,
+    geometry: () => geometry,
+    anchor(slots) {
+      if (destroyed) return;
+      const unknownBefore = anchorLayer.warnings().length;
+      anchorLayer.setSlots(slots);
+      applyCamera();
+      tellAnchors();
+      if (anchorLayer.warnings().length || unknownBefore) tellDiagnostics();
+    },
     on(type, listener) {
       if (destroyed) return () => {};
       const set = listeners.get(type) ?? new Set();
@@ -753,14 +892,14 @@ export function mountViewer(host: HTMLElement, options: ViewerOptions = {}): Vie
         value.zoom <= 0
       )
         return;
-      camera = { ...value };
-      userCamera = true;
-      applyCamera();
-      emit('camera', { camera: { ...camera }, reason: 'api' });
+      move({ ...value }, 'api', true);
     },
-    fit: () => {
-      if (!destroyed) fit();
-    },
+    fit: (ids, frameOptions) => fitTo(ids, frameOptions, 'api'),
+    reveal: (id, frameOptions) =>
+      whenSized(() => {
+        const box = boxOf(id);
+        return box ? move(revealCamera(camera, box, size, frameOptions), 'api', true) : 'missing';
+      }),
     focusItem(id) {
       if (!drawing?.items.some(item => item.id === id)) return false;
       const button = Array.from(outline.querySelectorAll<HTMLButtonElement>('button')).find(
@@ -772,7 +911,10 @@ export function mountViewer(host: HTMLElement, options: ViewerOptions = {}): Vie
     destroy() {
       if (destroyed) return;
       destroyed = true;
+      scheme.stop();
       revision++;
+      pendingMove = undefined;
+      if (cameraFrame) (win.cancelAnimationFrame ?? win.clearTimeout)(cameraFrame);
       if (pan) {
         try {
           viewport.releasePointerCapture(pan.pointerId);
@@ -784,15 +926,18 @@ export function mountViewer(host: HTMLElement, options: ViewerOptions = {}): Vie
       for (const [request, work] of pending)
         work.resolve({ status: 'destroyed', revision: request });
       pending.clear();
-      stopWorker(new Error('Viewer was destroyed.'));
-      for (const face of ownedFonts.values()) doc.fonts.delete(face);
-      ownedFonts.clear();
+      cancelRender();
+      for (const key of heldFonts) releaseFace(doc, key);
+      heldFonts.clear();
       resize.disconnect();
+      emit('anchors', { anchors: [] });
+      anchorLayer.destroy();
       listeners.clear();
       host.replaceChildren();
       drawing = undefined;
     },
   };
+  return handle;
 }
 
 export type { LinkPolicy };

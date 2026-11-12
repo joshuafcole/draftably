@@ -6,6 +6,7 @@ export const renderSvg: (source: string, options?: RenderOptions) => Promise<Ren
 export const validate: (source: string, options?: ValidateOptions) => Promise<ValidationResult> =
   check;
 export { runtimeVersion, fontMetricsVersion } from './version';
+export type { Box, EdgeOut, Geometry, PlacedBox } from './geometry';
 export type {
   CompileLimits,
   CommonRenderOptions,

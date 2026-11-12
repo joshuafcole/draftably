@@ -184,7 +184,7 @@ function pointer(x: number, y: number, extra: Record<string, unknown> = {}) {
       releasePointerCapture() {},
       getBoundingClientRect: () => ({ left: 0, top: 0, width: 800, height: 600 }),
     },
-    target: { closest: () => null },
+    target: { closest: () => null, getRootNode: () => ({ activeElement: null }) },
     ...extra,
   } as unknown as PointerEvent;
 }
@@ -332,7 +332,7 @@ describe('who the camera reports as the mover', () => {
     s.setStageSize(STAGE);
     s.moveCamera({ x: 5, y: 5, k: 1 });
     s.transact('Add', d => {
-      d.graph.nodes.push({ id: 'n', label: 'N' } as never);
+      d.graph.nodes.push({ id: 'n', title: 'N' } as never);
     });
     s.moveCamera({ x: 90, y: 90, k: 1 });
     moves.length = 0;

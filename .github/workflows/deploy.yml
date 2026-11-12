@@ -1,8 +1,9 @@
 name: Deploy to GitHub Pages
 
+# The release workflow calls this after it publishes to npm, so the docs never describe a
+# version that npm does not have. Run it by hand to ship a docs-only fix between releases.
 on:
-  push:
-    branches: [main]
+  workflow_call:
   workflow_dispatch:
 
 permissions:

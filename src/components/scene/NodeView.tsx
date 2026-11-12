@@ -5,8 +5,8 @@ import { brokenRectPath } from '../../model/geometry';
 import { nodeLabel } from '../../model/labels';
 import { portPoint } from '../../model/routes';
 import { resolveAppearance } from '../../model/appearance';
-import { drawnSwatch, participantAccent } from '../../model/colors';
-import { accentPath } from '../../cli/svg';
+import { detailInk, drawnSwatch, participantAccent } from '../../model/colors';
+import { accentPath } from '../../runtime/svg-renderer';
 import { HALO_GAP, haloInk, MARKER, statusPaint } from '../../model/status';
 import { countText, STACK_OFFSETS } from '../../model/stack';
 import { measureText } from '../../model/fonts';
@@ -15,7 +15,7 @@ import type { Diagram, NodeLayout, Side } from '../../model/types';
 import { SceneGlyph } from '../Icon';
 import { LinkMarkView } from './LinkMark';
 import { NodeBody, useNodeContent } from './node-content';
-import { pinSpot, PositionBadge, RemovedMarker, ResizeHandles, SceneText } from './parts';
+import { NodeTitle, pinSpot, PositionBadge, RemovedMarker, ResizeHandles } from './parts';
 
 const SIDES: Side[] = ['left', 'right', 'top', 'bottom'];
 
@@ -37,6 +37,36 @@ export interface NodeViewProps {
   /** Comparison candidates: focusable so a keyboard user can choose the anchor. */
   focusable?: boolean;
   idPrefix?: string;
+  /** A host body covers this node: its ports and handles draw in the chrome layer above it. */
+  body?: boolean;
+}
+
+/**
+ * The ports and resize handles of a node with a host body, drawn in the editor's top layer so the
+ * body never hides them. Pointer input on them reaches the canvas's own handlers.
+ */
+export function NodeChrome(props: NodeViewProps) {
+  const style = () => styleOf(props.doc, props.id);
+  return (
+    <g
+      class="node node-chrome"
+      classList={{ selected: props.selected }}
+      data-kind="node"
+      data-id={props.id}
+      transform={`translate(${props.rect.x},${props.rect.y})`}
+    >
+      <For each={style().shape === 'marker' ? (['bottom'] as Side[]) : SIDES}>
+        {side => {
+          const p = () =>
+            portPoint(style().shape, { x: 0, y: 0, w: props.rect.w, h: props.rect.h }, side);
+          return <circle class="port" data-port={side} cx={p().x} cy={p().y} r={4.5} />;
+        }}
+      </For>
+      <Show when={props.selected}>
+        <ResizeHandles rect={props.rect} zoom={props.zoom ?? 1} corners />
+      </Show>
+    </g>
+  );
 }
 
 export function NodeView(props: NodeViewProps) {
@@ -46,6 +76,7 @@ export function NodeView(props: NodeViewProps) {
   const color = () => drawnSwatch(props.doc, look(), props.id, 'node');
   const paint = () => statusPaint(look(), style().status, style().spot);
   const label = createMemo(() => nodeLabel(props.doc, props.id, node().title, props.rect));
+  const inside = () => label().mode === 'center' && style().shape !== 'text';
   const ringRadius = () => {
     const { shape } = style(),
       r = props.rect;
@@ -95,6 +126,7 @@ export function NodeView(props: NodeViewProps) {
       data-kind="node"
       data-id={props.id}
       data-href={node().href}
+      data-draft-body={props.body ? '' : undefined}
       transform={`translate(${props.rect.x},${props.rect.y})`}
       opacity={paint().opacity < 1 ? paint().opacity : undefined}
       tabindex={props.interactive || props.focusable ? 0 : undefined}
@@ -111,6 +143,7 @@ export function NodeView(props: NodeViewProps) {
       <Show when={label().leader && label().mode !== 'center'}>
         <path
           class="leader"
+          fill="none"
           d={`M${props.rect.w / 2},${props.rect.h / 2} L${label().x},${label().y}`}
         />
       </Show>
@@ -204,14 +237,11 @@ export function NodeView(props: NodeViewProps) {
       <Show
         when={body()}
         fallback={
-          <SceneText
-            class="node-title"
-            lines={label().lines}
-            x={label().x}
-            y={label().y}
-            lineHeight={label().lineHeight}
-            type={look().title}
-            fill={label().mode === 'center' && style().shape !== 'text' ? color().ink : look().text}
+          <NodeTitle
+            label={label()}
+            look={look()}
+            fill={inside() ? color().ink : look().text}
+            detailFill={inside() ? detailInk(look(), color()) : look().muted}
             strike={paint().strike}
             fade={paint().inkFade}
           />
