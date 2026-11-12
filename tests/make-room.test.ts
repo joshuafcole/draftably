@@ -2,15 +2,15 @@
  * Making room (`dsl/dilate.ts`, `dsl/make-room.ts`): opening a card warps the drawing instead of
  * laying it out again. Property tests over seeded random drawings, compiled for real:
  *
- * - relaxation off: every point outside the opened box moves by its cut's translation or not at
- *   all, on each axis, and no route is recomputed;
- * - relaxation on: no box moves more than the cap from where the warp put it, and the same open
- *   set draws the same geometry whatever order its containers were opened in.
+ * - the warp: every point outside the opened box moves by its cut's translation or not at all,
+ *   on each axis, no route is recomputed, and the same open set draws the same boxes whatever
+ *   order its containers were opened in;
+ * - `redrawBent`: the boxes stay the warp's, and only the lines the warp bent are routed again.
  */
 import { describe, expect, it } from 'vitest';
 import { compile } from '../src/dsl/compile';
 import { dilate, type Cut, type WarpBox } from '../src/dsl/dilate';
-import { makeRoom, redrawBent, relaxRoom, type RoomDrawing } from '../src/dsl/make-room';
+import { makeRoom, redrawBent, type RoomDrawing } from '../src/dsl/make-room';
 import { projectScene, visibleRects } from '../src/dsl/project';
 import { bundlesOf } from '../src/model/bundles';
 import { computeRoutes } from '../src/model/routes';
@@ -140,7 +140,7 @@ describe('dilate, the warp itself', () => {
   });
 });
 
-describe('makeRoom, relaxation off', () => {
+describe('makeRoom, the warp', () => {
   const seeds = Array.from({ length: 24 }, (_, i) => 1000 + i * 7919);
 
   it.each(seeds)(
@@ -217,11 +217,11 @@ describe('makeRoom, relaxation off', () => {
   );
 });
 
-describe('makeRoom, relaxation on', () => {
+describe('makeRoom, in any order', () => {
   const seeds = Array.from({ length: 6 }, (_, i) => 77 + i * 104729);
 
   it.each(seeds)(
-    'seed %i: capped, and the same in any order of opening',
+    'seed %i: the same boxes in any order of opening',
     async seed => {
       const { cards, source } = world(seed),
         all = new Set(cards),
@@ -240,21 +240,6 @@ describe('makeRoom, relaxation on', () => {
       const rects = (doc: RoomDrawing['doc']) =>
         [...visibleRects(doc).rects].sort(([a], [b]) => (a < b ? -1 : 1));
       expect(rects(backward.doc)).toEqual(rects(forward.doc));
-
-      const cap = 40,
-        fixed = cards,
-        one = await relaxRoom(forward, { fixed, maxMove: cap }),
-        other = await relaxRoom(backward, { fixed, maxMove: cap });
-      expect(rects(other.doc)).toEqual(rects(one.doc));
-      expect(other.routes.routes.map(r => r.points)).toEqual(one.routes.routes.map(r => r.points));
-      const warped = visibleRects(forward.doc).rects;
-      for (const [id, r] of visibleRects(one.doc).rects) {
-        const was = warped.get(id)!;
-        expect(Math.hypot(r.x - was.x, r.y - was.y), `${id} within the cap`).toBeLessThanOrEqual(
-          cap + 0.01,
-        );
-        if (fixed.includes(id)) expect(r).toEqual(was);
-      }
     },
     60_000,
   );
@@ -263,7 +248,7 @@ describe('makeRoom, relaxation on', () => {
 /**
  * A portal and a trunk through the warp (Phase 14 on Phase 13): a card with three lines to a
  * portal opens, so the portal is beyond the cut and moves with it. It stays outside the frame on
- * the side it faced, relaxation holds it where the warp put it, and the three lines stay one trunk.
+ * the side it faced, the redraw leaves it where the warp put it, and the three lines stay one trunk.
  */
 describe('makeRoom, a portal and a trunk', () => {
   const source = (open: boolean) =>
@@ -299,7 +284,7 @@ describe('makeRoom, a portal and a trunk', () => {
     };
   };
 
-  it('keeps the portal outside the frame and the trunk one trunk, warped and relaxed', async () => {
+  it('keeps the portal outside the frame and the trunk one trunk, warped and redrawn', async () => {
     const rest = await drawn(source(false)),
       open = await drawn(source(true)),
       made = makeRoom(rest, new Map([['c', open]]), open.doc);
@@ -314,11 +299,11 @@ describe('makeRoom, a portal and a trunk', () => {
       expect(trunks).toHaveLength(1);
       expect([...trunks[0].members].sort()).toEqual(['x', 'y', 'z']);
     }
-    const relaxed = await relaxRoom(made, { fixed: ['c'] }),
-      held = outside(relaxed.doc);
+    const redrawn = redrawBent(made),
+      held = outside(redrawn.doc);
+    expect(redrawn.redrawn.length).toBeGreaterThan(0);
     expect(held.p).toEqual(after.p);
-    expect(held.right).toBeGreaterThan(0);
-    const trunks = bundlesOf(relaxed.doc, relaxed.routes.routes);
+    const trunks = bundlesOf(redrawn.doc, redrawn.routes.routes);
     expect(trunks).toHaveLength(1);
     expect(trunks[0].members).toHaveLength(3);
   });

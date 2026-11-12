@@ -51,7 +51,7 @@ import type { CanvasTextPart } from './canvas-text';
 /**
  * Where a host has placed a drawing: each object's rectangle by id, and the routes to draw as they
  * are. Objects it leaves out keep the compile's place. The routes must be the host's for exactly
- * these places (`makeRoom`, `relaxRoom`).
+ * these places (`makeRoom`, `redrawBent`).
  */
 export interface HostArrangement {
   nodes: Readonly<Record<string, { x: number; y: number; w: number; h: number }>>;

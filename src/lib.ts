@@ -61,10 +61,7 @@ export {
   CannotMakeRoom,
   makeRoom,
   redrawBent,
-  relaxRoom,
-  RELAX_MAX_MOVE,
   type MadeRoom,
-  type RelaxOptions,
   type RoomDrawing,
 } from './dsl/make-room';
 export type { Route, RoutingResult } from './engines/routing-engine.js';
