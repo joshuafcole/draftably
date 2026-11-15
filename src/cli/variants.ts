@@ -74,6 +74,11 @@ export interface Measured {
   variant: Variant;
   source: string;
   svg: string;
+  /**
+   * The drawing `vary` measured for it, with `drawings: true`: the scene, its rects and routes, so
+   * a host that wants the geometry does not compile and route the source again.
+   */
+  drawing?: Drawn;
 }
 
 export type Prefer = 'fewer-crossings' | 'compact' | 'stable';
@@ -953,6 +958,8 @@ export interface VaryOptions {
   from?: { id: string; edits: Edit[] };
   /** `--budget`: stop trying new variants after this many milliseconds; keep what was found. */
   budget?: number;
+  /** Keep each listed variant's {@link Drawn} on its {@link Measured} as `drawing`. */
+  drawings?: boolean;
   /** Called as each variant finishes: its title, metrics (or error), and how many are left. */
   progress?: (
     done: { title: string; metrics?: Metrics; error?: string; ms: number },
@@ -972,7 +979,7 @@ export interface VaryResult {
   failed: Array<{ title: string; error: string }>;
   /** Candidates left untried when `--budget` ran out. */
   skipped: number;
-  /** Source and SVG for each listed variant, by id. */
+  /** Source and SVG for each listed variant, by id (and its drawing, with `drawings`). */
   drawn: Map<string, Measured>;
 }
 
@@ -1016,7 +1023,9 @@ export async function vary(source: string, opts: VaryOptions = {}): Promise<Vary
   };
   // The first variant to draw each picture; ids are given after ranking, so keep the objects.
   const seen = new Map<string, Variant>([[base.key, v0]]),
-    drawn = new Map<string, Measured>([['v0', { variant: v0, source, svg: base.svg }]]),
+    drawn = new Map<string, Measured>([
+      ['v0', { variant: v0, source, svg: base.svg, ...(opts.drawings ? { drawing: base } : {}) }],
+    ]),
     found: Array<{ variant: Variant; measured: Measured; same?: Variant }> = [],
     failed: VaryResult['failed'] = [];
   const candidates =
@@ -1058,7 +1067,11 @@ export async function vary(source: string, opts: VaryOptions = {}): Promise<Vary
         left,
       );
       if (same && ranked) continue;
-      found.push({ variant, measured: { variant, source: next, svg: d.svg }, same });
+      found.push({
+        variant,
+        measured: { variant, source: next, svg: d.svg, ...(opts.drawings ? { drawing: d } : {}) },
+        same,
+      });
       if (!same) seen.set(d.key, variant);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);

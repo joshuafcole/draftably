@@ -6,6 +6,7 @@ import { sceneConflicts } from '../src/dsl/conflicts';
 import {
   applyEdits,
   autoVariants,
+  draw,
   grid,
   improves,
   neighbors,
@@ -77,6 +78,27 @@ describe('vary', () => {
     expect(a.variants[0].id).toBe('v0');
     const pick = a.variants.find(v => v.id === a.recommended)!;
     if (pick.id !== 'v0') expect(improves(pick.metrics!, a.variants[0].metrics!)).toBe(true);
+  });
+
+  it("keeps each variant's drawing with `drawings`, and changes nothing else", async () => {
+    const plain = await vary(SOURCE),
+      kept = await vary(SOURCE, { drawings: true });
+    expect(kept.variants).toEqual(plain.variants);
+    expect(kept.recommended).toBe(plain.recommended);
+    expect([...kept.drawn.keys()]).toEqual([...plain.drawn.keys()]);
+    for (const [id, measured] of plain.drawn) {
+      expect(measured.drawing).toBeUndefined();
+      const { drawing, ...rest } = kept.drawn.get(id)!;
+      expect(rest).toEqual(measured);
+      // The drawing is the one the source draws: the same picture as drawing it again.
+      const again = await draw(measured.source);
+      expect(drawing!.svg).toBe(measured.svg);
+      expect(drawing!.key).toBe(again.key);
+      expect([...drawing!.rects]).toEqual([...again.rects]);
+      expect(drawing!.routes.map(r => [r.id, r.points])).toEqual(
+        again.routes.map(r => [r.id, r.points]),
+      );
+    }
   });
 
   it('takes --try steps from the viewer Compare parameters', () => {
