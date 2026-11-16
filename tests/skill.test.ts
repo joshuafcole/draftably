@@ -3,6 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { compile } from '../src/dsl/compile';
+import { LANGUAGE } from '../src/dsl/language';
 import { COLORS, DSL_SHAPES, ENGINE_PARAMS, ENGINES, ROUTING_PARAMS } from '../src/dsl/syntax';
 import { installSkill, skillSource, staleSkills } from '../src/cli/skill';
 
@@ -34,8 +35,7 @@ describe('agent skill', () => {
 
   // The skill is a second language guide. When the parser learns a word, the skill must too.
   it('names every statement, color, shape and engine the parser accepts', () => {
-    const parser = fs.readFileSync(path.join(__dirname, '../src/dsl/syntax.ts'), 'utf8');
-    const statements = [...parser.matchAll(/^\s*case '([a-z]+)':/gm)].map(m => m[1]);
+    const statements = Object.keys(LANGUAGE);
     expect(statements).toContain('edge');
     const words = [...statements, ...COLORS, ...DSL_SHAPES, ...ENGINES];
     // Words sit in code spans, after `=`, or between `|` (escaped as `\|` in tables).

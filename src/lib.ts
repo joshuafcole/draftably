@@ -24,6 +24,27 @@ export {
   type Statement,
 } from './dsl/syntax';
 
+// The language as data: each statement, the attributes it takes and what their values may be,
+// which `parseModel` reads, and the closed vocabularies it is built from. `FITS` is below.
+export {
+  CONFIG_KEYS,
+  DSL_SHAPES,
+  ENGINE_PARAMS,
+  ENGINES,
+  LANGUAGE,
+  ROUTING_PARAMS,
+  THEME_ATTRS,
+  type AttributeValue,
+  type LanguageAttribute,
+  type LanguageStatement,
+  type OpenValue,
+  type StatementSpec,
+} from './dsl/language';
+export { MARKS, type Mark } from './dsl/syntax';
+export { MARKERS, type EndMarker } from './model/markers';
+export { NOTE_SIDES, type NoteSide } from './model/note';
+export { THEME_IDS } from './model/appearance';
+
 // What an edit did to a source, statement by statement.
 export { sourceOperations, type SourceOperation } from './dsl/operations';
 

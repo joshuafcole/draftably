@@ -1,13 +1,15 @@
 import { describe, expect, it } from 'vitest';
+import * as lib from '../src/lib';
 import {
   CONFIG_KEYS,
   ENGINE_PARAMS,
   LANGUAGE,
   THEME_ATTRS,
   type AttributeValue,
+  type LanguageAttribute,
   type LanguageStatement,
-} from '../src/dsl/language';
-import { parseModel } from '../src/dsl/syntax';
+  parseModel,
+} from '../src/lib';
 
 /** Boxes and lines the samples below point at. */
 const CONTEXT = [
@@ -239,5 +241,47 @@ describe('the language table', () => {
   it('names the settings tables its config and theme attributes come from', () => {
     expect(Object.keys(LANGUAGE.config.attrs).sort()).toEqual(Object.keys(CONFIG_KEYS).sort());
     expect(Object.keys(LANGUAGE.theme.attrs).sort()).toEqual(Object.keys(THEME_ATTRS).sort());
+  });
+});
+
+describe('the library entry', () => {
+  it('exports the table and the vocabularies it is built from', () => {
+    expect(lib.LANGUAGE.edge.attrs.head).toBe(lib.MARKERS);
+    expect(lib.LANGUAGE.note.attrs.side).toBe(lib.NOTE_SIDES);
+    expect(lib.LANGUAGE.theme.words.name).toBe(lib.THEME_IDS);
+    expect(lib.LANGUAGE.node.attrs.shape).toBe(lib.DSL_SHAPES);
+    expect(lib.LANGUAGE.layout.attrs.engine).toBe(lib.ENGINES);
+    expect(lib.LANGUAGE.layout.attrs.fit).toEqual(Object.keys(lib.FITS));
+    expect(Object.keys(lib.LANGUAGE.routing.attrs)).toEqual(Object.keys(lib.ROUTING_PARAMS));
+    expect(Object.keys(lib.ENGINE_PARAMS).every(k => k in lib.LANGUAGE.layout.attrs)).toBe(true);
+    expect(Object.keys(lib.MARKS)).toEqual(['+', '-', '~', '.']);
+    expect(lib.CONFIG_KEYS).toBe(CONFIG_KEYS);
+    expect(lib.THEME_ATTRS).toBe(THEME_ATTRS);
+  });
+});
+
+describe('the table as types', () => {
+  it('names each statement and attribute as a literal, so a host table must place every one', () => {
+    // A host's coverage table is a mapped type over the language: leaving out an attribute, or
+    // naming one the language does not have, fails the type check.
+    type Covered<S extends LanguageStatement> = Record<LanguageAttribute<S>, true>;
+    const edge: Covered<'edge'> = {
+      kind: true,
+      from: true,
+      to: true,
+      was: true,
+      constraint: true,
+      directed: true,
+      head: true,
+      tail: true,
+    };
+    // @ts-expect-error `tail` has no entry.
+    const missing: Covered<'edge'> = { ...edge, tail: undefined };
+    // @ts-expect-error `colour` is not an edge attribute.
+    const extra: Covered<'edge'> = { ...edge, colour: true };
+    const routing: Covered<'routing'>['hops'] = true;
+    const layout: Array<LanguageAttribute<'layout'>> = ['rank-gap', 'fit', 'engine', 'gap'];
+    expect([edge, missing, extra, routing, layout].length).toBe(5);
+    expect(Object.keys(edge).sort()).toEqual(Object.keys(LANGUAGE.edge.attrs).sort());
   });
 });
