@@ -834,7 +834,7 @@ export function parseModel(source: string | SourceDoc): Model {
         if (named !== undefined) {
           count(1);
           assert(
-            ENGINES.includes(named),
+            ENGINES.includes(named as never),
             `Unknown layout engine ${named}; use ${ENGINES.join(', ')}.`,
           );
           allow([...forms.engine, ...common]);
@@ -889,7 +889,7 @@ export function parseModel(source: string | SourceDoc): Model {
         once('theme');
         const name = args[0].value as ThemeId,
           themes = LANGUAGE.theme.words.name;
-        assert(themes.includes(name), `Unknown theme ${name}; use ${themes.join(', ')}.`);
+        assert(themes.includes(name as never), `Unknown theme ${name}; use ${themes.join(', ')}.`);
         m.appearance.theme = name;
         m.themeLine = line;
         const o = m.appearance.overrides;

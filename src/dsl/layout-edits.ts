@@ -48,7 +48,7 @@ const value = (v: unknown): Word => bare(String(v));
 /** The `layout` attributes for engine settings: the engine's own controls that differ from the defaults. */
 export function engineAttrs(settings: LayoutSettings): Array<[string, Word]> {
   const algorithm = LayoutLab.algorithms.find(a => a.id === settings.algorithm);
-  if (!algorithm || !ENGINES.includes(settings.algorithm))
+  if (!algorithm || !ENGINES.includes(settings.algorithm as never))
     throw new UnstorableLayout(
       `${algorithm?.name ?? settings.algorithm} repairs the current drawing and cannot be saved as a layout recipe.`,
     );

@@ -47,7 +47,7 @@ export type Param<K extends string> =
  * Layout engines a file can name. `separate` is left out: it only repairs overlaps in the current
  * drawing, so it cannot be recomputed from the source.
  */
-export const ENGINES: readonly LayoutAlgorithmId[] = [
+export const ENGINES = [
   'compound-flow',
   'boundary-align',
   'compound-spring',
@@ -58,7 +58,7 @@ export const ENGINES: readonly LayoutAlgorithmId[] = [
   'layered',
   'tree',
   'grid',
-];
+] as const satisfies readonly LayoutAlgorithmId[];
 
 const ENGINE_TABLE = {
   'rank-gap': { key: 'rankGap', min: 12, max: 220 },
@@ -103,7 +103,7 @@ export const ROUTING_PARAMS: Record<string, Param<keyof RoutingSettings>> = ROUT
 
 // --- Shapes, frames and sides -----------------------------------------------------------------
 
-export const DSL_SHAPES: DslShape[] = [
+export const DSL_SHAPES = [
   'box',
   'pill',
   'circle',
@@ -111,11 +111,20 @@ export const DSL_SHAPES: DslShape[] = [
   'text',
   'marker',
   'portal',
-];
+] as const satisfies readonly DslShape[];
 /** Shapes a node's box can draw as it was: a marker's box is a thin cut, so it has no other shape. */
-export const PAST_SHAPES = DSL_SHAPES.filter(s => s !== 'marker' && s !== 'portal');
+export const PAST_SHAPES = ['box', 'pill', 'circle', 'diamond', 'text'] as const satisfies Exclude<
+  (typeof DSL_SHAPES)[number],
+  'marker' | 'portal'
+>[];
 export const FRAMES = ['box', 'soft', 'none'] as const;
-export const SIDES: PortSide[] = ['auto', 'left', 'right', 'top', 'bottom'];
+export const SIDES = [
+  'auto',
+  'left',
+  'right',
+  'top',
+  'bottom',
+] as const satisfies readonly PortSide[];
 
 // --- The table --------------------------------------------------------------------------------
 
@@ -184,7 +193,14 @@ const TRUE_FALSE = ['true', 'false'] as const;
 const DIRECTIONS = ['auto', 'right', 'down'] as const;
 const STRENGTHS = ['prefer', 'required'] as const;
 const FOLDS = ['auto', 'never'] as const;
-const FIT_NAMES = Object.keys(FITS) as Fit[];
+/** The names of `FITS`, as a list; the test holds it to `FITS`. */
+export const FIT_NAMES = [
+  'wide',
+  'slide',
+  'square',
+  'page',
+  'tall',
+] as const satisfies readonly Fit[];
 
 /**
  * Every statement `parseModel` accepts, in the order the parser reads them. `view`,

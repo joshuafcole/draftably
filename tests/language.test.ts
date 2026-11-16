@@ -284,4 +284,61 @@ describe('the table as types', () => {
     expect([edge, missing, extra, routing, layout].length).toBe(5);
     expect(Object.keys(edge).sort()).toEqual(Object.keys(LANGUAGE.edge.attrs).sort());
   });
+
+  it('gives every closed vocabulary its exact words as a type, not a wider one', () => {
+    type Equal<A, B> =
+      (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2 ? true : false;
+    type Words<V> = V extends readonly (infer W)[] ? W : never;
+    type Attrs = { [S in LanguageStatement]: (typeof LANGUAGE)[S]['attrs'] };
+    // Every closed vocabulary in the table, attribute or positional, is a tuple of literal words. A
+    // wider array type (`ThemeId[]`) would let a host's coverage table skip a word, or demand one
+    // the language lacks.
+    type Loose<V> = V extends readonly unknown[]
+      ? number extends V['length']
+        ? true
+        : string extends Words<V>
+          ? true
+          : false
+      : false;
+    type Wide = {
+      [S in LanguageStatement]: {
+        [A in keyof Attrs[S]]: Loose<Attrs[S][A]> extends true ? `${S} ${A & string}` : never;
+      }[keyof Attrs[S]];
+    }[LanguageStatement];
+    type WideWords = {
+      [S in LanguageStatement]: (typeof LANGUAGE)[S] extends { words: infer W }
+        ? { [K in keyof W]: Loose<W[K]> extends true ? `${S} ${K & string}` : never }[keyof W]
+        : never;
+    }[LanguageStatement];
+    // A loose one fails here by name, as `"theme title-font"` does not satisfy `never`.
+    type None<T extends never> = T;
+    const wide: None<Wide | WideWords>[] = [];
+
+    // The lists whose element types name more than they hold are exact: `separate`,
+    // `drafting-dark`, `icon` and `image` are types of draftably's, not words of the language.
+    type Engine = Words<typeof LANGUAGE.layout.attrs.engine>;
+    type Theme = Words<typeof LANGUAGE.theme.words.name>;
+    type Shape = Words<typeof LANGUAGE.node.attrs.shape>;
+    // @ts-expect-error `separate` repairs a drawing; a layout line cannot name it.
+    const separate: Engine = 'separate';
+    // @ts-expect-error `drafting-dark` is a host's theme, not one a file names.
+    const dark: Theme = 'drafting-dark';
+    // @ts-expect-error `icon` is an editor shape, not a file's.
+    const icon: Shape = 'icon';
+    const exact: [
+      Equal<Engine, (typeof lib.ENGINES)[number]>,
+      Equal<Theme, 'drafting' | 'fieldnotes' | 'signal' | 'ink' | 'blueprint'>,
+      Equal<Shape, 'box' | 'pill' | 'circle' | 'diamond' | 'text' | 'marker' | 'portal'>,
+      Equal<
+        Words<(typeof LANGUAGE.node.attrs)['was-shape']>,
+        'box' | 'pill' | 'circle' | 'diamond' | 'text'
+      >,
+      Equal<Words<typeof LANGUAGE.edge.attrs.from>, 'auto' | 'left' | 'right' | 'top' | 'bottom'>,
+      Equal<Words<(typeof LANGUAGE.theme.attrs)['title-font']>, 'sans' | 'serif' | 'mono'>,
+      Equal<Words<typeof LANGUAGE.layout.attrs.fit>, keyof typeof lib.FITS>,
+    ] = [true, true, true, true, true, true, true];
+    expect([wide, separate, dark, icon, ...exact].length).toBe(11);
+    // The fit names are a list beside `FITS`; they hold the same words, in the same order.
+    expect(LANGUAGE.layout.attrs.fit).toEqual(Object.keys(lib.FITS));
+  });
 });
