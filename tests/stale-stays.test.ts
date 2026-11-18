@@ -36,6 +36,14 @@ describe('stale viewer stays', () => {
     for (const id of ['a', 'b', 'c']) expect(at(source, id)).toEqual(at(flow(), id));
   });
 
+  it('gives a stale-stay diagnostic the intended position and distance', () => {
+    const scene = checkSource(flow(['stay a x=0 y=0', 'stay b x=30 y=10'])),
+      note = scene.diagnostics.find(d => d.code === 'stale-stay')!;
+    expect(note.ids[0]).toBe('a');
+    expect(note.intended).toEqual({ x: 0, y: 0 });
+    expect(typeof note.distance).toBe('number');
+  });
+
   it('keeps stays when a new object lands on a stayed one', () => {
     const source = flow(['stay a x=0 y=0', 'stay b x=400 y=0', 'stay c x=800 y=0']),
       grown = source.replace('edge e2 b -> c', 'node d "Sign"\nedge e2 b -> d\nedge e3 d -> c');

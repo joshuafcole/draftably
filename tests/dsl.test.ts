@@ -84,6 +84,17 @@ describe('compile', () => {
     expect(scene.diagnostics.some(d => d.code === 'relaxed' && d.ids[0] === 'payments')).toBe(true);
   });
 
+  it('gives a relaxed diagnostic its intended position and distance as numbers', () => {
+    const scene = checkSource(checkout + 'nudge payments dx=-120\n'),
+      d = scene.diagnostics.find(x => x.code === 'relaxed' && x.ids[0] === 'payments')!,
+      got = scene.byId.get('payments')!;
+    expect(typeof d.intended?.x).toBe('number');
+    expect(typeof d.intended?.y).toBe('number');
+    expect(d.distance).toBeGreaterThanOrEqual(2);
+    expect(d.message).toContain(`gave way by ${d.distance} px`);
+    expect(Math.round(Math.hypot(got.x - d.intended!.x, got.y - d.intended!.y))).toBe(d.distance);
+  });
+
   it('honors a requested group size and reports a size the contents override', () => {
     const big = checkSource(
       checkout.replace('layout services row gap=56', 'layout services row gap=56 min-width=800'),

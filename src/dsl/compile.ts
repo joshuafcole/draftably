@@ -110,6 +110,14 @@ export interface Diagnostic {
   ids: string[];
   /** Where on the drawing a finding about its geometry is, to frame or mark it. */
   box?: Rect;
+  /**
+   * On `relaxed` and `stale-stay`: where the refinement asked `ids[0]` to be, in the same
+   * coordinates as the scope's node positions. A `stale-stay` naming several objects carries
+   * the first one's.
+   */
+  intended?: { x: number; y: number };
+  /** On `relaxed` and `stale-stay`: px between `intended` and where the object is drawn (relaxed) or would be without the stay (stale-stay). */
+  distance?: number;
 }
 
 /** A connection as the file declares it, plus the lane a fold's wrap edge returns along. */
@@ -2595,6 +2603,13 @@ function staleStays(
 }
 
 /**
+ * How far an object sits from where a refinement wanted it, in scope-local terms (drawn minus
+ * intended). Positions in `refine` are scope-relative; this offset survives the move to the
+ * stage, where `layoutPass` turns it into the diagnostic's `intended`.
+ */
+const intendedGap = new WeakMap<Diagnostic, { dx: number; dy: number }>();
+
+/**
  * Apply refinements to one scope: stays, nudges, near, preferred alignment and pins set starting
  * positions; required alignment and near become shared or ordered variables; then overlapping
  * siblings are separated, moving lighter objects more. Pins never move.
@@ -2616,14 +2631,23 @@ function refine(
   );
   const intended = new Map<string, { pos: Pos; hint: Hint }>();
   const stale = staleStays(items, base, local, axis);
-  if (stale.length)
-    diagnostics.push({
-      level: 'info',
-      code: 'stale-stay',
-      message: `The stays on ${stale.map(h => h.id).join(', ')} no longer fit ${scope}'s arrangement, so they were ignored. Drag again to anchor the new layout.`,
-      line: stale[0].line,
-      ids: stale.map(h => h.id),
-    });
+  if (stale.length) {
+    const first = stale[0],
+      note: Diagnostic = {
+        level: 'info',
+        code: 'stale-stay',
+        message: `The stays on ${stale.map(h => h.id).join(', ')} no longer fit ${scope}'s arrangement, so they were ignored. Drag again to anchor the new layout.`,
+        line: first.line,
+        ids: stale.map(h => h.id),
+      };
+    if (first.type === 'stay') {
+      const at = base.get(first.id)!;
+      note.intended = { x: first.x, y: first.y };
+      note.distance = Math.round(Math.hypot(at.x - first.x, at.y - first.y));
+      intendedGap.set(note, { dx: at.x - first.x, dy: at.y - first.y });
+    }
+    diagnostics.push(note);
+  }
   for (const h of local)
     if (h.type === 'stay' && !stale.includes(h)) {
       pos.set(h.id, { x: h.x, y: h.y });
@@ -2845,14 +2869,19 @@ function refine(
     const got = pos.get(id)!,
       moved = Math.round(Math.hypot(got.x - want.x, got.y - want.y));
     // A few pixels is layout settling; more means the line no longer says where the object is.
-    if (moved >= 2)
-      diagnostics.push({
+    if (moved >= 2) {
+      const note: Diagnostic = {
         level: moved >= RELAXED_WARNING ? 'warning' : 'info',
         code: 'relaxed',
         message: `${hint.type} ${id} gave way by ${moved} px to keep ${scope} clear.${moved >= RELAXED_WARNING ? ` Remove line ${hint.line}, or run format --drop-stale.` : ''}`,
         line: hint.line,
         ids: [id],
-      });
+        intended: { x: want.x, y: want.y },
+        distance: moved,
+      };
+      intendedGap.set(note, { dx: got.x - want.x, dy: got.y - want.y });
+      diagnostics.push(note);
+    }
   }
   return pos;
 }
@@ -3845,6 +3874,12 @@ function layoutPass(
   settleLegendShades(m);
   diagnostics.push(...paletteNotes(m), ...legendNotes(m));
   for (const w of m.warnings) diagnostics.push({ level: 'warning', ...w, ids: [] });
+  // `refine` works in scope-local positions; put each ghost on the stage beside its object.
+  for (const d of diagnostics) {
+    const gap = intendedGap.get(d),
+      o = gap && objects.find(x => x.id === d.ids[0]);
+    if (gap && o) d.intended = { x: o.x - gap.dx, y: o.y - gap.dy };
+  }
   // Keep declaration order so output is stable regardless of the arrangement order.
   const index = new Map(m.objects.map((o, i) => [o.id, i]));
   objects.sort((a, b) => index.get(a.id)! - index.get(b.id)!);
