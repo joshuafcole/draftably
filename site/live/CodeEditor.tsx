@@ -27,7 +27,14 @@ import { COLORS, DSL_SHAPES } from '../../src/dsl/syntax';
 import type { Diagnostic } from '../../src/dsl/compile';
 import { THEME_IDS } from '../../src/model/appearance';
 import { formatSource } from '../../src/dsl/syntax';
-import { COMMANDS, highlightHtml, tokenClass, tokenizeLine, type Token } from '../highlight';
+import {
+  COMMANDS,
+  highlightHtml,
+  tokenClass,
+  tokenizeLine,
+  tokenizeSource,
+  type Token,
+} from '../highlight';
 import { HELP } from './reference';
 
 /** What the page can do to the editor. */
@@ -63,11 +70,13 @@ const tokens = ViewPlugin.fromClass(
     }
     build(view: EditorView) {
       const out = new RangeSetBuilder<Decoration>();
+      // Whole-file tokens, so a code node's body reads as body text wherever the view starts.
+      const lines = tokenizeSource(view.state.doc.toString().split('\n'));
       for (const { from, to } of view.visibleRanges) {
         for (let pos = from; pos <= to;) {
           const line = view.state.doc.lineAt(pos);
           let at = line.from;
-          for (const t of tokenizeLine(line.text)) {
+          for (const t of lines[line.number - 1] ?? []) {
             if (t.kind !== 'space') out.add(at, at + t.text.length, markFor(t));
             at += t.text.length;
           }

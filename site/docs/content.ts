@@ -52,6 +52,7 @@ const GROUPS: [string, string[]][] = [
     [
       'overview',
       'rules',
+      'code',
       'refinements',
       'themes-and-colors',
       'soft-groups',

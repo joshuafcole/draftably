@@ -1,5 +1,5 @@
 /** Router settings: the named presets and the undoable edit that changes how lines are drawn. */
-import { RouteLab } from '../../engines/routing-engine.js';
+import { RouteLab } from '../../engines/routing-engine';
 import type { RoutingSettings } from '../../model/types';
 import { toast } from '../toast';
 import type { DocumentPart } from './document';

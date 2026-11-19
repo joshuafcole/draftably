@@ -6,7 +6,7 @@ import {
   type LayoutOptions,
   type LayoutReport,
   type LayoutScope,
-} from '../../engines/layout-engine.js';
+} from '../../engines/layout-engine';
 import { normalize } from '../../model/document';
 import { clamp, clone } from '../../model/geometry';
 import { findGroup, selectionRoots } from '../../model/graph';

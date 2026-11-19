@@ -38,6 +38,7 @@ export function oldDoc(doc: Diagram): Diagram {
             sequence: {
               ...seq,
               phases: seq.before.phases,
+              activations: seq.before.activations,
               panel: { ...seq.panel, h: seq.panel.h + grow },
             },
           }

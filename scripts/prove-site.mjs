@@ -263,12 +263,13 @@ const journeys = {
     await wait(page, () => /#s=/.test(location.hash), 'the source hash');
     const shared = page.url();
     await page.click('.picker-button');
-    await page.fill('.picker-search', 'Sign-in');
+    await page.fill('.picker-search', 'Successful password');
     await page.keyboard.press('Enter');
     await wait(page, () => location.search.includes('example='), 'the selected example');
     await wait(
       page,
-      () => document.querySelector('.cm-content')?.textContent.includes('Sign-in sequence'),
+      () =>
+        document.querySelector('.cm-content')?.textContent.includes('Successful password sign-in'),
       'the example source',
     );
     const example = await sourceText(page);
@@ -282,7 +283,8 @@ const journeys = {
     await page.goForward();
     await wait(
       page,
-      () => document.querySelector('.cm-content')?.textContent.includes('Sign-in sequence'),
+      () =>
+        document.querySelector('.cm-content')?.textContent.includes('Successful password sign-in'),
       'the example again',
     );
     check('Forward restores the selected example', (await sourceText(page)) === example);

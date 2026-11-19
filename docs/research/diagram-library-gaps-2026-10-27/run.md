@@ -66,4 +66,4 @@ Raw Pro downloads belong under ignored `tmp/pro/diagram-library-gaps/`, not in G
 
 ## Preserved Pro result materials
 
-Backfill requested by Byron: [4 original result files](../../intent/diagram-library-coverage/assets/pro-results/diagram-library-gaps-2026-10-27/ASSET_INDEX.md) are now committed under the intent entry. This supersedes earlier instructions to leave originals ignored. ZIPs and input source packets remain local. Byte equality and supplied manifest entries were checked; no downloaded code was executed.
+Backfill requested by Byron: [4 original result files](https://github.com/byronwall/draftably/blob/1ae738518c60e44e06f7f483ffa0e61e28a784c2/docs/intent/diagram-library-coverage/assets/pro-results/diagram-library-gaps-2026-10-27/ASSET_INDEX.md) are now committed under the intent entry. This supersedes earlier instructions to leave originals ignored. ZIPs and input source packets remain local. Byte equality and supplied manifest entries were checked; no downloaded code was executed.

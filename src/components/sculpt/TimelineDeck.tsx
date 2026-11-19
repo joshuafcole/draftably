@@ -1,5 +1,5 @@
 import { createMemo, For, onMount, Show } from 'solid-js';
-import { LayoutLab } from '../../engines/layout-engine.js';
+import { LayoutLab } from '../../engines/layout-engine';
 import { clamp } from '../../model/geometry';
 import { type GhostMode } from '../../state/session/sculpt';
 import { IconButton, Select, tip } from '../controls';

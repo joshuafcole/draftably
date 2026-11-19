@@ -83,6 +83,8 @@ export function createActions(s: EditorPart & DocumentPart & ScenePart & LayoutP
     }
     const entity = findNode(s.doc, id) ?? findGroup(s.doc, id) ?? findEdge(s.doc, id);
     if (!entity) return;
+    // A code node's body is edited in the source, not on the canvas.
+    if ('code' in entity && entity.code) return;
     finishInlineEdit(true);
     batch(() => {
       s.setConnectFrom(null);
@@ -422,6 +424,37 @@ export function createActions(s: EditorPart & DocumentPart & ScenePart & LayoutP
     if (id) s.transact('Reverse connection', d => edits.reverseEdge(d, id));
   }
 
+  /** The selected event of a sequence: a message or an action. */
+  function selectedEvent() {
+    const id = s.selectedIds().find(id => isEdge(s.doc, id));
+    return id && s.doc.layout.edges[id]?.row !== undefined ? id : undefined;
+  }
+
+  /** Add a message, or an action beside an action, before or after the selected event. */
+  function insertEvent(where: 'before' | 'after') {
+    const id = selectedEvent();
+    if (!id) return;
+    let next: string | undefined;
+    s.transact('Insert message', d => {
+      next = edits.insertEvent(d, id, where);
+    });
+    // The new message is the one to name next, so it takes the selection.
+    if (next) s.setSelection([next]);
+    return next;
+  }
+
+  /** Move the selected event one place up or down. The file refuses a move it can't keep. */
+  function moveEvent(by: -1 | 1) {
+    const id = selectedEvent();
+    if (!id) return;
+    s.transact(
+      by < 0 ? 'Move message up' : 'Move message down',
+      d => void edits.moveEvent(d, id, by),
+    );
+    // The message is drawn again, so the canvas takes the keys for the next move.
+    s.focusCanvas();
+  }
+
   function resetSelectedBends() {
     const id = s.selectedIds().find(id => isEdge(s.doc, id));
     if (id)
@@ -632,6 +665,8 @@ export function createActions(s: EditorPart & DocumentPart & ScenePart & LayoutP
     fitSelectedContainer,
     toggleCollapse,
     reverseSelectedEdge,
+    insertEvent,
+    moveEvent,
     resetSelectedBends,
     setLayoutIntent,
     markSelectedAs,

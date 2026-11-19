@@ -13,7 +13,7 @@ import {
   type ThemeId,
 } from '../src/model/appearance';
 import { drawnSwatch, participantAccent } from '../src/model/colors';
-import { edgeLabelLines, edgeLabelSize } from '../src/model/labels';
+import { edgeLabelLines, edgeLabelSize, phaseLabelLines } from '../src/model/labels';
 
 const login = readFileSync(path.join(__dirname, '../examples/login-sequence.draft'), 'utf8');
 
@@ -38,7 +38,8 @@ describe('sequence diagrams', () => {
       { x: mid('app'), y: doc.layout.edges.m2.row },
       { x: mid('auth'), y: doc.layout.edges.m2.row },
     ]);
-    expect(routes.find(r => r.id === 'm5')!.points).toHaveLength(4);
+    // A local action is a box round its lifeline: six points, back to where it starts.
+    expect(routes.find(r => r.id === 'm5')!.points).toHaveLength(6);
   });
 
   it('takes only top-level groups, as bands of participants', () => {
@@ -217,7 +218,91 @@ describe('sequence spacing', () => {
         'layout root sequence',
       ].join('\n'),
     );
-    expect(centres(scene, 'a', 'b', 'c')).toEqual([36, 116, 228]);
+    // The label takes one gap, the left of two equal ones, and only that gap grows for it.
+    expect(centres(scene, 'a', 'b', 'c')).toEqual([36, 228, 308]);
+  });
+
+  it("sits a distant message's label in one gap, clear of every lifeline", () => {
+    const source = [
+        'node a "A"',
+        'node b "B"',
+        'node c "C"',
+        'node d "D"',
+        'edge m1 b -> c "a label wide enough to need its own room"',
+        'edge m2 a -> d "short"',
+        'edge m3 d -> a "another label that is long enough to wrap"',
+        'layout root sequence',
+      ].join('\n'),
+      xs = centres(checkSource(source), 'a', 'b', 'c', 'd'),
+      routes = labels(source);
+    for (const id of ['m2', 'm3']) {
+      const { x, w } = routes.get(id)!.label!;
+      for (const lane of xs) expect(Math.abs(lane - x)).toBeGreaterThanOrEqual(w / 2);
+    }
+    // The short label takes the gap that already has room, in the middle of its message.
+    expect(routes.get('m2')!.label!.x).toBe((xs[1] + xs[2]) / 2);
+  });
+
+  it('gives a one-line participant a header 32 high and stands every header on one line', () => {
+    const scene = checkSource(
+        'node a "A"\nnode b "A much longer participant\\nwith detail"\nedge m a -> b\nlayout root sequence',
+      ),
+      [a, b] = ['a', 'b'].map(id => scene.byId.get(id)!);
+    expect(a.h).toBe(32);
+    expect(b.h).toBeGreaterThan(a.h);
+    expect(a.y + a.h).toBe(b.y + b.h);
+    expect(a.y + a.h + a.lifeline!).toBe(b.y + b.h + b.lifeline!);
+  });
+
+  it("keeps a message's margin note inside the band of its phase", () => {
+    const scene = checkSource(
+        [
+          'node a "A"',
+          'node b "B"',
+          'edge m1 a -> b',
+          'edge m2 b -> a',
+          'edge m3 a -> b',
+          'phase one "One" m1 m2',
+          'phase two "Two" m3',
+          // On the last row of its band, where a note level with the row would cross the edge.
+          'note "A note that wraps to more than one line of text in the margin." near=m2 width=160',
+          'note "Second." near=m2',
+          'note "Tall note in a short band, which grows to hold it, line after line." near=m3 width=120',
+          'layout root sequence',
+        ].join('\n'),
+      ),
+      [one, two] = scene.sequence!.phases,
+      [n1, n2, n3] = scene.sequence!.notes!.map(r => r!);
+    for (const [note, band] of [
+      [n1, one],
+      [n2, one],
+      [n3, two],
+    ] as const) {
+      expect(note.y).toBeGreaterThanOrEqual(band.y);
+      expect(note.y + note.h).toBeLessThanOrEqual(band.y + band.h);
+    }
+    expect(n2.y).toBeGreaterThanOrEqual(n1.y + n1.h);
+  });
+
+  it('wraps a long phase label, grows its band for it and leaves a gap to the next', () => {
+    const scene = checkSource(
+        [
+          'node a "A"',
+          'node b "B"',
+          'edge m1 a -> b',
+          'edge m2 b -> a',
+          'phase one "A phase label that is much too long for one line of the gutter" m1',
+          'phase two "Two" m2',
+          'layout root sequence',
+        ].join('\n'),
+      ),
+      [one, two] = scene.sequence!.phases,
+      lines = phaseLabelLines(one.label, look);
+    expect(lines.length).toBeGreaterThan(2);
+    expect(one.h).toBeGreaterThanOrEqual(lines.length * look.annotation.lineHeight + 16);
+    expect(two.y - (one.y + one.h)).toBe(16);
+    // The gutter holds the wrapped label, so the first lane starts close to it.
+    expect(scene.byId.get('a')!.x).toBeLessThan(96 + 24 + 16 + 1);
   });
 
   const self = (label: string, ...rest: string[]) =>

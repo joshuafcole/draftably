@@ -37,7 +37,8 @@ export interface EdgeViewProps {
   selected?: boolean;
   /** Drawn as if the pointer were over it, such as when a host points at it from elsewhere. */
   hovered?: boolean;
-
+  /** In a sequence: the selected message answers this one, or this one answers it. */
+  paired?: boolean;
   interactive?: boolean;
   /** Its label is being edited in place, so the drawn label hides. */
   editing?: boolean;
@@ -101,7 +102,7 @@ export function EdgeView(props: EdgeViewProps) {
   const halos = () => (props.route.halo ? haloPieces(under(), props.route.halo) : []);
   const markerId = () => `${props.idPrefix ?? ''}arrow-${props.route.id}`;
   const tailId = () => `${props.idPrefix ?? ''}tail-${props.route.id}`;
-  const markerInk = () => (props.selected ? 'var(--accent)' : stroke());
+  const markerInk = () => (props.selected || props.paired ? 'var(--accent)' : stroke());
   const waypoints = () =>
     props.interactive && props.selected
       ? (props.doc.layout.edges[props.route.id]?.waypoints ?? [])
@@ -114,7 +115,12 @@ export function EdgeView(props: EdgeViewProps) {
   return (
     <g
       class="edge"
-      classList={{ selected: props.selected, hovered: props.hovered, editing: props.editing }}
+      classList={{
+        selected: props.selected,
+        hovered: props.hovered,
+        paired: props.paired,
+        editing: props.editing,
+      }}
       data-kind="edge"
       data-id={props.route.id}
       opacity={paint().opacity < 1 ? paint().opacity : undefined}

@@ -27,7 +27,9 @@ import {
 import { toast } from './toast';
 import {
   filesShown,
+  focusLabelField,
   objectsOpen,
+  propertiesOpen,
   confirmAction,
   openDialog,
   openQuickBuild,
@@ -46,10 +48,14 @@ import {
   checkedEnabled,
   hasSelection,
   runChecked,
+  setLabelNamer,
   type Command,
 } from './canvas-commands';
 
 export type { Command };
+
+// The Inspector belongs to the app shell, so the shell says how a new message gets its name.
+setLabelNamer(() => propertiesOpen() && (focusLabelField(), true));
 
 let fileInput:
   ((replaceImageId: string | null, accept: 'diagram' | 'image' | 'foreign') => void) | null = null;
@@ -199,6 +205,10 @@ export const commands = {
   },
   'collapse-selected': { label: 'Collapse or expand', run: () => activeSession().toggleCollapse() },
   'reverse-edge': { label: 'Reverse', run: () => activeSession().reverseSelectedEdge() },
+  'insert-event-after': canvasCommands['insert-event-after'],
+  'insert-event-before': canvasCommands['insert-event-before'],
+  'move-event-up': canvasCommands['move-event-up'],
+  'move-event-down': canvasCommands['move-event-down'],
   'reset-route': { label: 'Reset bends', run: () => activeSession().resetSelectedBends() },
   'mark-start': { label: 'Start here', run: () => activeSession().markSelectedAs('start') },
   'mark-end': { label: 'End here', run: () => activeSession().markSelectedAs('end') },

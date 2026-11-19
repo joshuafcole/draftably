@@ -46,6 +46,8 @@ recipes list the caveats for each site.
   with `draftably inspect --svg`, or let the [GitHub Action](#github-action) do it.
 - **Editor plugins.** There is no VS Code or Obsidian extension.
 - **MkDocs and Pandoc.** There is no plugin. Use committed SVG or PNG images.
+- **Touch in the viewer.** There is no pinch zoom, and a finger over a viewer pans the drawing,
+  not the page.
 
 To build an integration for another host, read [Build an adapter](#build-an-adapter).
 

@@ -1,6 +1,6 @@
 /**
  * Mermaid `sequenceDiagram` -> native source. Participants become nodes and messages become edges
- * in file order. Native sequences have no fragments, so each top-level branch of a block becomes
+ * in file order, each with its kind: a call, a send or a reply that names the call it answers. Native sequences have no fragments, so each top-level branch of a block becomes
  * a phase band, and the warning says that the branch logic is gone.
  */
 import {
@@ -13,20 +13,26 @@ import {
   type NativeNote,
   type NativePhase,
 } from './import-core';
+import { activationSpans } from '../dsl/sequence-layout';
 import type { SequenceEvent, SequenceSnapshot } from './mermaid-facade';
 
-/** Mermaid's line types that native messages cover; any other type stops the import. */
-const LINES: Record<string, Pick<NativeEdge, 'head' | 'tail' | 'dashed'>> = {
-  SOLID: {},
-  DOTTED: { dashed: true },
+/**
+ * Mermaid's line types that native messages cover; any other type stops the import. A solid
+ * arrow is a call, an open arrow is a send, and a dotted line is a reply. A solid line with
+ * another end keeps that end and gets no kind. A dotted line with another end becomes a reply
+ * with the plain arrowhead (`plain`), because a kind draws its own ends.
+ */
+const LINES: Record<string, Pick<NativeEdge, 'head' | 'tail' | 'message'> & { plain?: true }> = {
+  SOLID: { message: 'call' },
+  DOTTED: { message: 'reply' },
   SOLID_OPEN: { head: 'none' },
-  DOTTED_OPEN: { head: 'none', dashed: true },
+  DOTTED_OPEN: { message: 'reply', plain: true },
   SOLID_CROSS: { head: 'cross' },
-  DOTTED_CROSS: { head: 'cross', dashed: true },
-  SOLID_POINT: {},
-  DOTTED_POINT: { dashed: true },
+  DOTTED_CROSS: { message: 'reply', plain: true },
+  SOLID_POINT: { message: 'send' },
+  DOTTED_POINT: { message: 'reply' },
   BIDIRECTIONAL_SOLID: { tail: 'arrow' },
-  BIDIRECTIONAL_DOTTED: { tail: 'arrow', dashed: true },
+  BIDIRECTIONAL_DOTTED: { message: 'reply', plain: true },
 };
 const OPENS: Record<string, string> = {
   LOOP_START: 'loop',
@@ -102,6 +108,11 @@ export function mapMermaidSequence(
   let depth = 0,
     branch: NativePhase | undefined,
     last: { id: string; ends: string[] } | undefined;
+  // Mermaid's own activations, each from the message before `activate` to the one before
+  // `deactivate`, to compare with the bars the native calls and replies draw.
+  const active = new Map<string, number[]>(),
+    sourceBars: string[] = [];
+  let activated = false;
   const open = (word: string, text: string) => {
     const words = plainText(text).trim();
     branch = {
@@ -141,9 +152,17 @@ export function mapMermaidSequence(
       depth--;
       if (!depth) branch = undefined;
     } else if (e.kind === 'NOTE') addNote(e);
-    else if (e.kind === 'ACTIVE_START' || e.kind === 'ACTIVE_END')
-      warn('MERMAID_SEQUENCE_ACTIVATION', 'Activation bars are omitted.', 'appearance');
-    else if (e.kind === 'AUTONUMBER')
+    else if (e.kind === 'ACTIVE_START' || e.kind === 'ACTIVE_END') {
+      const lane = lanes.get(e.from ?? '') ?? '',
+        open = active.get(lane) ?? [],
+        at = plan.edges.length - 1;
+      activated = true;
+      if (e.kind === 'ACTIVE_START') active.set(lane, [...open, at]);
+      else {
+        sourceBars.push([lane, open.pop() ?? -1, at].join(' '));
+        active.set(lane, open);
+      }
+    } else if (e.kind === 'AUTONUMBER')
       warn('MERMAID_SEQUENCE_AUTONUMBER', 'Message numbers are omitted.', 'appearance');
     else if (e.kind === 'RECT_START' || e.kind === 'RECT_END')
       warn('MERMAID_SEQUENCE_RECT', 'Background rectangles are omitted.', 'appearance');
@@ -163,16 +182,62 @@ export function mapMermaidSequence(
         });
         continue;
       }
-      if (e.kind === 'SOLID_POINT')
+      const { plain, ...ends } = line;
+      if (plain)
         warn(
-          'MERMAID_SEQUENCE_ASYNC_ARROW',
-          'The open async arrow `-)` becomes an ordinary solid message, because native async draws dashed.',
+          'MERMAID_SEQUENCE_DOTTED_END',
+          'A dotted line with a cross, with no arrowhead or with two arrowheads becomes a reply with a plain arrowhead.',
+          'appearance',
         );
+      // A reply answers the nearest earlier call or send that runs the other way and has no
+      // answer yet. Without one it is a reply that names no message.
+      const asked =
+        ends.message === 'reply' && from !== to
+          ? [...plan.edges]
+              .reverse()
+              .find(
+                x =>
+                  (x.message === 'call' || x.message === 'send') &&
+                  x.from === to &&
+                  x.to === from &&
+                  !plan.edges.some(r => r.answers === x.id),
+              )
+          : undefined;
       const id = ids.get('edge-occurrence', String(index + 1), 'm' + (plan.edges.length + 1));
-      plan.edges.push({ id, from, to, label: plainText(e.text), directed: true, ...line });
+      plan.edges.push({
+        id,
+        from,
+        to,
+        label: plainText(e.text),
+        directed: true,
+        ...ends,
+        ...(asked ? { answers: asked.id } : {}),
+      });
       branch?.members.push(id);
       last = { id, ends: [e.from!, e.to!] };
     }
+  }
+  // Native bars run from a call to its last reply. Turn them on only when they are the bars
+  // the source draws; a different set would show activity the source does not.
+  if (activated) {
+    for (const [lane, open] of active) for (const at of open) sourceBars.push(`${lane} ${at} open`);
+    const native = activationSpans(
+      plan.edges.map(e => ({
+        id: e.id,
+        source: e.from,
+        target: e.to,
+        message: e.message,
+        replyTo: e.answers,
+      })),
+    ).map(s => [s.lane, s.start, s.end ?? 'open'].join(' '));
+    if ([...native].sort().join() === [...sourceBars].sort().join())
+      plan.layouts.find(l => l.kind === 'sequence')!.activations = true;
+    else
+      warn(
+        'MERMAID_SEQUENCE_ACTIVATION',
+        `Activation bars are omitted. Native bars run from a call to the reply that answers it, and that gives ${native.length} ${native.length === 1 ? 'bar' : 'bars'} where the source draws ${sourceBars.length}. Add activations=on to the layout line if those bars are right.`,
+        'appearance',
+      );
   }
   plan.phases = phases.filter(p => p.members.length);
   plan.notes = notes;

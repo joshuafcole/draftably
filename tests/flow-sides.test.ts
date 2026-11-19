@@ -1,8 +1,8 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { LayoutLab } from '../src/engines/layout-engine.js';
-import { RouteLab } from '../src/engines/routing-engine.js';
+import { LayoutLab } from '../src/engines/layout-engine';
+import { RouteLab } from '../src/engines/routing-engine';
 import { checkSource, compile } from '../src/dsl/compile';
 import { sceneConflicts } from '../src/dsl/conflicts';
 import { writeArrangement } from '../src/dsl/layout-edits';

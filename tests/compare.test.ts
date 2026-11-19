@@ -177,7 +177,10 @@ layout root flow gap=48
     expect(is[1] < is[2] && is[2] < is[0]).toBe(true);
     expect(is).toEqual(rows(doc));
     expect(before.layout.nodes).toEqual(after.layout.nodes);
-    expect(before.layout.sequence!.panel).toEqual(after.layout.sequence!.panel);
+    // The older order ends on the phase band, so its panel runs a little further down.
+    const [old, now] = [before, after].map(d => d.layout.sequence!.panel);
+    expect({ ...old, h: 0 }).toEqual({ ...now, h: 0 });
+    expect(old.h).toBeGreaterThanOrEqual(now.h);
     // The band holds m2 and m3 wherever they stand.
     const bands = [before, after].map(d => d.layout.sequence!.phases[0]);
     [was, is].forEach(([, m2, m3], i) => {
@@ -187,14 +190,13 @@ layout root flow gap=48
     expect(bands[0].y).not.toBe(bands[1].y);
   });
 
-  it('lists split messages by their spare IDs and leaves added ones on their rows', () => {
+  it('lists split messages by their spare IDs and leaves added ones out of Before', () => {
     const m4 = 'edge m4 a -> b';
     const before = SWAP([M2, M3, m4].join('\n'), 'm2');
     const after = SWAP([m4, 'edge m3 a -> b', 'edge m9 b -> a', M2].join('\n'), 'm2');
     const { merged } = compareDetailed(before, after);
     expect(merged).toContain('was-order m2 m3-was m4\n');
     const doc = projectScene(checkSource(merged));
-    expect(doc.layout.sequence!.before!.rows.m9).toBe(doc.layout.edges.m9.row);
     expect(panelDoc(doc, 'before').graph.edges.map(e => e.id)).not.toContain('m9');
   });
 

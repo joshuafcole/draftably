@@ -1,0 +1,36 @@
+diagram "Checkout: place an order" version=1
+subtitle "The stock is held before the card is charged"
+
+# A sequence with participant bands, phases, activation bars, a message between distant lanes and a send that expects no reply.
+footnote "Card accepted only; a declined card is left out."
+
+group client "Client" color=blue
+group server "Server" color=teal
+group outside "Outside" color=stone
+
+node shopper "Shopper" shape=pill in=client
+node web "Web app" in=client
+node orders "Orders API" in=server
+node stock "Stock service" in=server
+node pay "Payment provider" in=outside
+node mail "Email queue" in=outside
+
+edge m1 shopper -> web "place order" message=interaction
+edge m2 web -> orders "create order" message=call
+edge m3 orders -> stock "hold stock for each line" message=call
+edge m4 stock -> orders "hold reference" answers=m3
+edge m5 orders -> pay "charge card" message=call
+edge m6 pay -> orders "charge accepted" answers=m5
+action m7 orders "mark the order paid"
+edge m8 orders -> mail "queue the receipt email" message=send
+edge m9 orders -> web "order number" answers=m2
+edge m10 web -> shopper "order confirmed" message=outcome
+
+phase hold "Hold the stock" m1 m2 m3 m4
+phase charge "Charge the card" m5 m6 m7
+phase confirm "Confirm to the shopper" m8 m9 m10
+
+note "The hold ends after 10 minutes." near=m4
+
+# activations=on draws a bar on a participant while it is at work on a call.
+layout root sequence activations=on

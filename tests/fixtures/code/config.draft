@@ -1,0 +1,25 @@
+diagram "Config as YAML and JSON"
+theme drafting
+
+node yaml "deploy.yaml" shape=code lang=yaml <<YAML
+  service:
+    name: orders-api
+    replicas: 3
+    env:
+      - name: DATABASE_URL
+        value: "postgres://orders:secret@db.internal:5432/orders?sslmode=require&application_name=orders-api"
+      - name: LOG_LEVEL
+        value: info   # "debug" in staging
+YAML
+
+node json "deploy.json" shape=code lang=json <<JSON
+{
+  "service": {
+    "name": "orders-api",
+    "replicas": 3,
+    "env": [{ "name": "LOG_LEVEL", "value": "info" }]
+  }
+}
+JSON
+
+edge e1 yaml -> json "renders"

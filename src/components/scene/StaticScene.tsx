@@ -32,6 +32,7 @@ export function StaticScene(props: {
         ids={props.scene.vg.nodes.map(n => n.id)}
         rect={id => props.scene.rects.get(id)}
       />
+      <SequenceBackdrop doc={props.scene.doc} part="bars" />
       <For each={props.scene.routes}>
         {route => <EdgeView doc={props.scene.doc} route={route} idPrefix={props.idPrefix} />}
       </For>

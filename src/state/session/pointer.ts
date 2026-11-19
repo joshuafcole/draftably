@@ -414,6 +414,8 @@ export function createPointer(
         onLabel: !!edgeLabel,
       });
       s.selectItems([objectId], { add: e.shiftKey, toggle: e.shiftKey });
+      // The canvas takes the keys, as after a click on a shape, so Tab and Alt arrows act on it.
+      s.focusCanvas();
       return;
     }
     e.preventDefault();

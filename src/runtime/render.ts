@@ -332,7 +332,10 @@ export async function renderWithScene(
   let fontCss = '';
   try {
     if (options.fonts !== 'host')
-      fontCss = (await import('../lib/font-data')).fontFaceCss(resolveAppearance(doc.appearance));
+      fontCss = (await import('../lib/font-data')).fontFaceCss(
+        resolveAppearance(doc.appearance),
+        doc.graph.nodes.some(n => n.code),
+      );
   } catch {
     return {
       result: fail(

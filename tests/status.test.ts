@@ -45,7 +45,7 @@ describe('change marks', () => {
   });
 
   it('rejects marks and was= where they mean nothing', () => {
-    expect(() => parseModel('+layout root flow\n')).toThrow(/Only node, group and edge/);
+    expect(() => parseModel('+layout root flow\n')).toThrow(/Only node, group, edge and range/);
     expect(() => parseModel('node a "A" was="B"\n')).toThrow(/changed/);
   });
 

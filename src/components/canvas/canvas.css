@@ -243,6 +243,19 @@
   stroke-width: 2.6;
 }
 
+/* The other half of a call and its reply, when one of them is selected. */
+.edge.paired .edge-line {
+  stroke: var(--accent);
+  stroke-width: 2;
+}
+
+.activation-paired {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2;
+  pointer-events: none;
+}
+
 .edge-label-bg {
   stroke: none;
 }

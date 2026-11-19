@@ -148,7 +148,8 @@ export function nodeLabel(doc: Diagram, id: string, title: string, r: Rect): Nod
       (style.shape === 'diamond' && diamondMeasure(title, Math.min(r.w, r.h), look)) ||
       titleArea(style.shape, r.w, r.h, look, iconInside).width;
   if (mode !== 'center') width = cfg.width || Math.max(142, r.w);
-  const lines = wrapTitle(title, width, look),
+  // A code node draws its caption itself, in its own band.
+  const lines = style.shape === 'code' ? [] : wrapTitle(title, width, look),
     height = textHeight(lines, look);
   if (mode === 'top') y = -16 - height / 2;
   if (mode === 'bottom') y = r.h + 15 + height / 2;
@@ -181,6 +182,15 @@ export function visualBounds(doc: Diagram, id: string, title: string, r: Rect): 
     { x: r.x + l.x - l.width / 2, y: r.y + l.y - l.height / 2, w: l.width, h: l.height },
   ]);
 }
+
+/** Text width a sequence phase's label wraps to, so a long one does not push the lanes right. */
+export const PHASE_WRAP = 96;
+/** Inset of a phase label from its band's top left corner. */
+export const PHASE_TAB = 8;
+
+/** A phase label's lines, in the annotation type. */
+export const phaseLabelLines = (label: string, r: ResolvedAppearance) =>
+  wrapLines(label, PHASE_WRAP, r.annotation);
 
 /** Text width a sequence message's label wraps to; the gap between participants follows it. */
 export const MESSAGE_WRAP = 168;
@@ -226,6 +236,21 @@ export function edgeLabelSize(
     w: Math.round(Math.max(36, w)),
     h: Math.round(lines.length * type.lineHeight + 6),
   };
+}
+
+/**
+ * An activation bar: its width, how far a nested bar steps to the right, how far it runs past
+ * its first and last rows, and the length of a bar whose call gets no reply.
+ */
+export const ACTIVATION = { w: 8, step: 4, over: 4, stub: 16 };
+
+/** Room between a local action's label and its box, on each side. */
+export const ACTION_PAD = 5;
+
+/** The box of a local action: its label and `ACTION_PAD` round it, centred on the lifeline. */
+export function actionSize(label: string, r: ResolvedAppearance) {
+  const { w, h } = edgeLabelSize(label, r, true);
+  return { w: w + 2 * ACTION_PAD, h: h + 2 * ACTION_PAD };
 }
 
 /**

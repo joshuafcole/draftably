@@ -7,7 +7,7 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import type { FaceId } from '../model/fonts';
+import { FACES, type FaceId } from '../model/fonts';
 import sans500 from './fonts/inter-latin-500-normal.ttf?inline';
 import sans600 from './fonts/inter-latin-600-normal.ttf?inline';
 import serif600 from './fonts/source-serif-4-latin-600-normal.ttf?inline';
@@ -41,4 +41,23 @@ export function fontFiles(): Record<FaceId, string> {
     out[id] = file;
   }
   return (files = out);
+}
+
+/** The family each face's TrueType file registers under in resvg: its typographic family name. */
+const REGISTERED: Record<FaceId, string> = {
+  'sans-500': 'Inter',
+  'sans-600': 'Inter',
+  'serif-600': 'Source Serif 4',
+  'mono-500': 'JetBrains Mono',
+};
+
+/**
+ * `svg` with each hashed diagram family renamed to the family resvg registers for its face. resvg
+ * tries only the first family in a `font-family` list and then draws in its default, so the
+ * hashed name, which no file carries, would turn every face into Inter.
+ */
+export function rasterFamilies(svg: string) {
+  for (const id of Object.keys(FACES) as FaceId[])
+    svg = svg.replaceAll(FACES[id].family, REGISTERED[id]);
+  return svg;
 }

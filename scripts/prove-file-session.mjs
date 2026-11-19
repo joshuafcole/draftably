@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * End-to-end proof for file-backed editing (docs/intent/diagram-dsl, first proof).
+ * End-to-end proof for file-backed editing (docs/CHECKS.md, "File-backed editing").
  *
  * Opens a copy of examples/checkout.draft through `pnpm draftably open`, drives the real editor in
  * Chromium (drag, pin, resize, undo/redo, camera), adds content to the file from outside,

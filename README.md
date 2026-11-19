@@ -5,7 +5,8 @@ draftably places the boxes and routes the lines. Open the diagram in the browser
 Your source stays readable, so you can keep it beside your code, review changes in Git,
 and give the same file to a coding agent.
 
-Use it for architecture diagrams, process flows, sequences, state machines and database schemas.
+Use it for architecture diagrams, process flows, sequences, state machines, database schemas and
+annotated code listings.
 Start in the browser with no install, or use the CLI to edit files on disk.
 
 [Try the live demo](https://draftably.dev/) · [Playground](https://draftably.dev/play) ·
@@ -36,7 +37,7 @@ Editor changes save to the same `.draft` source. Changes from a text editor or a
 the drawing while the local editor is open.
 
 See the [language reference](docs/DSL.md) for layout rules, nested groups, swim lanes, sequences,
-cells and placement controls. The [examples](examples/) show complete diagrams.
+cells, code listings and placement controls. The [examples](examples/) show complete diagrams.
 
 ## Get started
 

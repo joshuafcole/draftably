@@ -192,6 +192,78 @@ try {
   await page.keyboard.press('ControlOrMeta+z');
   await sleep(200);
   check('a destroyed editor takes no shortcuts', (await state(0)).source === left4.source);
+
+  // A sequence in the embedded editor, which has no Inspector: Tab adds a message and its label
+  // opens in place, and Alt with an arrow moves a message, with keys only after one click.
+  const events = () =>
+    page.evaluate(() =>
+      [...window.editors[0].source().matchAll(/^(?:edge|action) (\S+)/gm)].map(m => m[1]).join(' '),
+    );
+  await page.evaluate(() =>
+    window.editors[0].update(
+      [
+        'node a "App"',
+        'node b "API"',
+        'edge m1 a -> b "ask" message=call',
+        'edge m2 b -> a "tell" answers=m1',
+        'action m3 a "show it"',
+        'layout root sequence',
+        '',
+      ].join('\n'),
+    ),
+  );
+  await idle(0);
+  await waitFor(page, () => !!window.editors[0].session.doc.layout.sequence, 'sequence drawn');
+  const line = await page.locator('#left [data-id="m2"] .edge-hit').first().boundingBox();
+  await page.mouse.click(line.x + line.width / 3, line.y + line.height / 2);
+  await page.keyboard.press('Tab');
+  await waitFor(
+    page,
+    () => {
+      const el = document.activeElement;
+      return !!el?.closest('#left') && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA');
+    },
+    'label editor in the embedded editor',
+  );
+  check(
+    'Tab adds a message after the selected one',
+    (await events()) === 'm1 m2 m4 m3',
+    await events(),
+  );
+  await page.keyboard.type('thanks');
+  await page.keyboard.press('Enter');
+  await idle(0);
+  await waitFor(
+    page,
+    () => /edge m4 b -> a "thanks"/.test(window.editors[0].source()),
+    'label saved',
+  );
+  check('the new message is named in place', true);
+  check(
+    'the new message keeps the selection',
+    same((await state(0)).selected, ['m4']),
+    String((await state(0)).selected),
+  );
+  await page.keyboard.press('Alt+ArrowDown');
+  await idle(0);
+  await waitFor(
+    page,
+    () => /action m3[^\n]*\nedge m4/.test(window.editors[0].source()),
+    'moved down',
+  );
+  await page.keyboard.press('Alt+ArrowUp');
+  await idle(0);
+  await waitFor(
+    page,
+    () => /edge m4[^\n]*\naction m3/.test(window.editors[0].source()),
+    'moved up',
+  );
+  check(
+    'Alt and an arrow move the message twice with no click',
+    (await events()) === 'm1 m2 m4 m3',
+    await events(),
+  );
+  await page.screenshot({ path: path.join(proof.out, 'sequence-keys.png') });
 } catch (error) {
   check('proof ran to completion', false, error.message);
 } finally {

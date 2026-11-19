@@ -12,6 +12,7 @@ To write a `.draft` file, read the agent skill first. It has the syntax, the lay
 - [Diagram recipes](https://draftably.dev/docs/recipes/): complete architecture, handoff, sequence and change-review examples
 - [CLI](https://draftably.dev/docs/cli/): `check`, `vary`, `inspect` and the other commands
 - [Language reference](https://draftably.dev/docs/rules/): every statement and attribute
+- [Code](https://draftably.dev/docs/code/): code listings with `shape=code`, syntax colors for `sql`, `python`, `ts`, `js`, `json`, `yaml`, `sh` and `diff`, named line ranges, and `src=` files
 - [Layout engines](https://draftably.dev/docs/layout-engines/): placement algorithms and settings
 - [Refinements](https://draftably.dev/docs/refinements/): ordering, pins and placement adjustments
 

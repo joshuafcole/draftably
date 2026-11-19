@@ -47,6 +47,7 @@ jobs:
       - run: pnpm site:build
       - run: pnpm runtime:build && pnpm runtime:pack-check && pnpm viewer:pack-check && pnpm prove:runtime && pnpm prove:viewer && pnpm prove:element && pnpm markdown:build && pnpm markdown:pack-check && pnpm markdown:browser-check && pnpm mermaid:build && pnpm editor:build && pnpm frameworks:build && pnpm prove:frameworks && pnpm prove:recipes && pnpm prove:slots && pnpm prove:color-scheme
       - run: pnpm prove:file
+      - run: pnpm prove:sequence
       - run: pnpm prove:layout
       - run: pnpm prove:site
       - if: failure()
@@ -56,6 +57,7 @@ jobs:
           path: |
             tmp/proof/
             tmp/proof-layout/
+            tmp/proof-sequence/
             tmp/proof-site/
             tmp/proof-slots/
 

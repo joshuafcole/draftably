@@ -15,6 +15,7 @@ import {
 } from '../model/appearance';
 import { findNode, isCell, selectionRoots } from '../model/graph';
 import { groupHeaderFor } from '../model/labels';
+import { CODE_MAX_WIDTH, type CodeBlock } from '../model/code';
 import type { ColorKey, Diagram, DiagramEdge, DiagramNode, PortSide, Rect } from '../model/types';
 import { computeRoutes, type DrawnRoute } from '../model/routes';
 import { placeOf } from '../model/route-marks';
@@ -54,6 +55,18 @@ import {
 } from './syntax';
 
 export class UnsupportedEdit extends Error {}
+
+/** A pasted or duplicated code node's options and body, as a new statement writes them. */
+function writeCode(s: Statement, code: CodeBlock) {
+  if (code.lang) setAttr(s, 'lang', bare(code.lang));
+  if (!code.wrap) setAttr(s, 'wrap', bare('off'));
+  if (code.numbers) setAttr(s, 'numbers', bare('on'));
+  if (code.start !== 1) setAttr(s, 'start', bare(code.start));
+  if (code.maxWidth !== CODE_MAX_WIDTH) setAttr(s, 'max-width', bare(code.maxWidth));
+  let tag = 'CODE';
+  for (let n = 2; code.lines.some(l => l.trim() === tag); n++) tag = `CODE${n}`;
+  s.body = { tag, lines: code.lines, close: tag };
+}
 
 export interface EditInput {
   source: SourceDoc;
@@ -196,6 +209,30 @@ export function translateEdit(input: EditInput): EditResult {
     taken.add(id);
     return id;
   };
+  /**
+   * The next id in the file's own numbering, such as `m8` after `m1` to `m7`, for a new event
+   * of a sequence. Undefined when the lines of that kind are not numbered that way.
+   */
+  const nextNumbered = (command: 'edge' | 'action') => {
+    const numbered = (id: string) => /^([A-Za-z_]+)(\d+)$/.exec(id),
+      // An action in a file with no numbered action follows the messages' numbering.
+      own = statements(source).filter(s => s.command === command),
+      lines = own.some(s => numbered(s.args[0].value))
+        ? own
+        : statements(source).filter(s => s.command === 'edge'),
+      prefixes = lines.flatMap(s => numbered(s.args[0].value)?.[1] ?? []),
+      prefix = prefixes
+        .sort((a, b) => prefixes.filter(p => p === b).length - prefixes.filter(p => p === a).length)
+        .at(0);
+    if (prefix === undefined) return undefined;
+    let n = Math.max(
+      0,
+      ...[...taken].map(id => (numbered(id)?.[1] === prefix ? +numbered(id)![2] : 0)),
+    );
+    while (taken.has(`${prefix}${++n}`));
+    taken.add(`${prefix}${n}`);
+    return `${prefix}${n}`;
+  };
   /** Source id for an editor id. */
   const sid = (id: string) => ids.get(id) ?? id;
   const parentOf = (d: Diagram, id: string) =>
@@ -253,6 +290,12 @@ export function translateEdit(input: EditInput): EditResult {
     st.args[st.args.length - 1] = quoted(e.label);
   });
   writeBundles(source, before.appearance.bundles, after.appearance.bundles);
+  // A sequence's activation bars are a word on its layout line.
+  const bars = !!after.layout.sequence?.bars;
+  if (bars !== !!before.layout.sequence?.bars) {
+    const line = layoutStatement(source, 'root');
+    if (line) setAttr(line, 'activations', bars ? bare('on') : undefined);
+  }
   // A phase's label is in its `phase` line; its messages never change on the canvas.
   const phases = new Map(before.layout.sequence?.phases.map(p => [p.id, p.label]));
   for (const p of after.layout.sequence?.phases ?? []) {
@@ -312,10 +355,12 @@ export function translateEdit(input: EditInput): EditResult {
     const type = after.graph.groups.includes(o as never) ? 'group' : 'node';
     const id = fresh(o.title, type);
     ids.set(o.id, id);
-    const s = statement(type, [bare(id), quoted(o.title)]);
+    const code = (o as DiagramNode).code;
+    const s = statement(type, [bare(id), ...(code && !o.title ? [] : [quoted(o.title)])]);
     if (o.parentId) setAttr(s, 'in', bare(sid(o.parentId)));
     const shape = after.styles[o.id]?.shape;
     if (type === 'node' && shape && shape !== 'box') setAttr(s, 'shape', bare(shape));
+    if (code) writeCode(s, code);
     writeColor(s, o.id, o.parentId ?? null);
     writeShade(s, after.styles[o.id]?.shade);
     insertAfter(source, s, isDeclaration);
@@ -344,6 +389,12 @@ export function translateEdit(input: EditInput): EditResult {
       b = after.styles[o.id];
     if (a?.color !== b?.color) writeColor(s, o.id, o.parentId ?? null);
     if (a?.shade !== b?.shade) writeShade(s, b?.shade);
+    if (
+      s.command === 'node' &&
+      a?.shape !== b?.shape &&
+      (a?.shape === 'code' || b?.shape === 'code')
+    )
+      throw new UnsupportedEdit('A code node keeps its shape; edit its body in the source.');
     if (s.command === 'node' && a?.shape !== b?.shape)
       setAttr(s, 'shape', b.shape === 'box' ? undefined : bare(b.shape));
     const span = (o as DiagramNode).span;
@@ -357,14 +408,38 @@ export function translateEdit(input: EditInput): EditResult {
     setAttr(s, 'to', cfg?.toSide && cfg.toSide !== 'auto' ? bare(cfg.toSide) : undefined);
   };
   const writeEdge = (e: DiagramEdge, s: Statement) => {
-    s.args = [s.args[0], bare(sid(e.from)), bare('->'), bare(sid(e.to))];
+    // An action has its own line: its participant and its label. A self-message turns into one,
+    // and back, when its kind changes.
+    if (e.message === 'action') {
+      const label = e.label || s.args.find(w => w.quoted)?.value || e.id;
+      s.command = 'action';
+      s.attrs = [];
+      s.args = [s.args[0], bare(sid(e.from)), quoted(label)];
+      return;
+    }
+    s.command = 'edge';
+    // An end on a code range keeps its range name, while that node still has the range.
+    const has = (id: string, range: string) =>
+        after.graph.nodes.some(n => n.id === id && n.code?.ranges?.some(r => r.name === range)),
+      end = (id: string, range?: string) =>
+        bare(sid(id) + (range && has(id, range) ? '.' + range : ''));
+    s.args = [s.args[0], end(e.from, e.fromRange), bare('->'), end(e.to, e.toRange)];
     if (e.label) s.args.push(quoted(e.label));
     setAttr(s, 'directed', e.directed === false ? bare('false') : undefined);
     setAttr(s, 'head', e.head ? bare(e.head) : undefined);
     setAttr(s, 'tail', e.tail ? bare(e.tail) : undefined);
     const kind = getAttr(s, 'kind')?.value;
-    if (e.dashed) setAttr(s, 'kind', bare('async'));
+    // A kind of message draws its own dashes, so it never takes `kind=` beside it.
+    if (e.message) setAttr(s, 'kind', undefined);
+    else if (e.dashed) setAttr(s, 'kind', bare('async'));
     else if (kind === 'async') setAttr(s, 'kind', undefined);
+    // A reply that names its message needs only `answers=`.
+    setAttr(
+      s,
+      'message',
+      e.message && !(e.message === 'reply' && e.replyTo) ? bare(e.message) : undefined,
+    );
+    setAttr(s, 'answers', e.replyTo ? bare(sid(e.replyTo)) : undefined);
     ports(after.layout.edges[e.id], s);
   };
   const beforeEdges = new Map(before.graph.edges.map(e => [e.id, e]));
@@ -373,11 +448,31 @@ export function translateEdit(input: EditInput): EditResult {
     if (!old) {
       const id = input.newId
         ? fresh(e.label ?? '', 'edge', { from: sid(e.from), to: sid(e.to) })
-        : fresh(`${sid(e.from)}-${sid(e.to)}`, 'edge');
+        : (after.layout.sequence && nextNumbered(e.message === 'action' ? 'action' : 'edge')) ||
+          fresh(`${sid(e.from)}-${sid(e.to)}`, 'edge');
       ids.set(e.id, id);
       const s = statement('edge', [bare(id)]);
       writeEdge(e, s);
-      if (statements(source).some(x => x.command === 'edge'))
+      // A sequence reads its events in file order, so a new one goes where it was put: after
+      // the event above it, in that event's phase, or before the one below it.
+      const order = after.graph.edges,
+        at = order.indexOf(e),
+        above =
+          after.layout.sequence && at > 0
+            ? edgeStatement(source, sid(order[at - 1].id))
+            : undefined,
+        below = after.layout.sequence
+          ? edgeStatement(source, sid(order[at + 1]?.id ?? ''))
+          : undefined;
+      if (above) {
+        source.lines.splice(source.lines.indexOf(above) + 1, 0, s);
+        for (const p of statements(source))
+          if (p.command === 'phase') {
+            const i = p.args.findIndex((w, k) => k > 1 && w.value === above.args[0].value);
+            if (i > 0) p.args.splice(i + 1, 0, bare(id));
+          }
+      } else if (below) source.lines.splice(source.lines.indexOf(below), 0, s);
+      else if (statements(source).some(x => x.command === 'edge'))
         insertAfter(source, s, x => x.command === 'edge');
       else insertAfter(source, s, isDeclaration);
     } else if (!same(old, e) || !same(before.layout.edges[e.id], after.layout.edges[e.id])) {
@@ -387,7 +482,7 @@ export function translateEdit(input: EditInput): EditResult {
   }
 
   writeRoutes(input, notes);
-
+  moveEvents(source, scene, before, after);
   const drops: Drop[] = [];
   placeSelection(input, sid, notes, drops);
   return {
@@ -453,6 +548,50 @@ function writeRoutes(input: EditInput, notes: string[]) {
     else addRefinement(source, statement('label', [bare(e.id)], attrs));
     notes.push(`placed the label of ${e.id}`);
   }
+}
+
+/**
+ * A sequence's events in a new order: their lines trade places, each with its own comment. A
+ * move that would put a reply above the message it answers, or split a phase, is refused with
+ * the reason, since neither the reply nor the phase can follow without the author's word.
+ */
+function moveEvents(source: SourceDoc, scene: Scene, before: Diagram, after: Diagram) {
+  if (!after.layout.sequence) return;
+  const kept = new Set(after.graph.edges.map(e => e.id)),
+    was = before.graph.edges.filter(e => kept.has(e.id)).map(e => e.id),
+    now = after.graph.edges.filter(e => was.includes(e.id)).map(e => e.id);
+  if (was.join('\0') === now.join('\0')) return;
+  const all = after.graph.edges.map(e => e.id);
+  for (const e of after.graph.edges)
+    if (e.replyTo && all.indexOf(e.replyTo) > all.indexOf(e.id))
+      throw new UnsupportedEdit(
+        `${e.id} answers ${e.replyTo}, so it stays below it. Move ${e.replyTo} first, or clear the reply's "Reply to".`,
+      );
+  for (const p of scene.model.phases) {
+    const at = p.ids.map(id => all.indexOf(id)).filter(i => i >= 0);
+    if (at.length && Math.max(...at) - Math.min(...at) + 1 !== at.length)
+      throw new UnsupportedEdit(
+        `That move would split the phase "${p.label}". Change the phase's messages in the source first.`,
+      );
+  }
+  // An event's line and the comment lines right above it move as one block.
+  const blockOf = (id: string) => {
+    const end = source.lines.indexOf(edgeStatement(source, id)!);
+    let start = end;
+    while (start > 0 && source.lines[start - 1].kind === 'comment') start--;
+    return { start, end };
+  };
+  const blocks = was.map(blockOf),
+    text = new Map(
+      was.map((id, i) => [id, source.lines.slice(blocks[i].start, blocks[i].end + 1)]),
+    ),
+    out: typeof source.lines = [];
+  let at = 0;
+  blocks.forEach((b, i) => {
+    out.push(...source.lines.slice(at, b.start), ...text.get(now[i])!);
+    at = b.end + 1;
+  });
+  source.lines = [...out, ...source.lines.slice(at)];
 }
 
 function writeShade(s: Statement, shade: number | undefined) {

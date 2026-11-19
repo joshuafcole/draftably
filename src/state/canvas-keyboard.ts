@@ -180,6 +180,12 @@ export function handleCanvasKey(e: KeyboardEvent, closeMenu?: () => boolean): bo
       return true;
     }
     const only = activeSession().singleSelection();
+    // In a sequence, Tab adds a message after the selected one, and Shift Tab before it.
+    if (only && activeSession().doc.layout.edges[only]?.row !== undefined) {
+      e.preventDefault();
+      runCanvasCommand(e.shiftKey ? 'insert-event-before' : 'insert-event-after');
+      return true;
+    }
     if (only && (findNode(activeSession().doc, only) || findEdge(activeSession().doc, only))) {
       e.preventDefault();
       activeSession().quickExtend({ sibling: e.shiftKey });
@@ -189,6 +195,13 @@ export function handleCanvasKey(e: KeyboardEvent, closeMenu?: () => boolean): bo
 
   if (e.altKey && ARROW_SIDES[e.key] && onCanvas) {
     e.preventDefault();
+    // A sequence message moves up or down among the messages; it has no side to add on.
+    const only = activeSession().singleSelection();
+    if (only && activeSession().doc.layout.edges[only]?.row !== undefined) {
+      if (e.key === 'ArrowUp' || e.key === 'ArrowDown')
+        runCanvasCommand(e.key === 'ArrowUp' ? 'move-event-up' : 'move-event-down');
+      return true;
+    }
     activeSession().quickExtend({ side: ARROW_SIDES[e.key] });
     return true;
   }

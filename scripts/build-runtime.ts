@@ -47,12 +47,6 @@ execFileSync('pnpm', ['exec', 'tsc', '-p', 'tsconfig.runtime.json'], {
   cwd: root,
   stdio: 'inherit',
 });
-// TypeScript does not copy input declarations used by the native engine modules.
-const engineTypes = path.join(out, 'types/src/engines');
-mkdirSync(engineTypes, { recursive: true });
-for (const file of readdirSync(path.join(root, 'src/engines')))
-  if (file.endsWith('.d.ts'))
-    cpSync(path.join(root, 'src/engines', file), path.join(engineTypes, file));
 const { FACES } = await import('../src/model/font-faces.ts');
 const { fontMetricsVersion } = await import('../src/model/font-faces.ts');
 const identity = createHash('sha256').update(
@@ -62,7 +56,8 @@ for (const face of Object.values(FACES))
   identity.update(readFileSync(path.join(root, 'src/assets/fonts', face.file)));
 if (identity.digest('hex').slice(0, 12) !== fontMetricsVersion)
   throw Error('Update fontMetricsVersion after changing font bytes or metrics.');
-// Emitted declarations must also work with NodeNext, which requires file extensions.
+// Emitted declarations must also work with NodeNext, which requires file extensions. The engine
+// modules import each other with `.ts`, so Node can run them as they are; a package has only `.js`.
 for (const file of readdirSync(path.join(out, 'types'), { recursive: true }) as string[]) {
   if (!file.endsWith('.d.ts')) continue;
   const full = path.join(out, 'types', file);
@@ -70,7 +65,9 @@ for (const file of readdirSync(path.join(out, 'types'), { recursive: true }) as 
   writeFileSync(
     full,
     text.replace(/(from\s+|import\()(['"])(\.[^'"]+)\2/g, (match, lead, quote, name) =>
-      /\.(?:js|json|ts)$/.test(name) ? match : `${lead}${quote}${name}.js${quote}`,
+      /\.(?:js|json)$/.test(name)
+        ? match
+        : `${lead}${quote}${name.replace(/\.ts$/, '')}.js${quote}`,
     ),
   );
 }

@@ -2,7 +2,7 @@
  * Compare's reading of its candidates: what each one measures, which ones are the same drawing,
  * which few are worth showing, and how each differs from the current drawing.
  */
-import type { RoutingResult } from '../engines/routing-engine.js';
+import type { RoutingResult } from '../engines/routing-engine';
 import { labelHits } from './label-hits';
 import type { Rect } from './types';
 import type { StaticScene } from './static-scene';

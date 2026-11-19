@@ -10,7 +10,7 @@ import {
   type CandidateResult,
   type ComparisonConfig,
   type ComparisonMode,
-} from '../engines/explorer-engine.js';
+} from '../engines/explorer-engine';
 import { LANES_HOLD } from '../dsl/layout-edits';
 import { holdSlots, measure, pickCandidates, type Measure } from '../model/candidates';
 import { documentIdentity, normalize, routingFingerprint } from '../model/document';
@@ -23,9 +23,9 @@ import { CancelledError, inPool, startEngineTask, type RunningTask } from '../li
 import { toast } from './toast';
 import { closeMenu } from './ui';
 import { sourceScope } from './session/file-session';
-import { LayoutLab } from '../engines/layout-engine.js';
-import { RouteLab } from '../engines/routing-engine.js';
-import type { CandidateSpec } from '../engines/explorer-engine.js';
+import { LayoutLab } from '../engines/layout-engine';
+import { RouteLab } from '../engines/routing-engine';
+import type { CandidateSpec } from '../engines/explorer-engine';
 import { activeSession } from './active-session';
 
 const CURRENT: CandidateSpec = {

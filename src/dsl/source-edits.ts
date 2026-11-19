@@ -30,8 +30,11 @@ export const declaration = (doc: SourceDoc, id: string) =>
     s => (s.command === 'node' || s.command === 'group') && s.args[0]?.value === id,
   );
 
+/** A statement that makes a connection: an `edge`, or a sequence's `action`. */
+export const isEdge = (s: Statement) => s.command === 'edge' || s.command === 'action';
+
 export const edgeStatement = (doc: SourceDoc, id: string) =>
-  statements(doc).find(s => s.command === 'edge' && s.args[0]?.value === id);
+  statements(doc).find(s => isEdge(s) && s.args[0]?.value === id);
 
 export const layoutStatement = (doc: SourceDoc, scope: string) =>
   statements(doc).find(s => s.command === 'layout' && s.args[0]?.value === scope);
@@ -81,12 +84,28 @@ export const clearPosition = (doc: SourceDoc, id: string) =>
 
 /**
  * Every statement that mentions `id` as an object: refinements, edges and alignment lists. Its
- * messages go with it, and they leave the phases and states that list them.
+ * messages go with it, and they leave the phases and states that list them. A code node's
+ * `range` lines go too, and so does each mention of those ranges.
  */
 export function removeReferences(doc: SourceDoc, id: string) {
+  const ranges = statements(doc)
+    .filter(s => s.command === 'range' && s.args[0]?.value.startsWith(id + '.'))
+    .map(s => s.args[0].value);
+  // `sql` or one of its ranges, `sql.copy1`; never another node whose ID only starts with `sql.`.
+  const named = new Set([id, ...ranges]),
+    names = (w: { value: string } | undefined) => !!w && named.has(w.value);
+  removeWhere(doc, s => s.command === 'range' && names(s.args[0]));
   statements(doc)
-    .filter(s => s.command === 'edge' && (s.args[1]?.value === id || s.args[3]?.value === id))
+    .filter(
+      s =>
+        (s.command === 'edge' && (names(s.args[1]) || names(s.args[3]))) ||
+        (s.command === 'action' && s.args[1]?.value === id),
+    )
     .forEach(s => removeEdge(doc, s.args[0].value));
+  for (const r of ranges) {
+    removeFromStates(doc, r);
+    unanchorNotes(doc, r);
+  }
   removeWhere(doc, s => {
     if (s.command === 'near') return s.args[0]?.value === id || s.args[1]?.value === id;
     if (['nudge', 'stay', 'pin', 'size'].includes(s.command)) return s.args[0]?.value === id;
@@ -142,7 +161,17 @@ function unanchorNotes(doc: SourceDoc, id: string) {
  * own.
  */
 export function removeEdge(doc: SourceDoc, id: string) {
-  removeWhere(doc, s => ['edge', 'route', 'label'].includes(s.command) && s.args[0]?.value === id);
+  removeWhere(
+    doc,
+    s => (isEdge(s) || ['route', 'label'].includes(s.command)) && s.args[0]?.value === id,
+  );
+  // A reply to it stays, and no longer names what it answers.
+  for (const s of statements(doc))
+    if (getAttr(s, 'answers')?.value === id) {
+      // `answers=` alone made it a reply, so without it the line says so itself.
+      setAttr(s, 'message', bare('reply'));
+      setAttr(s, 'answers', undefined);
+    }
   removeFromStates(doc, id);
   unanchorNotes(doc, id);
   for (const s of statements(doc))

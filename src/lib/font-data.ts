@@ -16,9 +16,19 @@ const DATA: Record<FaceId, string> = {
   'mono-500': mono500,
 };
 
-/** `@font-face` rules for the faces an appearance draws with. */
-export function fontFaceCss(look: ResolvedAppearance): string {
-  const faces = [...new Set<FaceId>([look.title.face, look.groupTitle.face, look.annotation.face])];
+/**
+ * `@font-face` rules for the faces an appearance draws with, and JetBrains Mono when the drawing
+ * has a code node.
+ */
+export function fontFaceCss(look: ResolvedAppearance, code = false): string {
+  const faces = [
+    ...new Set<FaceId>([
+      look.title.face,
+      look.groupTitle.face,
+      look.annotation.face,
+      ...(code ? (['mono-500'] as const) : []),
+    ]),
+  ];
   return faces
     .map(id => {
       const face = FACES[id];

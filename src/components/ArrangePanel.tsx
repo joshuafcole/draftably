@@ -1,5 +1,5 @@
 import { createEffect, createMemo, createSignal, For, Show, type JSX } from 'solid-js';
-import { LayoutLab as Engine, type LayoutSettingKey } from '../engines/layout-engine.js';
+import { LayoutLab as Engine, type LayoutSettingKey } from '../engines/layout-engine';
 import { layoutShape, type LayoutShape } from '../dsl/layout-edits';
 import { ENGINES, FITS, type Fit } from '../dsl/syntax';
 import { count } from '../model/candidates';

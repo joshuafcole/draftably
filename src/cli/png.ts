@@ -7,7 +7,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
 import { embedPngSource } from '../model/embed';
-import { fontFiles } from './raster-fonts';
+import { fontFiles, rasterFamilies } from './raster-fonts';
 
 /** The width and height an SVG declares on its root, rounded up. */
 export function svgSize(svg: string) {
@@ -16,27 +16,30 @@ export function svgSize(svg: string) {
   return { w: Math.ceil(Number(size[1])), h: Math.ceil(Number(size[2])) };
 }
 
+/** `svg` loaded in resvg with the bundled fonts, each diagram family renamed so resvg finds it. */
+export async function rasterize(svg: string) {
+  const { Resvg } = await import('@resvg/resvg-js');
+  return new Resvg(rasterFamilies(svg), {
+    font: {
+      loadSystemFonts: false,
+      fontFiles: Object.values(fontFiles()),
+      defaultFontFamily: 'Inter',
+    },
+  });
+}
+
 /**
  * Write `svg` as a PNG at `scale` times its own size, with `source` embedded when given. Returns
  * the image's size in pixels.
  */
 export async function writePng(svg: string, out: string, scale = 2, source?: string) {
   const { w, h } = svgSize(svg);
-  const { Resvg } = await import('@resvg/resvg-js');
   // Scale through the root size, as Chrome's device scale did: the drawing keeps its viewBox.
   const sized = svg.replace(
     /width="[\d.]+" height="[\d.]+"/,
     `width="${w * scale}" height="${h * scale}"`,
   );
-  const png = new Resvg(sized, {
-    font: {
-      loadSystemFonts: false,
-      fontFiles: Object.values(fontFiles()),
-      defaultFontFamily: 'Inter',
-    },
-  })
-    .render()
-    .asPng();
+  const png = (await rasterize(sized)).render().asPng();
   fs.writeFileSync(
     path.resolve(out),
     source === undefined ? png : await embedPngSource(png, source),

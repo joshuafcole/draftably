@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * End-to-end proof for diagram themes (docs/intent/diagram-themes).
+ * End-to-end proof for diagram themes (docs/CHECKS.md, "Themes in file mode").
  *
  * Opens a temporary copy of examples/theme-proof.draft through `pnpm draftably open` on its own
  * port and checks, in Chromium with the bundled fonts:

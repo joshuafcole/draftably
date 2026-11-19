@@ -1,6 +1,6 @@
 {
   "name": "@draftably/runtime",
-  "version": "0.4.0",
+  "version": "0.6.0",
   "private": false,
   "description": "Portable native Draftably SVG rendering, validation, and optional viewer.",
   "type": "module",

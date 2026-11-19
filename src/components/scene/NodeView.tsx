@@ -15,7 +15,7 @@ import type { Diagram, NodeLayout, Side } from '../../model/types';
 import { SceneGlyph } from '../Icon';
 import { LinkMarkView } from './LinkMark';
 import { NodeBody, useNodeContent } from './node-content';
-import { NodeTitle, pinSpot, PositionBadge, RemovedMarker, ResizeHandles } from './parts';
+import { CodeBody, NodeTitle, pinSpot, PositionBadge, RemovedMarker, ResizeHandles } from './parts';
 
 const SIDES: Side[] = ['left', 'right', 'top', 'bottom'];
 
@@ -237,14 +237,30 @@ export function NodeView(props: NodeViewProps) {
       <Show
         when={body()}
         fallback={
-          <NodeTitle
-            label={label()}
-            look={look()}
-            fill={inside() ? color().ink : look().text}
-            detailFill={inside() ? detailInk(look(), color()) : look().muted}
-            strike={paint().strike}
-            fade={paint().inkFade}
-          />
+          <>
+            <Show when={node().code}>
+              {code => (
+                <CodeBody
+                  code={code()}
+                  caption={node().title}
+                  w={props.rect.w}
+                  h={props.rect.h}
+                  look={look()}
+                  swatch={color()}
+                  strike={paint().strike}
+                  fade={paint().inkFade}
+                />
+              )}
+            </Show>
+            <NodeTitle
+              label={label()}
+              look={look()}
+              fill={inside() ? color().ink : look().text}
+              detailFill={inside() ? detailInk(look(), color()) : look().muted}
+              strike={paint().strike}
+              fade={paint().inkFade}
+            />
+          </>
         }
       >
         {host => (

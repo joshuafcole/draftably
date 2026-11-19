@@ -20,7 +20,9 @@ import {
   type ThemeId,
 } from '../model/appearance';
 import type { FontRole } from '../model/fonts';
-import type { EndMarker } from '../model/markers';
+import type { EndMarker, MessageKind } from '../model/markers';
+import { CODE_MAX_WIDTH, CODE_TAB, codeLines, type CodeBlock } from '../model/code';
+import { langOf, parseSrc, srcBody, type CodeFiles } from '../model/code-src';
 import { NO_STATE, NOTE_WIDTH } from '../model/note';
 import type { Status } from '../model/status';
 import type {
@@ -34,6 +36,7 @@ import type {
 } from '../model/types';
 import {
   attributesOf,
+  CODE_ATTRS,
   CONFIG_KEYS,
   ENGINE_PARAMS,
   ENGINES,
@@ -90,7 +93,26 @@ export interface Statement {
   comment?: string;
   /** 1-based line in the source this statement was parsed from; 0 when added by an edit. */
   line: number;
+  /**
+   * A heredoc body: `<<TAG` ends the statement's line, and the lines after it, up to a line
+   * holding only `TAG`, are kept verbatim. The statement spans all of them.
+   */
+  body?: HereBody;
 }
+
+export interface HereBody {
+  tag: string;
+  /** The body's lines exactly as written. */
+  lines: string[];
+  /** The closing line exactly as written (`TAG`, maybe with spaces around it). */
+  close: string;
+}
+
+/** The most characters a `.draft` source may hold. */
+export const SOURCE_LIMIT = 300_000;
+
+/** `<<TAG` as the last word of a statement opens a body. */
+const HEREDOC = /^<<([A-Za-z_][A-Za-z0-9_]*)$/;
 
 export type SourceLine = { kind: 'blank' } | { kind: 'comment'; text: string } | Statement;
 
@@ -185,28 +207,65 @@ function word(raw: string, line: number, column: number): Word {
 /** Read source text into lines. Only lexical errors are reported here. */
 export function readSource(source: string): SourceDoc {
   if (typeof source !== 'string') throw new DslError('Source must be text.');
-  if (source.length > 300_000) throw new DslError('Limit: 300,000 source characters.');
-  const lines: SourceLine[] = source.split(/\r?\n/).map((text, i) => {
+  if (source.length > SOURCE_LIMIT) throw new DslError('Limit: 300,000 source characters.');
+  const texts = source.split(/\r?\n/),
+    lines: SourceLine[] = [];
+  for (let i = 0; i < texts.length; i++) {
     const line = i + 1,
-      { tokens, columns, comment } = tokenize(text, line);
-    if (!tokens.length) return comment ? { kind: 'comment', text: comment } : { kind: 'blank' };
-    const [first, ...rest] = tokens,
-      mark = MARKS[first[0] as Mark] && first.length > 1 ? (first[0] as Mark) : undefined,
-      command = mark ? first.slice(1) : first,
-      args: Word[] = [],
-      attrs: Array<[string, Word]> = [];
-    rest.forEach((raw, i) => {
-      const eq = raw.indexOf('='),
-        col = columns[i + 1];
-      if (eq > 0 && !raw.startsWith('"')) {
-        const key = raw.slice(0, eq);
-        if (attrs.some(([k]) => k === key)) throw new DslError(`Duplicate attribute ${key}.`, line);
-        attrs.push([key, word(raw.slice(eq + 1), line, col + eq + 1)]);
-      } else args.push(word(raw, line, col));
-    });
-    return { kind: 'statement', command, ...(mark ? { mark } : {}), args, attrs, comment, line };
-  });
+      { tokens, columns, comment } = tokenize(texts[i], line);
+    // A body is read before anything else, so its lines are never tokenized.
+    const open = HEREDOC.exec(tokens[tokens.length - 1] ?? '');
+    let body: HereBody | undefined;
+    if (open && tokens.length > 1) {
+      tokens.pop();
+      columns.pop();
+      const tag = open[1],
+        end = texts.findIndex((t, j) => j > i && t.trim() === tag);
+      if (end < 0)
+        throw new DslError(
+          `The body opened by <<${tag} has no closing line. End it with a line holding only ${tag}.`,
+          line,
+        );
+      body = { tag, lines: texts.slice(i + 1, end), close: texts[end] };
+      i = end;
+    }
+    lines.push(statementOf(tokens, columns, comment, line, body));
+  }
   return { lines };
+}
+
+function statementOf(
+  tokens: string[],
+  columns: number[],
+  comment: string | undefined,
+  line: number,
+  body: HereBody | undefined,
+): SourceLine {
+  if (!tokens.length) return comment ? { kind: 'comment', text: comment } : { kind: 'blank' };
+  const [first, ...rest] = tokens,
+    mark = MARKS[first[0] as Mark] && first.length > 1 ? (first[0] as Mark) : undefined,
+    command = mark ? first.slice(1) : first,
+    args: Word[] = [],
+    attrs: Array<[string, Word]> = [];
+  rest.forEach((raw, i) => {
+    const eq = raw.indexOf('='),
+      col = columns[i + 1];
+    if (eq > 0 && !raw.startsWith('"')) {
+      const key = raw.slice(0, eq);
+      if (attrs.some(([k]) => k === key)) throw new DslError(`Duplicate attribute ${key}.`, line);
+      attrs.push([key, word(raw.slice(eq + 1), line, col + eq + 1)]);
+    } else args.push(word(raw, line, col));
+  });
+  return {
+    kind: 'statement',
+    command,
+    ...(mark ? { mark } : {}),
+    args,
+    attrs,
+    comment,
+    line,
+    ...(body ? { body } : {}),
+  };
 }
 
 // --- Formatting --------------------------------------------------------------------------------
@@ -220,8 +279,11 @@ export function printStatement(s: Statement): string {
     (s.mark ?? '') + s.command,
     ...s.args.map(printWord),
     ...s.attrs.map(([k, v]) => k + '=' + printWord(v)),
+    ...(s.body ? ['<<' + s.body.tag] : []),
   ];
-  return parts.join(' ') + (s.comment ? ' ' + s.comment : '');
+  const head = parts.join(' ') + (s.comment ? ' ' + s.comment : '');
+  // The body and its closing line print exactly as written.
+  return s.body ? [head, ...s.body.lines, s.body.close].join('\n') : head;
 }
 
 /**
@@ -287,6 +349,8 @@ export interface ModelObject {
   frame?: 'soft' | 'none';
   /** Groups only: `fold=never` keeps the group's chain in one column even when it is much the tallest. */
   fold?: 'never';
+  /** Code nodes only: the body and its options. */
+  code?: CodeBlock;
   /** Set by the compiler: the soft groups this object sits in below its layout scope, outermost first. */
   soft?: string[];
   /** Cells only: how many columns (or units) of its group's grid the cell covers; `var` for a
@@ -315,10 +379,17 @@ export interface ModelEdge {
   tail?: EndMarker;
   /** `constraint=false`: drawn and routed, but layout doesn't rank or order by it. */
   constraint?: false;
+  /** Sequence diagrams: `message=`, or `action` for an `action` line. */
+  message?: MessageKind;
+  /** `answers=`: the earlier message a reply answers. */
+  replyTo?: string;
+  /** Set by `validateReferences` for an end written as a code range, `sql.copy2`. */
+  fromRange?: string;
+  toRange?: string;
   line: number;
 }
 
-/** A layout engine run cold over a scope's subtree; see `src/engines/layout-engine.js`. */
+/** A layout engine run cold over a scope's subtree; see `src/engines/layout-engine.ts`. */
 export interface EngineRecipe {
   algorithm: LayoutAlgorithmId;
   params: Partial<LayoutSettings>;
@@ -337,6 +408,8 @@ export interface ModelLayout {
   /** With `unit`: the width of one unit, and whether unit numbers run above the first row. */
   unitWidth?: number;
   ruler?: boolean;
+  /** `sequence` only: draw a bar on a participant's lifeline while it is at work on a call. */
+  activations?: true;
   /** `flow` only: whether a long run of ranks folds into bands. Engines take `fold` as a param. */
   fold: 'auto' | 'never';
   /** Root only: the image shape to aim for; compile tries direction and folding to get closest. */
@@ -437,10 +510,24 @@ export interface Model {
   phases: Array<{ id: string; label: string; ids: string[]; line: number }>;
   /** Sequence diagrams: the `was-order` statement, the older version's message order. */
   wasOrder?: { ids: string[]; line: number };
+  /** `range` statements, resolved onto their code nodes by `validateReferences`. */
+  ranges: ModelRange[];
   /** Problems that do not stop the file from drawing, such as a `config` key set twice. */
   warnings: { code: string; message: string; line: number }[];
 }
 
+/** A `range` statement as written: its lines by number (`lines=`) or by pattern (`match=`). */
+export interface ModelRange {
+  node: string;
+  name: string;
+  lines?: [number, number];
+  match?: string;
+  span: number;
+  color: string;
+  label?: string;
+  status?: Status;
+  line: number;
+}
 /** What to write instead of a layout attribute that a line does not take. */
 function layoutHint(key: string, engine: boolean) {
   if (engine && key === 'gap') return 'Engine lines space boxes with node-gap= and rank-gap=.';
@@ -462,8 +549,12 @@ const FAMILY = /^[A-Za-z_][A-Za-z0-9_-]*$/;
 /** A `count=` symbol for an unknown number: a letter or a short word, such as `N` or `many`. */
 const COUNT_SYMBOL = /^[A-Za-z]{1,8}$/;
 
-/** Parse and validate source. Throws `DslError` with a line number for the first problem. */
-export function parseModel(source: string | SourceDoc): Model {
+/**
+ * Parse and validate source. Throws `DslError` with a line number for the first problem. `files`
+ * holds the text of the files `src=` names, read by the host; without it a `src=` node draws a
+ * placeholder.
+ */
+export function parseModel(source: string | SourceDoc, files?: CodeFiles): Model {
   const doc = typeof source === 'string' ? readSource(source) : source;
   const m: Model = {
     title: 'Untitled diagram',
@@ -483,6 +574,7 @@ export function parseModel(source: string | SourceDoc): Model {
     labels: [],
     stateLines: new Map(),
     phases: [],
+    ranges: [],
     warnings: [],
   };
   const configLines = new Map<string, number>();
@@ -555,10 +647,15 @@ export function parseModel(source: string | SourceDoc): Model {
       assert(!unique.has(key), `Duplicate declaration: ${key}. Edit the existing line instead.`);
       unique.add(key);
     };
+    // Only a code node takes a body; the node and group case says so for those two.
+    assert(
+      !s.body || command === 'node' || command === 'group',
+      `The ${command} line takes no body. Only a code node (node id shape=code <<TAG) does.`,
+    );
     const status: Status | undefined = s.mark && MARKS[s.mark];
     assert(
       !s.mark || statementSpec(command)?.marks,
-      `Only node, group and edge lines take a ${s.mark} mark.`,
+      `Only node, group, edge and range lines take a ${s.mark} mark.`,
     );
     /** Two numbers in one word, `x,y`, each within `min` and `max`. */
     const pair = (key: string, min: number, max: number): [number, number] => {
@@ -724,7 +821,26 @@ export function parseModel(source: string | SourceDoc): Model {
         break;
       case 'node':
       case 'group': {
-        count(2);
+        const code = command === 'node' && attrs.get('shape')?.value === 'code';
+        // A code node's quoted label is an optional caption.
+        if (code) count(1, 2);
+        else count(2);
+        assert(
+          !s.body || code,
+          command === 'node'
+            ? 'Only a code node takes a body. Add shape=code, or remove the <<TAG body.'
+            : 'A group takes no body. Remove the <<TAG body.',
+        );
+        assert(
+          !(s.body && attrs.has('src')),
+          'A code node has src= or a body, never both. Remove the <<TAG body or src=.',
+        );
+        assert(
+          !code || s.body || attrs.has('src'),
+          'A code node needs a body: end the line with <<TAG, then the code, then a line holding only TAG. Or read it from a file with src="path".',
+        );
+        for (const key of CODE_ATTRS)
+          assert(code || !attrs.has(key), `${key}= belongs on a code node (shape=code).`);
         allow(attributesOf(command));
         const oid = id(args[0]);
         assert(oid !== 'root', 'root is reserved for the outer layout scope.');
@@ -736,6 +852,42 @@ export function parseModel(source: string | SourceDoc): Model {
           `Expected color=auto, a built-in color (${BUILT_IN_FAMILIES.join(', ')}) or a theme-color name; got ${color}.`,
         );
         const shade = attrs.has('shade') ? shadeOf(attrs.get('shade')!) : undefined;
+        const codeBlock = (): CodeBlock => {
+          const tab = num('tab', CODE_TAB, 1, 16),
+            src = attrs.get('src'),
+            ref = src && parseSrc(src.value);
+          assert(
+            !src || (src.value && ref),
+            `Expected src="path" or src="path#L10-L40"; got ${src?.value}.`,
+          );
+          const read = ref ? srcBody(src!.value, ref, files?.[ref.path], tab) : undefined,
+            lang = attrs.has('lang') ? text(attrs.get('lang')) : ref && langOf(ref.path);
+          return {
+            lines: read ? read.lines : codeLines(s.body!.lines, tab),
+            ...(lang && !read?.placeholder ? { lang } : {}),
+            wrap: choice('wrap', 'on', LANGUAGE.node.attrs.wrap) === 'on',
+            numbers: choice('numbers', 'off', LANGUAGE.node.attrs.numbers) === 'on',
+            start: num('start', read?.start ?? 1, 0, 1_000_000),
+            maxWidth: num('max-width', CODE_MAX_WIDTH, 120, 8000),
+            sourceLine: read
+              ? line
+              : line +
+                1 +
+                Math.max(
+                  0,
+                  s.body!.lines.findIndex(l => l.trim()),
+                ),
+            ...(read
+              ? {
+                  src: {
+                    path: ref!.path,
+                    ...(read.placeholder ? { placeholder: true } : {}),
+                    ...(read.problem ? { problem: read.problem } : {}),
+                  },
+                }
+              : {}),
+          };
+        };
         m.objects.push({
           id: oid,
           type: command,
@@ -744,6 +896,7 @@ export function parseModel(source: string | SourceDoc): Model {
           color,
           ...(shade !== undefined ? { shade } : {}),
           shape: command === 'node' ? choice('shape', 'box', LANGUAGE.node.attrs.shape) : 'box',
+          ...(code ? { code: codeBlock() } : {}),
           ...(s.mark ? { status } : {}),
           ...was(),
           ...(attrs.has('href') ? { href: text(attrs.get('href')) } : {}),
@@ -782,12 +935,29 @@ export function parseModel(source: string | SourceDoc): Model {
           !undirected || !(attrs.has('head') || attrs.has('tail')),
           `Edge ${eid} has directed=false, so it has no ends to mark. Remove head= and tail=, or remove directed=false.`,
         );
+        // `answers=` alone makes a reply: only a reply answers a message.
+        const named = attrs.has('message')
+            ? choice('message', 'interaction', edge.message)
+            : undefined,
+          message = named ?? (attrs.has('answers') ? ('reply' as const) : undefined);
+        assert(
+          !attrs.has('answers') || message === 'reply',
+          `Edge ${eid} has message=${named} and answers=, which disagree: answers= makes a reply. Remove answers=, or use message=reply.`,
+        );
+        // A kind of message draws its own line and ends, so it takes no style beside it.
+        for (const key of ['kind', 'head', 'tail', 'directed'])
+          assert(
+            !message || !attrs.has(key),
+            `Edge ${eid} has ${named ? `message=${named}` : 'answers='}, which sets how it is drawn. Remove ${key}=.`,
+          );
         m.edges.push({
           id: eid,
           source: id(args[1]),
           target: id(args[3]),
           label: text(args[4]),
-          dashed: choice('kind', 'sync', edge.kind) === 'async',
+          dashed: choice('kind', 'sync', edge.kind) === 'async' || message === 'reply',
+          ...(message ? { message } : {}),
+          ...(attrs.has('answers') ? { replyTo: id(attrs.get('answers')) } : {}),
           from: choice('from', 'auto', edge.from),
           to: choice('to', 'auto', edge.to),
           ...(undirected ? { directed: false as const } : {}),
@@ -798,6 +968,30 @@ export function parseModel(source: string | SourceDoc): Model {
             : {}),
           ...(s.mark ? { status } : {}),
           ...was(),
+          line,
+        });
+        break;
+      }
+      case 'action': {
+        // `action id participant "label"`: work one participant does, in its place among the messages.
+        assert(
+          args.length === 3 && args[2].quoted && args[2].value.trim(),
+          'An action needs an ID, its participant and a label: action check auth "check hash".',
+        );
+        allow(attributesOf('action'));
+        const aid = id(args[0]),
+          who = id(args[1]);
+        assert(!edgeIds.has(aid), `Duplicate edge id ${aid}.`);
+        edgeIds.add(aid);
+        m.edges.push({
+          id: aid,
+          source: who,
+          target: who,
+          label: args[2].value,
+          dashed: false,
+          from: 'auto',
+          to: 'auto',
+          message: 'action',
           line,
         });
         break;
@@ -845,7 +1039,12 @@ export function parseModel(source: string | SourceDoc): Model {
           allow(
             recipe === 'cells'
               ? [...forms.cells, ...common]
-              : [...forms.recipe, ...(recipe === 'flow' ? forms.flow : []), ...common],
+              : [
+                  ...forms.recipe,
+                  ...(recipe === 'flow' ? forms.flow : []),
+                  ...(recipe === 'sequence' ? forms.sequence : []),
+                  ...common,
+                ],
           );
         }
         const algorithm = (named ? 'flow' : args[1]?.value) as Algorithm;
@@ -868,6 +1067,9 @@ export function parseModel(source: string | SourceDoc): Model {
           direction: choice('direction', 'auto', layout.direction),
           fold: named ? 'auto' : choice('fold', 'auto', layout.fold),
           ...(attrs.has('fit') ? { fit: choice('fit', 'slide', layout.fit) } : {}),
+          ...(choice('activations', 'off', layout.activations) === 'on'
+            ? { activations: true as const }
+            : {}),
           ...(attrs.has('columns') ? { columns: num('columns', 1, 1, 512) } : {}),
           ...(attrs.has('unit')
             ? {
@@ -958,6 +1160,61 @@ export function parseModel(source: string | SourceDoc): Model {
           ...(shade !== undefined ? { shade } : {}),
         });
         m.legendLines.push(line);
+        break;
+      }
+      case 'range': {
+        count(1, 2);
+        allow(attributesOf('range'));
+        const rid = id(args[0]),
+          dot = rid.lastIndexOf('.');
+        assert(
+          dot > 0 && dot < rid.length - 1,
+          'A range is named after its code node: range sql.copy1 lines=3-6.',
+        );
+        assert(!objectIds.has(rid), `Duplicate id ${rid}: a node or group already has it.`);
+        assert(!m.ranges.some(r => `${r.node}.${r.name}` === rid), `Duplicate range ${rid}.`);
+        assert(
+          attrs.has('lines') !== attrs.has('match'),
+          'A range needs lines=a-b or match="pattern", not both.',
+        );
+        assert(!attrs.has('span') || attrs.has('match'), 'span= extends a match="pattern" range.');
+        let lines: [number, number] | undefined;
+        if (attrs.has('lines')) {
+          const span = /^(\d+)(?:-(\d+))?$/.exec(attrs.get('lines')!.value);
+          assert(span, `Expected lines=a-b, such as lines=3-6; got ${attrs.get('lines')!.value}.`);
+          lines = [Number(span![1]), Number(span![2] ?? span![1])];
+          assert(lines[0] <= lines[1], `lines=${lines[0]}-${lines[1]} runs backwards.`);
+        }
+        if (attrs.has('match')) {
+          const w = attrs.get('match')!;
+          assert(w.quoted && w.value, 'Expected match="pattern" in double quotes.');
+          try {
+            new RegExp(w.value);
+          } catch {
+            fail(`match="${w.value}" is not a valid regular expression.`);
+          }
+          assert(
+            !nestedQuantifier(w.value),
+            `match="${w.value}" repeats a group that repeats inside, such as (a+)+, which can take minutes to run. Repeat only the inside or only the group.`,
+          );
+        }
+        const color = attrs.get('color')?.value ?? 'amber';
+        assert(
+          !attrs.get('color')?.quoted && FAMILY.test(color) && color !== 'auto',
+          `Expected color= a built-in color (${BUILT_IN_FAMILIES.join(', ')}) or a theme-color name; got ${color}.`,
+        );
+        if (args[1]) assert(args[1].quoted, 'A range label goes in quotes.');
+        m.ranges.push({
+          node: rid.slice(0, dot),
+          name: rid.slice(dot + 1),
+          ...(lines ? { lines } : {}),
+          ...(attrs.has('match') ? { match: attrs.get('match')!.value } : {}),
+          span: num('span', 1, 1, 10_000),
+          color,
+          ...(args[1]?.value.trim() ? { label: args[1].value } : {}),
+          ...(status ? { status } : {}),
+          line,
+        });
         break;
       }
       case 'note': {
@@ -1172,6 +1429,114 @@ export function layoutParent(by: Map<string, ModelObject>, id: string): string {
   return p;
 }
 
+/**
+ * A quantified group that holds a quantifier, such as `(a+)+`, `(a*)*` or `((ab)+){2,}`. These
+ * can backtrack for minutes on one line, so `match=` refuses them.
+ */
+export function nestedQuantifier(pattern: string): boolean {
+  const stack: boolean[] = [];
+  let inner = false,
+    inClass = false;
+  for (let i = 0; i < pattern.length; i++) {
+    const c = pattern[i];
+    if (c === '\\') {
+      i++;
+      continue;
+    }
+    if (inClass) {
+      if (c === ']') inClass = false;
+      continue;
+    }
+    if (c === '[') inClass = true;
+    else if (c === '(') {
+      stack.push(inner);
+      inner = false;
+    } else if (c === ')') {
+      const quantified = /[+*{]/.test(pattern[i + 1] ?? '');
+      if (quantified && inner) return true;
+      inner = (stack.pop() ?? false) || inner || quantified;
+    } else if (c === '+' || c === '*' || c === '{') inner = true;
+  }
+  return false;
+}
+
+/**
+ * Put each `range` onto its code node as body line indexes. `lines=` counts from the node's
+ * `start=` (1 by default); `match=` takes the first line that matches, and `span=` lines from it.
+ * Returns the ranges by ID, `node.name`.
+ */
+function resolveRanges(
+  m: Model,
+  by: Map<string, ModelObject>,
+  defined: Map<string, Set<number>>,
+): Map<string, ModelRange> {
+  const out = new Map<string, ModelRange>(),
+    assert = (ok: unknown, message: string, line: number) => {
+      if (!ok) throw new DslError(message, line);
+    };
+  for (const r of m.ranges) {
+    const rid = `${r.node}.${r.name}`,
+      o = by.get(r.node);
+    assert(!by.has(rid), `Duplicate id ${rid}: a node or group already has it.`, r.line);
+    assert(o, `Unknown node ${r.node} in range ${rid}.`, r.line);
+    assert(
+      o!.code,
+      `${r.node} is not a code node, so it has no lines to name. Give it shape=code and a body, or remove range ${rid}.`,
+      r.line,
+    );
+    assert(
+      isBuiltInFamily(r.color) || defined.has(r.color),
+      `Unknown color ${r.color}. Define it with theme-color ${r.color} shade=… fill= stroke= ink=.`,
+      r.line,
+    );
+    const code = o!.code!,
+      last = code.start + code.lines.length - 1;
+    let from: number, to: number;
+    // A placeholder for an unread src= file has no real lines: the range marks its first line,
+    // so edges and notes still find it.
+    if (code.src?.placeholder) [from, to] = [0, 0];
+    else if (r.lines) {
+      assert(
+        r.lines[0] >= code.start,
+        `range ${rid} starts at line ${r.lines[0]}, before ${r.node}'s first line, ${code.start}.`,
+        r.line,
+      );
+      assert(
+        r.lines[1] <= last,
+        `range ${rid} runs to line ${r.lines[1]}, past ${r.node}'s last line, ${last}.`,
+        r.line,
+      );
+      [from, to] = [r.lines[0] - code.start, r.lines[1] - code.start];
+    } else {
+      const re = new RegExp(r.match!),
+        hits = code.lines.flatMap((l, i) => (re.test(l) ? [i] : []));
+      assert(hits.length, `range ${rid}: match="${r.match}" matches no line of ${r.node}.`, r.line);
+      if (hits.length > 1)
+        m.warnings.push({
+          code: 'range-match',
+          message: `range ${rid}: match="${r.match}" matches ${hits.length} lines of ${r.node} (${hits.map(i => i + code.start).join(', ')}), so it starts at the first. Make the pattern match one line.`,
+          line: r.line,
+        });
+      [from, to] = [hits[0], hits[0] + r.span - 1];
+      assert(
+        to < code.lines.length,
+        `range ${rid}: span=${r.span} from line ${from + code.start} runs past ${r.node}'s last line, ${last}.`,
+        r.line,
+      );
+    }
+    (code.ranges ??= []).push({
+      name: r.name,
+      from,
+      to,
+      color: r.color,
+      ...(r.label ? { label: r.label } : {}),
+      ...(r.status ? { status: r.status } : {}),
+    });
+    out.set(rid, r);
+  }
+  return out;
+}
+
 function validateReferences(m: Model) {
   const by = new Map(m.objects.map(o => [o.id, o]));
   const framed = (id: string, line: number, what: string) =>
@@ -1184,14 +1549,38 @@ function validateReferences(m: Model) {
   const assert = (ok: unknown, message: string, line: number) => {
     if (!ok) throw new DslError(message, line);
   };
-  const exists = (id: string, line: number) =>
-    assert(by.has(id), `Unknown node/group ${id}.`, line);
+  // `sql.copy9` where `sql` is a code node names a range, so the message says which it has.
+  const missing = (id: string) => {
+    const dot = id.lastIndexOf('.'),
+      o = dot > 0 ? by.get(id.slice(0, dot)) : undefined;
+    if (!o?.code) return `Unknown node/group ${id}.`;
+    const names = o.code.ranges?.map(r => r.name) ?? [];
+    return `Unknown range ${id}: ${o.id} ${names.length ? `has ${names.join(', ')}` : 'has no ranges'}. Name it with range ${id} lines=a-b.`;
+  };
+  const exists = (id: string, line: number) => assert(by.has(id), missing(id), line);
   const scope = (id: string, line: number) =>
     assert(id === 'root' || by.get(id)?.type === 'group', `Unknown container ${id}.`, line);
   const defined = new Map<string, Set<number>>();
   for (const c of m.appearance.colors) {
     if (!defined.has(c.family)) defined.set(c.family, new Set());
     defined.get(c.family)!.add(c.shade);
+  }
+  const ranges = resolveRanges(m, by, defined);
+  // An edge end written as a range ends on its code node, at the range's lines.
+  for (const e of m.edges) {
+    const a = ranges.get(e.source),
+      b = ranges.get(e.target);
+    for (const [r, side] of [
+      [a, e.from],
+      [b, e.to],
+    ] as const)
+      assert(
+        !r || side === 'auto' || side === 'left' || side === 'right',
+        `${e.id} ends on range ${r?.node}.${r?.name}, which it meets on the left or right side. Use from=/to= left or right, or remove it.`,
+        e.line,
+      );
+    if (a) Object.assign(e, { source: a.node, fromRange: a.name });
+    if (b) Object.assign(e, { target: b.node, toRange: b.name });
   }
   (m.appearance.legend ?? []).forEach((e, i) => {
     if (!e.family || isBuiltInFamily(e.family)) return;
@@ -1300,6 +1689,43 @@ function validateReferences(m: Model) {
       p.line,
     );
   }
+  // Kinds of message: only a sequence has them, and a reply names an earlier message it answers.
+  m.edges.forEach((e, i) => {
+    if (!e.message) return;
+    assert(
+      sequence,
+      e.message === 'action'
+        ? 'An action is work one participant does in a sequence diagram; use layout root sequence.'
+        : `message= gives the kind of a sequence message; use layout root sequence, or remove it from ${e.id}.`,
+      e.line,
+    );
+    assert(
+      !by.has(e.id),
+      `${e.id} names both a participant and ${e.message === 'action' ? 'an action' : 'a message'}; give one another ID.`,
+      e.line,
+    );
+    if (!e.replyTo) return;
+    const at = m.edges.findIndex(x => x.id === e.replyTo),
+      asked = m.edges[at];
+    assert(asked, `Unknown message ${e.replyTo} in answers= on ${e.id}.`, e.line);
+    assert(
+      at < i,
+      `${e.id} replies to ${e.replyTo}, which comes after it. A reply follows the message it answers.`,
+      e.line,
+    );
+    assert(
+      asked.message && ['interaction', 'call', 'send'].includes(asked.message),
+      asked.message
+        ? `${e.id} replies to ${e.replyTo}, which is ${asked.message === 'action' ? 'an action' : `a${asked.message === 'outcome' ? 'n' : ''} ${asked.message}`}. A reply answers an interaction, a call or a send.`
+        : `${e.id} replies to ${e.replyTo}, which has no kind. Give ${e.replyTo} message=interaction, call or send.`,
+      e.line,
+    );
+    assert(
+      asked.source === e.target && asked.target === e.source,
+      `${e.id} replies to ${e.replyTo}, so it runs back from ${asked.target} to ${asked.source}.`,
+      e.line,
+    );
+  });
   if (m.wasOrder) {
     const { ids, line } = m.wasOrder,
       edge = (id: string) => m.edges.find(e => e.id === id),
@@ -1369,7 +1795,7 @@ function validateReferences(m: Model) {
         `Unknown state ${x} in a note's states=.`,
         m.noteLines[i],
       );
-    if (!n.near || by.has(n.near)) return;
+    if (!n.near || by.has(n.near) || ranges.has(n.near)) return;
     if (!messageIds.has(n.near)) return exists(n.near, m.noteLines[i]);
     assert(
       sequence,
@@ -1382,8 +1808,10 @@ function validateReferences(m: Model) {
     for (const x of s.ids) {
       const line = m.stateLines.get(`${s.id}:${x}`)!;
       assert(
-        by.has(x) || edgeIds.has(x),
-        `Unknown node, group or edge ${x} in state ${s.id}.`,
+        by.has(x) || edgeIds.has(x) || ranges.has(x),
+        missing(x).startsWith('Unknown range')
+          ? `${missing(x)} (in state ${s.id})`
+          : `Unknown node, group, edge or range ${x} in state ${s.id}.`,
         line,
       );
     }

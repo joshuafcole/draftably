@@ -71,7 +71,8 @@ document.querySelectorAll('[data-renderer="mermaid"]');
 ```
 
 The conversion keeps nodes, groups, labels and connections, and recomputes the layout. It drops
-`classDef` styling, click callbacks and sequence activation bars.
+`classDef` styling and click callbacks. It keeps sequence activation bars when each one runs
+from a call to its reply.
 
 ## Markdown you build
 
@@ -147,7 +148,8 @@ draftably import checkout.mmd --output checkout.draft
 | `A -->\|HTTPS\| B`              | `edge e1 A -> B "HTTPS"`                                  |
 | `D -.-> C`                      | `edge e2 D -> C kind=async`                               |
 | `sequenceDiagram`               | `layout root sequence`                                    |
-| `U->>A: POST /orders`           | `edge m1 U -> A "POST /orders"`                           |
+| `U->>A: POST /orders`           | `edge m1 U -> A "POST /orders" message=call`              |
+| `A-->>U: 201 Created`           | `edge m2 A -> U "201 Created" answers=m1`                 |
 | `Note over A: Writes the order` | `note "Writes the order" near=m2 side=right`              |
 
 Every edge has an ID, so a label can change without breaking a reference. The

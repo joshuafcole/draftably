@@ -30,6 +30,9 @@ export interface NativeEdge {
   head?: EndMarker;
   tail?: EndMarker;
   dashed?: boolean;
+  /** Sequence diagrams: the kind of message, and the earlier message a reply answers. */
+  message?: 'call' | 'send' | 'reply';
+  answers?: string;
   constraint?: false;
   fromSide?: 'left' | 'right' | 'top' | 'bottom';
   toSide?: 'left' | 'right' | 'top' | 'bottom';
@@ -37,6 +40,8 @@ export interface NativeEdge {
 export interface NativeLayout {
   scope: string;
   kind: 'flow' | 'column' | 'row' | 'sequence';
+  /** `sequence` only: draw activation bars from calls and their replies. */
+  activations?: true;
   direction?: 'right' | 'down';
 }
 export interface NativeColor {
@@ -226,7 +231,10 @@ export function finish(
     if (!e.directed) s += ' directed=false';
     if (e.head && e.head !== 'arrow') s += ' head=' + e.head;
     if (e.tail && e.tail !== 'none') s += ' tail=' + e.tail;
-    if (e.dashed) s += ' kind=async';
+    // A reply that names its message needs only `answers=`.
+    if (e.answers) s += ' answers=' + e.answers;
+    else if (e.message) s += ' message=' + e.message;
+    else if (e.dashed) s += ' kind=async';
     if (e.constraint === false) s += ' constraint=false';
     if (e.fromSide) s += ' from=' + e.fromSide;
     if (e.toSide) s += ' to=' + e.toSide;
@@ -234,7 +242,12 @@ export function finish(
   }
   for (const l of plan.layouts)
     lines.push(
-      'layout ' + l.scope + ' ' + l.kind + (l.direction ? ' direction=' + l.direction : ''),
+      'layout ' +
+        l.scope +
+        ' ' +
+        l.kind +
+        (l.direction ? ' direction=' + l.direction : '') +
+        (l.activations ? ' activations=on' : ''),
     );
   for (const p of plan.phases ?? [])
     lines.push(['phase', p.id, quote(p.label), ...p.members].join(' '));

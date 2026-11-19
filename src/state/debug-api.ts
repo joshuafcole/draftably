@@ -2,7 +2,7 @@
  * `window.diagramStudio`: a small scripting surface for automated browser checks and the console.
  * The app itself never calls it.
  */
-import { LayoutLab } from '../engines/layout-engine.js';
+import { LayoutLab } from '../engines/layout-engine';
 import { clone } from '../model/geometry';
 import { SAMPLES } from '../model/samples';
 import {

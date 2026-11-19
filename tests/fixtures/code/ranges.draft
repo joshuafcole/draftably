@@ -1,0 +1,46 @@
+diagram "Six copies of one join"
+theme drafting
+
+node cost "Query plan: 6 scans of the orders union"
+node sql "generated query" shape=code lang=sql numbers=on <<SQL
+  SELECT DISTINCT C.NAME, A1.AGG AS ORDERS, A2.AGG AS ITEMS
+  FROM CUSTOMERS AS C
+    JOIN (SELECT ORDER_ID, CUSTOMER_ID FROM ONLINE_ORDERS
+          UNION SELECT ORDER_ID, CUSTOMER_ID FROM STORE_ORDERS) AS O
+      ON O.CUSTOMER_ID = C.ID
+    JOIN (SELECT C.ID AS G0, COUNT(*) AS AGG
+          FROM CUSTOMERS AS C JOIN (SELECT ORDER_ID, CUSTOMER_ID FROM ONLINE_ORDERS
+            UNION SELECT ORDER_ID, CUSTOMER_ID FROM STORE_ORDERS) AS O
+          GROUP BY C.ID) AS A1 ON A1.G0 = C.ID
+    JOIN (SELECT C.ID AS G0, SUM(I.QTY) AS AGG
+          FROM CUSTOMERS AS C JOIN (SELECT ORDER_ID, CUSTOMER_ID FROM ONLINE_ORDERS
+            UNION SELECT ORDER_ID, CUSTOMER_ID FROM STORE_ORDERS) AS O
+          JOIN ORDER_ITEMS AS I ON I.ORDER_ID = O.ORDER_ID
+          GROUP BY C.ID) AS A2 ON A2.G0 = C.ID
+  WHERE C.ID IN (
+    SELECT D.ID FROM (SELECT C.ID FROM CUSTOMERS AS C
+        JOIN (SELECT ORDER_ID, CUSTOMER_ID FROM ONLINE_ORDERS
+          UNION SELECT ORDER_ID, CUSTOMER_ID FROM STORE_ORDERS) AS O ON O.CUSTOMER_ID = C.ID) AS D
+    JOIN (SELECT C.ID AS G0, COUNT(*) AS N
+          FROM CUSTOMERS AS C JOIN (SELECT ORDER_ID, CUSTOMER_ID FROM ONLINE_ORDERS
+            UNION SELECT ORDER_ID, CUSTOMER_ID FROM STORE_ORDERS) AS O
+          GROUP BY C.ID) AS B1 ON B1.G0 = D.ID
+    JOIN (SELECT C.ID AS G0, SUM(I.QTY) AS Q
+          FROM CUSTOMERS AS C JOIN (SELECT ORDER_ID, CUSTOMER_ID FROM ONLINE_ORDERS
+            UNION SELECT ORDER_ID, CUSTOMER_ID FROM STORE_ORDERS) AS O
+          JOIN ORDER_ITEMS AS I ON I.ORDER_ID = O.ORDER_ID
+          GROUP BY C.ID) AS B2 ON B2.G0 = D.ID
+    ORDER BY B1.N DESC, B2.Q DESC LIMIT 50)
+  ORDER BY C.NAME
+SQL
+
+range sql.copy1 lines=3-4 color=red "copy 1 · outer rows"
+range sql.copy2 lines=7-8 color=red "copy 2 · count"
+range sql.copy3 lines=11-12 color=red "copy 3 · sum"
+range sql.top lines=15-28 color=blue "top 50, recomputed"
+range sql.copy4 lines=17-18 color=red "copy 4"
+range sql.copy5 match="COUNT\\(\\*\\) AS N" span=3 color=red "copy 5"
+range sql.copy6 match="SUM\\(I\\.QTY\\) AS Q" span=3 color=red "copy 6"
+
+note "Each copy re-joins every order row before it aggregates." near=sql.copy2 side=right
+edge e1 cost -> sql.copy1 "scan 1 of 6"

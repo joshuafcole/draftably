@@ -14,7 +14,6 @@ export default tseslint.config(
       'reference',
       'docs/intent/diagram-imports/assets/pro-results/2026-10-31',
       'tmp',
-      'src/engines/*.js',
     ],
   },
   js.configs.recommended,

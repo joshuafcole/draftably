@@ -22,10 +22,7 @@ describe('color schemes', () => {
   it('keeps every title readable on its fill in dark', async () => {
     const files = [
       ...examples,
-      [
-        'sequence-cruft',
-        readFileSync('docs/intent/viewer-feedback-2026-11-02/repro/sequence-cruft.draft', 'utf8'),
-      ] as const,
+      ['sequence-cruft', readFileSync('tests/fixtures/sequence-cruft.draft', 'utf8')] as const,
     ];
     const low: string[] = [];
     for (const [file, source] of files.filter(([, s]) => !/^\s*theme\s/m.test(s))) {

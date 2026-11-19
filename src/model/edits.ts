@@ -2,7 +2,7 @@
  * Document edits. Every function mutates the diagram it is given, so callers run them inside
  * a store transaction (see `state/document.ts`), which records a single undo step.
  */
-import { LayoutLab } from '../engines/layout-engine.js';
+import { LayoutLab } from '../engines/layout-engine';
 import { clamp, clone, center, inside, overlaps, rectUnion, rounded } from './geometry';
 import { emptyDiagram, normalize, uid } from './document';
 import { placeOf } from './route-marks';
@@ -26,6 +26,7 @@ import {
 } from './graph';
 import { nodeLabel, visualBounds } from './labels';
 import { defaultShapeSize } from './styles';
+import type { MessageKind } from './markers';
 import type {
   ContainerLayout,
   Diagram,
@@ -367,10 +368,13 @@ export function insertStep(
     },
     target,
   );
+  // The new step is a plain node: the first line leaves its range end behind, and the second
+  // line starts at the step, so only its far end keeps the original target's range.
   const to = edge.to,
-    { head, tail: _tail, ...ends } = clone(edge);
+    { head, tail: _tail, fromRange: _from, ...ends } = clone(edge);
   edge.to = id;
   delete edge.head;
+  delete edge.toRange;
   doc.layout.edges[edge.id] = { fromSide: cfg.fromSide || 'auto', toSide: 'auto' };
   const second = uid('e');
   // The tail stays at the source and the head stays at the target.
@@ -671,6 +675,94 @@ export function setEdge(
   // Only a directed edge has marks to write, and a default end stays unwritten.
   if (!e.directed || e.head === 'arrow') delete e.head;
   if (!e.directed || e.tail === 'none') delete e.tail;
+}
+
+/**
+ * Give a sequence message a kind, or take it away. The kind draws the line and its ends, so the
+ * message keeps no style of its own. A reply to a message that can no longer take one is unpaired.
+ */
+export function setMessage(doc: Diagram, id: string, kind: MessageKind | undefined) {
+  const e = findEdge(doc, id);
+  if (!e || (kind === 'action' && e.from !== e.to)) return;
+  if (kind) e.message = kind;
+  else delete e.message;
+  e.directed = true;
+  e.dashed = kind === 'reply';
+  delete e.head;
+  delete e.tail;
+  if (kind !== 'reply') delete e.replyTo;
+  if (!kind || !['interaction', 'call', 'send'].includes(kind))
+    for (const other of doc.graph.edges) if (other.replyTo === id) delete other.replyTo;
+}
+
+/**
+ * Add an event to a sequence before or after another: a plain message between the same two
+ * participants, or an action beside an action. The file gives it its row when it draws again.
+ */
+export function insertEvent(doc: Diagram, id: string, where: 'before' | 'after') {
+  const edges = doc.graph.edges,
+    at = edges.findIndex(e => e.id === id),
+    by = edges[at],
+    row = doc.layout.edges[id]?.row;
+  if (!by || row === undefined) return undefined;
+  const action = by.from === by.to,
+    next = uid('e');
+  edges.splice(where === 'before' ? at : at + 1, 0, {
+    id: next,
+    from: by.from,
+    to: by.to,
+    label: action ? 'action' : 'message',
+    directed: true,
+    emphasis: false,
+    dashed: false,
+    ...(action ? { message: 'action' as const } : {}),
+  });
+  doc.layout.edges[next] = { row };
+  return next;
+}
+
+/** Move a sequence event one place up or down among the events. False at either end. */
+export function moveEvent(doc: Diagram, id: string, by: -1 | 1) {
+  const edges = doc.graph.edges,
+    at = edges.findIndex(e => e.id === id),
+    to = at + by;
+  if (at < 0 || to < 0 || to >= edges.length || doc.layout.edges[id]?.row === undefined)
+    return false;
+  [edges[at], edges[to]] = [edges[to], edges[at]];
+  return true;
+}
+
+/** Turn a sequence's activation bars on or off. The file's layout line holds the switch. */
+export function setActivations(doc: Diagram, on: boolean) {
+  const seq = doc.layout.sequence;
+  if (!seq) return;
+  if (on) seq.bars = true;
+  else delete seq.bars;
+}
+
+/** The earlier messages a reply can answer: those with a kind that run the other way. */
+export function replyTargets(doc: Diagram, id: string) {
+  const edges = doc.graph.edges,
+    at = edges.findIndex(e => e.id === id),
+    reply = edges[at];
+  return reply
+    ? edges
+        .slice(0, at)
+        .filter(
+          e =>
+            e.from === reply.to &&
+            e.to === reply.from &&
+            ['interaction', 'call', 'send'].includes(e.message ?? ''),
+        )
+    : [];
+}
+
+/** Say which message a reply answers, or that it names none. */
+export function setReplyTo(doc: Diagram, id: string, target: string | undefined) {
+  const e = findEdge(doc, id);
+  if (!e || e.message !== 'reply') return;
+  if (target) e.replyTo = target;
+  else delete e.replyTo;
 }
 
 export function setEdgeLayout(doc: Diagram, id: string, patch: Partial<EdgeLayout>) {

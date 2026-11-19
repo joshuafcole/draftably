@@ -11,6 +11,27 @@ It distinguishes custom build integrations from native support on hosted platfor
 
 Status: shipped as `@draftably/runtime` and `@draftably/markdown`; see [Embed diagrams](https://draftably.dev/docs/embed) and [the closure record](../initiative-history.json).
 
+## Themes and palettes
+
+Two studies shaped the five themes. The palette study scored twenty color directions for distinct
+roles, label contrast, color-blind separation and quiet frames. It replaced Graphite, Mulberry and
+Midnight with Drafting, Ink and Blueprint, and made inherited group members pale cards. The texture
+study wrote a recipe for a textured paper theme ("Pressed"). That try was set aside before the
+palette study, so no textured theme shipped. Its rules for grain, halos and export still apply to a
+later textured theme.
+
+[Palette study (archived)](https://github.com/byronwall/draftably/blob/2083565255480f4f33c1fbba3f9831ac5910575b/docs/intent/diagram-themes/palette-research.md) ·
+[Texture study (archived)](https://github.com/byronwall/draftably/blob/2083565255480f4f33c1fbba3f9831ac5910575b/docs/intent/diagram-themes/texture-research.md)
+
+Status: shipped as the `theme` and `theme-color` lines; see [Themes and colors](../DSL.md#themes-and-colors), the appearance rules in [ARCHITECTURE.md](../ARCHITECTURE.md#components--the-interface) and [the closure record](../initiative-history.json).
+
+Known limits from the palette study:
+
+- Families at the same shade still rely on hue. Teal and green stay close, and blue and violet
+  merge under protanopia. For meaning that must survive color blindness, pair one bright warm
+  family with one dark cool family, or use Signal.
+- In Blueprint, a dark group shade (900) of `amber` or `violet` reads brown or plum.
+
 ## Upstream proposals
 
 [Saved drafts](upstream-proposals.md) for asking a Markdown host or Kroki to render `draft` fences. None has been sent.

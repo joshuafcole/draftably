@@ -8,6 +8,7 @@ import {
   declaration,
   edgeStatement,
   getAttr,
+  isEdge,
   quoted,
   removeEdge,
   removeReferences,
@@ -19,22 +20,22 @@ import { DslError, parseModel, printSource, readSource, type Statement } from '.
 
 const ID = /^[A-Za-z_][A-Za-z0-9_.-]*$/;
 
-/** The declaration or edge `target` names: `node.id`, `group.id`, `edge.id`, or a bare id. */
+/** The declaration `target` names: `node.id`, `group.id`, `edge.id`, `action.id`, or a bare id. */
 function find(source: string, target: string) {
   const doc = readSource(source),
-    kind = /^(node|group|edge)\./.exec(target)?.[1],
+    kind = /^(node|group|edge|action)\./.exec(target)?.[1],
     id = kind ? target.slice(kind.length + 1) : target;
   const s =
-    kind === 'edge'
+    kind === 'edge' || kind === 'action'
       ? edgeStatement(doc, id)
       : (declaration(doc, id) ?? (kind ? undefined : edgeStatement(doc, id)));
-  if (!s || (kind && kind !== 'edge' && s.command !== kind))
-    throw new DslError(`No ${kind ?? 'node, group or edge'} ${id}.`);
+  if (!s || (kind && s.command !== kind))
+    throw new DslError(`No ${kind ?? 'node, group, edge or action'} ${id}.`);
   return { doc, s, id };
 }
 
 /** Where a statement keeps its label among its arguments. */
-const labelAt = (s: Statement) => (s.command === 'edge' ? 4 : 1);
+const labelAt = (s: Statement) => (s.command === 'edge' ? 4 : s.command === 'action' ? 2 : 1);
 
 /**
  * Set fields on one declaration: `label="…"` replaces its label, `key=value` sets an attribute,
@@ -52,12 +53,16 @@ export function setFields(source: string, target: string, fields: string[]) {
       const i = labelAt(s);
       while (s.args.length < i) s.args.push(quoted(''));
       s.args[i] = quoted(value);
-    } else
+    } else {
+      // `answers=` alone made a reply, so the line keeps that word when its target goes.
+      if (key === 'answers' && value === '' && getAttr(s, 'answers') && !getAttr(s, 'message'))
+        setAttr(s, 'message', bare('reply'));
       setAttr(
         s,
         key,
         value === '' ? undefined : /^[\w.-]+$/.test(value) ? bare(value) : quoted(value),
       );
+    }
   }
   return check(printSource(doc));
 }
@@ -71,7 +76,7 @@ export function removeIds(source: string, ids: string[]) {
   let next = source;
   for (const target of ids) {
     const { doc, s, id } = find(next, target);
-    if (s.command === 'edge') removeEdge(doc, id);
+    if (isEdge(s)) removeEdge(doc, id);
     else {
       const parent = getAttr(s, 'in');
       for (const member of statements(doc))
@@ -95,7 +100,7 @@ export function renameId(source: string, from: string, to: string) {
   for (const s of statements(doc)) {
     // Labels and other text are quoted; ids never are.
     s.args = s.args.map(w => (!w.quoted && w.value === from ? bare(to) : w));
-    for (const key of ['in', 'root'])
+    for (const key of ['in', 'root', 'answers', 'near'])
       if (getAttr(s, key)?.value === from) setAttr(s, key, bare(to));
     const context = s.command === 'state' ? getAttr(s, 'context')?.value.split(',') : undefined;
     if (context?.includes(from))

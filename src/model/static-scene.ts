@@ -1,4 +1,4 @@
-import type { RoutingResult } from '../engines/routing-engine.js';
+import type { RoutingResult } from '../engines/routing-engine';
 import { drawingBounds } from './bounds';
 import { center } from './geometry';
 import { findGroup, frameRect, makeGeometry, visibleGraph, type VisibleGraph } from './graph';

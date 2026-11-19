@@ -6,7 +6,7 @@
 
 These are planning recommendations, not approval to implement. The [summary](summary.md) explains
 the decision; [coverage](coverage.md) and its CSVs retain the comparison evidence.
-Pro's full examples and proposed syntax remain in [the committed report](../../intent/diagram-library-coverage/assets/pro-results/diagram-library-gaps-2026-10-27/capability-bets.md).
+Pro's full examples and proposed syntax remain in [the archived report](https://github.com/byronwall/draftably/blob/1ae738518c60e44e06f7f483ffa0e61e28a784c2/docs/intent/diagram-library-coverage/assets/pro-results/diagram-library-gaps-2026-10-27/capability-bets.md).
 
 ## Ranked bets
 

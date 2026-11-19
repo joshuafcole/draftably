@@ -7,6 +7,7 @@ import { BundleView } from '../scene/BundleView';
 import { GroupView } from '../scene/GroupView';
 import { NodeChrome, NodeView } from '../scene/NodeView';
 import { Lifelines, SequenceBackdrop } from '../scene/Lifelines';
+import { replyPair } from '../../model/status';
 import { PositionMarks } from '../scene/PositionMarks';
 import { InlineEditor } from './InlineEditor';
 import { Overlay } from './Overlay';
@@ -86,9 +87,7 @@ export function Canvas(props: CanvasProps) {
     };
     stage.addEventListener('pointerdown', press, true);
     stage.addEventListener('focusin', activate, true);
-    // A click with no press before it (assistive tech, a host's script) acts on this session too:
-    // the zoom controls run on the active session, and none, or a closed map's, is a Fit that
-    // frames nothing.
+    // Keyboard, screen-reader and synthetic clicks needn't come with a pointerdown or focusin.
     stage.addEventListener('click', activate, true);
     onCleanup(() => {
       observer.disconnect();
@@ -116,6 +115,14 @@ export function Canvas(props: CanvasProps) {
     equals: (a, b) => a.length === b.length && a.every((id, i) => id === b[i]),
   });
   const bundleById = createMemo(() => new Map(s.bundles().map(b => [b.id, b])));
+
+  // In a sequence, one selected message brings its call or its replies with it, and their bar.
+  const paired = createMemo(() => {
+    const only = s.singleSelection();
+    return new Set(only ? replyPair(shown(), only) : []);
+  });
+  const pairedBars = () =>
+    (shown().layout.sequence?.activations ?? []).filter(b => paired().has(b.call));
   const empty = () => !s.nodeIds().length && !s.groupIds().length;
 
   const onPointerUp = (e: PointerEvent) => {
@@ -224,6 +231,12 @@ export function Canvas(props: CanvasProps) {
           </g>
           <SequenceBackdrop doc={shown()} part="phases" />
           <Lifelines doc={s.doc} ids={s.nodeIds()} rect={id => s.sceneRects().get(id)} />
+          <SequenceBackdrop doc={shown()} part="bars" />
+          <For each={pairedBars()}>
+            {b => (
+              <rect class="activation-paired" x={b.x} y={b.y} width={b.w} height={b.h} rx="1.5" />
+            )}
+          </For>
           <g>
             <For each={keep(s.routeIds()).filter(id => !s.bundleOf().has(id))}>
               {id => (
@@ -234,6 +247,7 @@ export function Canvas(props: CanvasProps) {
                       route={route()}
                       selected={isSelected(id)}
                       hovered={s.hoveredId() === id}
+                      paired={!isSelected(id) && paired().has(id)}
                       editing={s.inlineEditId() === id}
                       interactive
                     />

@@ -14,6 +14,7 @@ import { checkSource, compile } from '../dsl/compile';
 import { projectScene } from '../dsl/project';
 import { DslError } from '../dsl/syntax';
 import type { PdfOptions } from '../cli/pdf';
+import { readCodeFiles } from './code-files';
 import { createFileSession, type FileSession } from './file-session';
 
 export interface WorkspaceFile {
@@ -30,6 +31,12 @@ export interface WorkspaceInfo {
   root: string;
   files: WorkspaceFile[];
 }
+
+/**
+ * A Host header naming this machine. A page on another site that rebinds its DNS name to
+ * 127.0.0.1 still sends its own name, so its requests for files are refused.
+ */
+const LOCAL_HOST = /^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/i;
 
 const SKIP = new Set(['node_modules', 'dist', 'dist-cli', 'build', 'coverage', 'tmp', 'target']);
 const MAX_FILES = 400;
@@ -109,7 +116,8 @@ export function createWorkspace(root: string): Workspace {
   const thumbnail = (full: string, modified: number) => {
     const cached = thumbnails.get(full);
     if (cached?.modified === modified) return cached.svg;
-    const svg = compile(fs.readFileSync(full, 'utf8'))
+    const source = fs.readFileSync(full, 'utf8');
+    const svg = compile(source, readCodeFiles(source, full, root))
       .then(scene => renderSvg(projectScene(scene)).replace(/<style>[\s\S]*?<\/style>/, ''))
       .catch(() => null);
     thumbnails.set(full, { modified, svg });
@@ -170,10 +178,14 @@ export function createWorkspace(root: string): Workspace {
     try {
       const { buildPdf } = await import('../cli/pdf');
       const { bytes } = await buildPdf(
-        files.map(f => ({
-          name: path.relative(root, f!).split(path.sep).join('/'),
-          source: fs.readFileSync(f!, 'utf8'),
-        })),
+        files.map(f => {
+          const source = fs.readFileSync(f!, 'utf8');
+          return {
+            name: path.relative(root, f!).split(path.sep).join('/'),
+            source,
+            files: readCodeFiles(source, f!, root),
+          };
+        }),
         request,
       );
       res.writeHead(200, { 'content-type': 'application/pdf', 'cache-control': 'no-store' });
@@ -187,6 +199,10 @@ export function createWorkspace(root: string): Workspace {
     root,
     handle(req, res) {
       const [url, query = ''] = (req.url ?? '').split('?');
+      if (url.startsWith('/api/') && !LOCAL_HOST.test(req.headers.host ?? '')) {
+        json(res, 403, { error: 'The draftably viewer answers localhost only.' });
+        return true;
+      }
       if (url === '/api/workspace' && req.method === 'GET') {
         json(res, 200, {
           name: path.basename(root),
@@ -219,7 +235,7 @@ export function createWorkspace(root: string): Workspace {
       }
       let session = sessions.get(full);
       if (!session) {
-        session = createFileSession(full);
+        session = createFileSession(full, root);
         sessions.set(full, session);
       }
       return session.handle(req, res);

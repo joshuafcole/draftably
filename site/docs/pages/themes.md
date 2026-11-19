@@ -49,6 +49,20 @@ Another theme (`fieldnotes`, `signal`, `ink`, `blueprint`), a `theme-color` line
 `theme` line (`canvas=`, `text=`, `connection=`) keeps the file's colors on every page. To keep one
 diagram light, set `color-scheme: light` on its element.
 
-The `theme` line also takes overrides such as `padding-x=`, `radius=` and `title-font=`, and
-`theme-color` lines change or add color families. [Themes and colors](#themes-and-colors) lists
-them all.
+## Match a design system
+
+The file holds the whole look, so the viewer, the CLI and every export draw it the same way. The
+`theme` line takes overrides such as `padding-x=`, `radius=` and `title-font=`. A `theme-color`
+line changes one shade of a built-in family or adds a family of your own, such as a brand color:
+
+```text
+theme fieldnotes padding-x=18 radius=3
+theme-color brand shade=100 fill="#EAF1ED" stroke="#9AB4A4" ink="#244431"
+theme-color brand shade=800 fill="#244431" stroke="#244431" ink="#FFFFFF"
+node context "Context" color=brand shade=100
+node focus "Main step" color=brand shade=800
+```
+
+Shades run from 50 (lightest) to 950 (darkest), and a color with no shade uses 500. Padding and
+fonts change box sizes, so they can move boxes. Colors and shades never move anything.
+[Themes and colors](#themes-and-colors) lists every attribute and family.

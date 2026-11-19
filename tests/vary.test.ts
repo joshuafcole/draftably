@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
-import { ExplorerLab } from '../src/engines/explorer-engine.js';
+import { ExplorerLab } from '../src/engines/explorer-engine';
 import { compile } from '../src/dsl/compile';
 import { sceneConflicts } from '../src/dsl/conflicts';
 import {

@@ -4,7 +4,7 @@
     "slug": "diagram-library-coverage",
     "outcome": "completed",
     "retired_at": "2026-11-02",
-    "summary": "The comparison, sequence, marker, note, Mermaid sequence and Before panel slices shipped in stack #376. Inspected at c607e0e with no uncommitted changes.",
+    "summary": "The comparison, sequence, marker, note, Mermaid sequence and Before panel slices shipped in stack #376. Inspected at c607e0e with no uncommitted changes. On 2026-11-14 the folder's leftover README and four original Pro result files were removed; they are at 1ae73851, the research pages link them there, and docs/research keeps the only CSV set in the tree.",
     "reason": "Byron chose diagram quality as the lead job, then asked for all the work and a merge when CI passed.",
     "documentation": [
       "docs/DSL.md",
@@ -18,7 +18,7 @@
       "Decide whether docs/research/diagram-library-gaps-2026-10-27/run.md stays public.",
       "Keep one CSV set: docs/research or assets/pro-results.",
       "Close PR 116 if its semantic signature idea is covered.",
-      "Close or rebase PR 331; M2 to M4 stay open there.",
+      "PR 331 is closed. PR 560 shipped M2 to M4 of its plan and retired it; see the sequence-explanations record.",
       "A crossing halo can cut a short marked line.",
       "An old label taller than its new one can crowd its row in a Before panel.",
       "The Inspector still shows pin and position fields for sequence participants.",
@@ -71,6 +71,146 @@
       "Several diagrams at once (multi-file sheets or boards, overlays) stays a later question from Byron's memo; start a new initiative when wanted.",
       "Optional: show a link's target without hover tooltips (for example in the status bar on selection), since PR 441 removed the hover tooltip that named it.",
       "Below the cut line, not planned: editing states in the viewer, captions and playback, tags, per-state camera, a project-wide config file, rewriting SVG links for any output folder."
+    ]
+  },
+  {
+    "title": "Diagram themes and stronger default styles",
+    "slug": "diagram-themes",
+    "outcome": "completed",
+    "retired_at": "2026-11-12",
+    "summary": "Five themes, numeric shades, custom families, bundled fonts and the Appearance menu shipped in PR 29 (22a53ba4) and PR 30 (9d9a1331) on 2026-10-15. The palette study then renamed graphite, mulberry and midnight to drafting, ink and blueprint (9faadcab), and PR 551 (10e1ade5, draftably 0.14.0) added drafting-dark for dark pages. Reconciled against origin/main 20835652 with no local code changes. The planning files are at 20835652.",
+    "reason": "Byron asked on 2026-11-12 to retire plans that are actually done into durable docs. All three milestones are on origin/main.",
+    "documentation": [
+      "docs/DSL.md",
+      "docs/ARCHITECTURE.md",
+      "docs/CHECKS.md",
+      "docs/research/README.md",
+      "site/docs/pages/themes.md",
+      "site/docs/pages/theming.md",
+      "AGENTS.md"
+    ],
+    "revision": "20835652",
+    "follow_ups": [
+      "No textured theme shipped. The texture study's recipe and rules are archived through docs/research/README.md; start a new initiative if wanted.",
+      "Known palette limits (teal vs green, blue vs violet under protanopia, brown Blueprint 900 for amber and violet) are listed in docs/research/README.md.",
+      "Below the cut line, not planned: font uploads, remote fonts, per-node typography or padding, a full theme editor, brand extraction."
+    ]
+  },
+  {
+    "title": "Diagram structure: soft groups, swim lanes and sequence",
+    "slug": "diagram-structure",
+    "outcome": "completed",
+    "retired_at": "2026-11-12",
+    "summary": "Soft groups (frame=soft|none, cohesion, soft-split and soft-overlap checks, tint drag in the viewer), swim lanes (layout root lanes) and sequence diagrams (layout root sequence) shipped in the structure stack, PR 149 to PR 153. The fewer-containers variant in draftably vary shipped in PR 163 after issue 124 closed. Reconciled against origin/main 20835652 with no local code changes. The planning files are at 20835652.",
+    "reason": "Byron approved retirement on 2026-11-12. All six milestones are on origin/main.",
+    "documentation": ["docs/ARCHITECTURE.md", "docs/DSL.md", "skills/draftably/SKILL.md"],
+    "revision": "20835652",
+    "follow_ups": [
+      "Below the cut line, not planned: a 'together' statement, viewer editing for lanes, free nested groups and position refinements inside lanes, sequence activations and fragments (loop, alt), other Mermaid types. Start a new initiative if wanted."
+    ]
+  },
+  {
+    "title": "Sequence diagrams as explanations",
+    "slug": "sequence-explanations",
+    "outcome": "completed",
+    "retired_at": "2026-11-14",
+    "summary": "A sequence holds to its source (M1: PR 386, PR 397, PR 398), measures what it draws (M2), says what each message is with message= kinds, answers= and action lines (M3), and explains itself with a key, a fixed order line, pair focus and an SVG description (M4). Activation bars (layout root sequence activations=on), insert and move in the editor, and typed Mermaid import were added in the same PR. M2 to M4 and the retirement are in PR 560. Reconciled against dac2b76e: tests/sequence.test.ts, tests/sequence-meaning.test.ts, tests/import-mermaid.test.ts and pnpm prove:sequence pass. The plan came from a Pro research run (PR 331, closed as superseded); its files are at dac2b76e under docs/intent/sequence-explanations.",
+    "reason": "Byron asked on 2026-11-14 to retire the plan in the PR that ships its last milestone. Every committed milestone is shipped.",
+    "documentation": [
+      "docs/DSL.md",
+      "docs/ARCHITECTURE.md",
+      "docs/intent/diagram-quality/FEEL.md",
+      "docs/CHECKS.md",
+      "skills/draftably/SKILL.md",
+      "site/docs/pages/import.md"
+    ],
+    "revision": "dac2b76e",
+    "follow_ups": [
+      "Decisions that differ from the plan: answers= replaces reply-to= (no dash in new words) and alone makes a reply; an action is an edge from a participant to itself, not a separate record; activation bars were deferred by the plan and added by Byron behind a switch.",
+      "Not built, no scope statement: a footnote states the scope, and a second way to say it adds nothing.",
+      "Not built, fragments (alt, opt, loop, par): Byron decided that they stay out. A phase is a narrative band; the Mermaid import turns each top-level branch into a phase and warns.",
+      "Not built, the plan's Explore list: phase collapse, navigation on a phone, one local alternative, parallel operands, order suggestions. None had a build commitment.",
+      "Not built, deferred by the plan: the full UML notation and measured time.",
+      "Not run: the reader study (SEQ-16). Tests cover geometry and meaning, not comprehension.",
+      "Not built: a draftably command for layout settings such as activations=on; set edits declarations only.",
+      "Not built: a before and after view of a change of kind; compare refuses such files.",
+      "Not changed: named emphasis states keep their rule (they list what is in focus). Pair focus is for a selection in the editor.",
+      "Activation import limits: a Mermaid bar from a bare activate line stays off with a warning, and a dotted line with a cross, no arrowhead or two arrowheads becomes a reply with a plain arrowhead.",
+      "Editor limits: insert and move work on a file only, and the Inspector still shows port fields for a message."
+    ]
+  },
+  {
+    "title": "Diagram DSL and shared file editing",
+    "slug": "diagram-dsl",
+    "outcome": "completed",
+    "retired_at": "2026-11-14",
+    "summary": "All four milestones shipped in PR 4 to PR 7 (on top of PR 3), merged on 2026-10-15: the .meld language, compiler and headless CLI (check, format, inspect), a watched file in the editor with revision-checked atomic saves, viewer edits written as source (a drag writes near, then pin, size, declarations), and stay anchors, layout notes, Reflow group and pnpm prove:file. The language became .draft in PR 10. Changed from the plan: the root scope does not clamp to nonnegative coordinates, new objects default to color=auto, and a resize writes no move preference. The layout tools that the plan disabled in file mode came back in the layout-in-files work. Reconciled against origin/main 1ae73851 with no local code changes. The planning files are at 1ae73851.",
+    "reason": "Byron asked on 2026-11-14 to retire plans that shipped. All four milestones are on origin/main, and the map's next action (merge PR 3 to PR 7) is done.",
+    "documentation": [
+      "docs/DSL.md",
+      "docs/ARCHITECTURE.md",
+      "docs/CHECKS.md",
+      "skills/draftably/SKILL.md"
+    ],
+    "revision": "1ae73851",
+    "follow_ups": [
+      "Not built, still refused as UnsupportedEdit: custom connection bends, label positions, images and icons in files.",
+      "Below the cut line, not planned: views, static summaries and checkpoints (DSL.md says views and checkpoints are not supported), inset and multi-instance diagrams, multi-user merge."
+    ]
+  },
+  {
+    "title": "Automatic layout in diagram files",
+    "slug": "layout-in-files",
+    "outcome": "completed",
+    "retired_at": "2026-11-14",
+    "summary": "The .draft rename (PR 10), engine recipes and the routing line (PR 11), Rebuild, Compare and routing saved as recipes (PR 12), and Improve, timeline steps and brush strokes saved as stay lines (PR 14) merged on 2026-10-15. pnpm prove:layout covers the tools in file mode. Changed from the plan: Compare candidates in file mode are compiled source variants, so previews are exact, and arrangements carry no provenance comment, because stay lines are updated in place. Reconciled against origin/main 1ae73851 with no local code changes. The planning file is at 1ae73851.",
+    "reason": "Byron asked on 2026-11-14 to retire plans that shipped. The plan said status: implemented, and all four PRs are on origin/main.",
+    "documentation": ["docs/DSL.md", "docs/ARCHITECTURE.md", "docs/CHECKS.md"],
+    "revision": "1ae73851",
+    "follow_ups": [
+      "Not built: an engine version in the layout line (engine=layered@7). Fixed engine output and pnpm test:engines stand in for it.",
+      "Not built: a named arrangement statement. Plain stay lines were enough.",
+      "Still unavailable in file mode, by choice: layout checkpoints (undo walks the file's versions), reset-route, start and end marks, fit-container and images (FILE_UNSUPPORTED in src/state/commands.ts)."
+    ]
+  },
+  {
+    "title": "One host contract for every framework",
+    "slug": "host-contract",
+    "outcome": "completed",
+    "retired_at": "2026-11-14",
+    "summary": "The plan (PR 526) and all seven steps merged on 2026-11-11: small fixes and size min-height (PR 527), element parity with HOST_EVENTS props in every wrapper (PR 531), the worker pool, one sheet and one font set (PR 535), one camera (PR 537), geometry, selection and context menus (PR 538), slots in both elements (PR 539), and recipes, host proofs and docs for every framework (PR 541). PR 498 and PR 499 landed on main as 9f233d73 and 1ae73851; PR 500 to PR 502 were closed and rebuilt on the contract. PR 546 then passed other attributes, such as data-theme, through every wrapper. Reconciled against origin/main 1ae73851 with no local code changes. The planning files are at 1ae73851.",
+    "reason": "Byron asked on 2026-11-14 to retire plans that shipped. The plan said status: implemented, and every step is on origin/main.",
+    "documentation": [
+      "docs/ARCHITECTURE.md",
+      "docs/CHECKS.md",
+      "site/docs/pages/support.md",
+      "site/docs/pages/content-on-nodes.md",
+      "site/docs/pages/events-and-status.md",
+      "site/docs/pages/camera-and-geometry.md"
+    ],
+    "revision": "1ae73851",
+    "follow_ups": [
+      "Not built: touch in the viewer. There is no pinch zoom, and the viewport is still touch-action: none (site/docs/pages/support.md lists it).",
+      "Not met: the warm first-diagram budget (300 ms). A fresh layout of the 28-box file takes about 600 ms in the router (docs/CHECKS.md).",
+      "pnpm prove:meta is not in CI; run it before a release.",
+      "Deferred until a host asks: a hover event, layout({ draft }) from .draft text, and Svelte Flow and Vue Flow edge components.",
+      "Not chosen: named regions inside an item, worldToClient and clientToWorld helpers, and occurrence keys for compare and states panels. Add them when a host needs them.",
+      "The Callsheet questions (published editor or source, input in bodies, selection sync, theme, page counts, print) had no recorded answers."
+    ]
+  },
+  {
+    "title": "Viewer feedback, 2 November 2026",
+    "slug": "viewer-feedback-2026-11-02",
+    "outcome": "completed",
+    "retired_at": "2026-11-19",
+    "summary": "Seven fixes from Byron's 2 November review of agent-written diagrams, all merged on 2026-11-02: the version in the status bar (PR 404); a subtitle that wraps to the drawing, the heading-prose warning and shorter skill guidance (PR 405); legend line rows, a one-row key and the legend-missing warning (PR 411); readable removed items in a diff, the variant Byron picked (PR 410); lane-colored line breaks and label cards with no redundant sequence border (PR 409); flow labels that wrap at 140px (PR 402) and a bend that slides for a long label (PR 413); and straight lines between two packed columns (PR 407). Version Packages (PR 322) shipped the sidebar resize. The long-row spike found that long chains already fold on main. The flow label wrap is 140px, not the planned 180px, from a measurement of the corpus. Reconciled against main 43dd8ff1 with no local code changes. The planning files are at 43dd8ff1; tests/fixtures/sequence-cruft.draft is the one repro kept, because tests/color-scheme.test.ts reads it.",
+    "reason": "Byron asked on 2026-11-19 to retire the plan (TASK-0044). Every milestone is on main.",
+    "documentation": ["docs/ARCHITECTURE.md", "docs/DSL.md", "skills/draftably/SKILL.md"],
+    "revision": "43dd8ff1",
+    "follow_ups": [
+      "Not built: a dotted legend line row; no line draws dotted yet.",
+      "The title stays one line, so a long title still sets the frame width.",
+      "Below the cut line and not built: removing note from the language, and an editor control to pick a diff style."
     ]
   }
 ]
