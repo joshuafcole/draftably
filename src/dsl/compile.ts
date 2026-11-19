@@ -9,15 +9,19 @@
  * starting positions, so it is as repeatable as the built-in recipes. Refinements then apply on
  * top of the engine's arrangement exactly as they do on top of `flow`.
  */
-import { LayoutLab } from '../engines/layout-engine.js';
+import { LayoutLab } from '../engines/layout-engine';
 import { DEFAULT_THEME, resolveAppearance, type ResolvedAppearance } from '../model/appearance';
 import { measureText, widestPiece, wrapLines } from '../model/fonts';
 import { rectUnion } from '../model/geometry';
 import {
+  ACTIVATION,
+  actionSize,
   edgeLabelSize,
   GROUP_TITLE_LINES,
   groupHeaderFor,
   diamondMeasure,
+  PHASE_TAB,
+  phaseLabelLines,
   SELF_LOOP,
   selfMessageInk,
   titleArea,
@@ -26,8 +30,11 @@ import {
   wrapTitle,
 } from '../model/labels';
 import { cellsBandFor, layoutCells, layoutUnits } from './cells';
-import { marginNotes } from '../model/note';
+import { marginNoteRoom, marginNotes } from '../model/note';
+import { activationSpans, eventRows, labelSlot, laneCentres, type Hold } from './sequence-layout';
 import { defaultShapeSize } from '../model/styles';
+import { CODE_LANGS, codeLayout } from '../model/code';
+import type { CodeFiles } from '../model/code-src';
 import type {
   CellsChrome,
   Diagram,
@@ -131,6 +138,8 @@ export interface SceneEdge extends ModelEdge {
   route?: { points: Point[]; strength: 'soft' | 'required' };
   /** From `label`: where its label sits, a fraction along the line and a distance off it. */
   labelAt?: { at: number; offset: number };
+  /** A message between distant lanes: the middle of the gap its label sits in. */
+  labelX?: number;
 }
 
 export interface Scene {
@@ -158,8 +167,9 @@ type Pos = { x: number; y: number };
 
 const round = (n: number) => Math.round(n);
 
-export async function compile(source: string): Promise<Scene> {
-  const m = parseModel(source),
+/** `files` holds the text of the files `src=` names; see `CodeFiles`. */
+export async function compile(source: string, files?: CodeFiles): Promise<Scene> {
+  const m = parseModel(source, files),
     root = m.layouts.find(l => l.scope === 'root' && l.fit);
   if (!root?.fit) return compileModel(m);
   // `fit=`: lay the drawing out each way it can read and fold, and keep the one whose shape is
@@ -284,8 +294,8 @@ function fitVariants(root: ModelLayout) {
  * Check source synchronously: every error `compile` can report, without running layout engines
  * (they never add errors). Engine-governed scopes keep their built-in recipe in the result.
  */
-export function checkSource(source: string): Scene {
-  const full = parseModel(source),
+export function checkSource(source: string, files?: CodeFiles): Scene {
+  const full = parseModel(source, files),
     split = splitPortals(full),
     m = split?.inner ?? full;
   const flat = dissolved(m);
@@ -317,7 +327,12 @@ const SEQ_TOP = 24,
   /** Room between the drawing and a note in a side margin. */
   SEQ_NOTE_PAD = 8,
   /** Narrowest participant box; a short title no longer takes a full default-width box. */
-  SEQ_MIN_W = 104;
+  SEQ_MIN_W = 104,
+  /** Most room above and below a participant's title, so a one-line header is 32 high. */
+  SEQ_HEADER_PAD = 8,
+  /** Room between a phase's label and its band's edges, and between two phase bands. */
+  SEQ_PHASE_INSET = 12,
+  SEQ_PHASE_GAP = 16;
 
 /**
  * A participant box only as wide as its title on one line needs (at least `SEQ_MIN_W`), so short
@@ -329,6 +344,18 @@ function participantWidth(o: SceneObject, look: ResolvedAppearance) {
   let w = SEQ_MIN_W;
   while (w < o.w && titleArea(o.shape, w, o.h, look).width < text) w += 4;
   return Math.min(w, o.w);
+}
+
+/**
+ * A participant's header: narrow (`participantWidth`) and, for a box or a pill, only as tall as
+ * its title and a little padding, so the row of headers stays quiet. Other shapes keep their height.
+ */
+function participantHeader(o: SceneObject, look: ResolvedAppearance): SceneObject {
+  const w = participantWidth(o, look);
+  if (o.shape !== 'box' && o.shape !== 'pill') return { ...o, w };
+  const lines = wrapTitle(o.label, titleArea(o.shape, w, o.h, look).width, look),
+    h = Math.ceil(textHeight(lines, look) + 2 * Math.min(look.paddingY, SEQ_HEADER_PAD));
+  return { ...o, w, h: Math.min(o.h, h) };
 }
 
 /**
@@ -365,14 +392,17 @@ function sequenced(scene: Scene): Scene {
     );
   const parts = ordered
       .map(id => scene.byId.get(id)!)
-      .map(o => (sized.has(o.id) ? o : { ...o, w: participantWidth(o, look) })),
+      .map(o => (sized.has(o.id) ? o : participantHeader(o, look))),
     at = new Map(parts.map((o, i) => [o.id, i]));
-  // Phases: a tab on the left holds each label, so the drawing starts past the widest.
-  const tab = scene.model.phases.length
-      ? Math.max(...scene.model.phases.map(p => measureText(p.label, look.annotation))) +
-        2 * SEQ_BAND_PAD
+  // Phases: a gutter on the left holds each label, wrapped, so a long one moves no lane far.
+  const titles = new Map(scene.model.phases.map(p => [p.id, phaseLabelLines(p.label, look)])),
+    tab = titles.size
+      ? Math.max(...[...titles.values()].flat().map(l => measureText(l, look.annotation))) +
+        2 * SEQ_PHASE_INSET
       : 0,
-    top = groups.length ? look.groupHeader : 0;
+    top = groups.length ? look.groupHeader : 0,
+    /** The headers stand on one line, so a tall one rises above the others. */
+    foot = top + Math.max(0, ...parts.map(o => o.h));
   // Lanes stand across a band's edge from each other with room for both bands' padding.
   const across = (i: number) => parts[i - 1].parent !== parts[i].parent;
   // The labels a message makes room for. Before draws an older one on the same lanes and rows, so
@@ -394,17 +424,62 @@ function sequenced(scene: Scene): Scene {
         : selfMessageInk(undefined, look);
     };
   // What holds each lane away from an earlier one, by the lane it ends on: a message's label fits
-  // between its two lifelines, and a self-message's ink clears the next lifeline or band.
+  // between two lifelines, and a self-message's ink clears the next lifeline or band.
+  const gaps = parts
+      .slice(1)
+      .map((o, i) => parts[i].w / 2 + SEQ_GAP + (across(i + 1) ? 2 * SEQ_BAND_PAD : 0) + o.w / 2),
+    /** A local action is a box centred on its lifeline; half of it reaches each way. */
+    actionBox = (e: SceneEdge) => (e.message === 'action' ? actionSize(e.label, look) : undefined),
+    onFirst = scene.edges.filter(e => at.get(e.source) === 0).map(e => actionBox(e)?.w ?? 0),
+    first = tab + SEQ_BAND_PAD + Math.max(parts[0].w, ...onFirst) / 2,
+    base = laneCentres(
+      first,
+      gaps,
+      parts.map(() => []),
+    );
+  // Activation bars, with `activations=on`: a message ends on a bar's edge, so a label needs
+  // that much more room between its lifelines, and a self-message starts that much further out.
+  const spans = scene.model.layouts.some(l => l.algorithm === 'sequence' && l.activations)
+      ? activationSpans(scene.edges)
+      : [],
+    barRight = (lane: number) =>
+      Math.max(
+        0,
+        ...spans
+          .filter(s => at.get(s.lane) === lane)
+          .map(s => ACTIVATION.w / 2 + s.level * ACTIVATION.step),
+      ),
+    barRoom = (lane: number) =>
+      2 * Math.max(barRight(lane), barRight(lane + 1) && ACTIVATION.w / 2);
   const reach = new Map<string, number>(),
-    holds: Array<Array<{ from: number; room: number }>> = parts.map(() => []);
+    reachLeft = new Map<string, number>(),
+    holds: Hold[][] = parts.map(() => []),
+    /** The left lane of the gap that holds each label of a message between distant lanes. */
+    labelGaps = new Map<string, number>();
   for (const e of scene.edges) {
     const [a, b] = [at.get(e.source)!, at.get(e.target)!].sort((p, q) => p - q);
     if (a < b) {
       const { w } = labelBox(e);
-      if (w) holds[b].push({ from: a, room: w + SEQ_LABEL_RUN });
+      if (!w) continue;
+      // A label over one gap crosses no lifeline. Between distant lanes it takes one gap too.
+      const slot = b - a > 1 ? labelSlot(base, a, b, w + SEQ_LABEL_RUN, across) : a;
+      if (b - a > 1) labelGaps.set(e.id, slot);
+      holds[slot + 1].push({ from: slot, room: w + SEQ_LABEL_RUN + barRoom(slot) });
       continue;
     }
-    const { right } = selfInk(e);
+    const box = actionBox(e);
+    if (box) {
+      // The box clears the lifeline on each side, and a band's edge and header past it.
+      const half = box.w / 2,
+        room = (lane: number, other: number) =>
+          half + SEQ_SELF_CLEAR + (across(lane) ? 2 * SEQ_BAND_PAD + parts[other].w / 2 : 0);
+      reach.set(e.source, Math.max(reach.get(e.source) ?? 0, half));
+      reachLeft.set(e.source, Math.max(reachLeft.get(e.source) ?? 0, half));
+      if (a) holds[a].push({ from: a - 1, room: room(a, a - 1) });
+      if (a + 1 < parts.length) holds[a + 1].push({ from: a, room: room(a + 1, a + 1) });
+      continue;
+    }
+    const right = selfInk(e).right + barRight(a);
     reach.set(e.source, Math.max(reach.get(e.source) ?? 0, right));
     if (a + 1 < parts.length)
       holds[a + 1].push({
@@ -412,46 +487,64 @@ function sequenced(scene: Scene): Scene {
         room: right + SEQ_SELF_CLEAR + (across(a + 1) ? 2 * SEQ_BAND_PAD + parts[a + 1].w / 2 : 0),
       });
   }
-  // Centres: each lane takes the header gap from its neighbour, or what holds it, if that is more.
-  const centre: number[] = [];
-  parts.forEach((o, i) => {
-    if (!i) return void centre.push(tab + SEQ_BAND_PAD + o.w / 2);
-    const gap = parts[i - 1].w / 2 + SEQ_GAP + (across(i) ? 2 * SEQ_BAND_PAD : 0) + o.w / 2;
-    centre.push(Math.max(centre[i - 1] + gap, ...holds[i].map(h => centre[h.from] + h.room)));
-  });
-  let y = top + Math.max(0, ...parts.map(o => o.h)) - SEQ_LIFT,
-    /** The bottom of a self-message's ink, which the row after it must clear. */
-    ink = 0;
-  const rows = new Map<string, number>(),
-    spans = new Map<string, { from: number; to: number }>();
-  for (const e of scene.edges) {
-    // The label sits above its line, so a row is the label's height and a little air.
-    const label = labelBox(e).h,
-      self = e.source === e.target ? selfInk(e) : undefined,
-      above = self ? self.above : label && label + 1;
-    y = Math.ceil(
-      Math.max(y + Math.max(SEQ_ROW, label ? label + 8 : 0), ink + SEQ_SELF_CLEAR + above),
+  const centre = laneCentres(first, gaps, holds);
+  // Rows: the label sits above its line, so a row is the label's height and a little air. A
+  // phase is one block with room for its title, and a gap from the next.
+  const phaseOf = new Map(scene.model.phases.flatMap(p => p.ids.map(id => [id, p.id] as const))),
+    lineHeight = look.annotation.lineHeight,
+    {
+      rows,
+      bands,
+      end: last,
+    } = eventRows(
+      scene.edges.map(e => {
+        const label = labelBox(e).h,
+          box = actionBox(e),
+          self = box
+            ? { above: box.h / 2, below: box.h / 2 }
+            : e.source === e.target
+              ? selfInk(e)
+              : undefined;
+        return {
+          id: e.id,
+          phase: phaseOf.get(e.id),
+          label: self ? 0 : label,
+          above: self ? self.above : label && label + 1,
+          below: self ? self.below : 0,
+          tall: !!self,
+          drop: self && !box ? SELF_LOOP.down : 0,
+        };
+      }),
+      foot - SEQ_LIFT,
+      // A band holds its title, and the margin notes on its messages.
+      id =>
+        Math.max(
+          titles.get(id)!.length * lineHeight + 2 * PHASE_TAB,
+          marginNoteRoom(
+            look,
+            scene.model.appearance.notes ?? [],
+            scene.model.phases.find(p => p.id === id)!.ids.filter(x => !scene.byId.has(x)),
+          ),
+        ),
+      { row: SEQ_ROW, clear: SEQ_SELF_CLEAR, pad: 8, gap: SEQ_PHASE_GAP },
     );
-    rows.set(e.id, y);
-    ink = self ? y + self.below : 0;
-    spans.set(e.id, { from: y - Math.max(label, SEQ_ROW / 2) - 4, to: Math.max(y, ink) + 8 });
-    if (self) y += SELF_LOOP.down;
-  }
-  const end = Math.max(y, ink) + SEQ_TOP;
+  const end = last + SEQ_TOP;
   const placed = new Map(
     parts.map(o => {
       const x = round(centre[at.get(o.id)!] - o.w / 2);
-      return [o.id, { x, w: o.w }] as const;
+      return [o.id, { x, w: o.w, h: o.h }] as const;
     }),
   );
   /** The right edge of a participant, or of a self-message drawn past it. */
   const inkRight = (o: SceneObject) =>
     Math.max(placed.get(o.id)!.x + o.w, centre[at.get(o.id)!] + (reach.get(o.id) ?? 0));
+  const inkLeft = (o: SceneObject) =>
+    Math.min(placed.get(o.id)!.x, centre[at.get(o.id)!] - (reachLeft.get(o.id) ?? 0));
   const objects = scene.objects.map(o => {
     if (o.type === 'group') {
       // A group is a column band behind its participants' lifelines, its title above them.
       const members = parts.filter(p => p.parent === o.id),
-        x = round(Math.min(...members.map(p => placed.get(p.id)!.x)) - SEQ_BAND_PAD),
+        x = round(Math.min(...members.map(p => inkLeft(p))) - SEQ_BAND_PAD),
         w = round(Math.max(...members.map(p => inkRight(p))) + SEQ_BAND_PAD - x);
       // A lane's default shade depends on the scheme, so the drawing picks it (`drawnShade`).
       return {
@@ -466,18 +559,9 @@ function sequenced(scene: Scene): Scene {
         baseY: 0,
       };
     }
-    const { x, w } = placed.get(o.id)!;
-    return {
-      ...o,
-      w,
-      x,
-      y: top,
-      localX: x,
-      localY: top,
-      baseX: x,
-      baseY: top,
-      lifeline: end - top - o.h,
-    };
+    const { x, w, h } = placed.get(o.id)!,
+      y = foot - h;
+    return { ...o, w, h, x, y, localX: x, localY: y, baseX: x, baseY: y, lifeline: end - foot };
   });
   const left = Math.min(0, ...objects.map(o => o.x)) - (tab ? 0 : SEQ_BAND_PAD),
     right = Math.max(
@@ -494,42 +578,57 @@ function sequenced(scene: Scene): Scene {
   // nothing inside it moves. A left note also stays clear of the phase labels.
   const notes = scene.model.appearance.notes ?? [],
     anchors = new Map([...rows].filter(([id]) => !scene.byId.has(id))),
-    margins = marginNotes(look, notes, anchors, {
-      left: left - (tab ? SEQ_PANEL_PAD : SEQ_NOTE_PAD),
-      right: right + SEQ_NOTE_PAD,
-      top: 0,
-    }),
+    margins = marginNotes(
+      look,
+      notes,
+      anchors,
+      { left: left - (tab ? SEQ_PANEL_PAD : SEQ_NOTE_PAD), right: right + SEQ_NOTE_PAD, top: 0 },
+      // A note on a message in a phase sits inside that phase's band.
+      new Map(scene.model.phases.flatMap(p => p.ids.map(id => [id, bands.get(p.id)!] as const))),
+    ),
     drawn = margins.filter(r => r !== null),
     framed = drawn.length ? rectUnion([panel, rectUnion(drawn, SEQ_PANEL_PAD)]) : panel,
     phaseX = framed.x < panel.x ? panel.x : undefined;
-  // Phases top to bottom, so tinting alternates down the drawing, each ending where the next begins.
-  const runs = scene.model.phases
-    .map(p => {
-      const ofPhase = p.ids.map(id => spans.get(id)!);
+  // A bar runs a little past its first and last rows, so an arrow meets its side, not a corner.
+  const rowAt = scene.edges.map(e => rows.get(e.id)!),
+    activations = spans.map(s => {
+      const from = rowAt[s.start],
+        to = s.end !== undefined && s.end > s.start ? rowAt[s.end] : from + ACTIVATION.stub;
       return {
-        id: p.id,
-        label: p.label,
-        from: round(Math.min(...ofPhase.map(r => r.from))),
-        to: round(Math.max(...ofPhase.map(r => r.to))),
+        node: s.lane,
+        call: s.call,
+        x: round(centre[at.get(s.lane)!] - ACTIVATION.w / 2 + s.level * ACTIVATION.step),
+        y: from - ACTIVATION.over,
+        w: ACTIVATION.w,
+        h: to - from + 2 * ACTIVATION.over,
       };
-    })
-    .sort((a, b) => a.from - b.from);
-  const phases = runs.map(({ id, label, from, to }, i) => ({
-    id,
-    label,
-    y: from,
-    h: Math.min(to, runs[i + 1]?.from ?? to) - from,
-  }));
+    });
+  // Phases top to bottom, so tinting alternates down the drawing.
+  const phases = scene.model.phases
+    .map(p => ({ id: p.id, label: p.label, ...bands.get(p.id)! }))
+    .sort((a, b) => a.y - b.y);
   return {
     ...scene,
     objects,
     byId: new Map(objects.map(o => [o.id, o])),
-    edges: scene.edges.map(e => ({ ...e, lane: undefined, row: rows.get(e.id) })),
+    edges: scene.edges.map(e => {
+      const slot = labelGaps.get(e.id);
+      return {
+        ...e,
+        lane: undefined,
+        row: rows.get(e.id),
+        labelX: slot === undefined ? undefined : round((centre[slot] + centre[slot + 1]) / 2),
+      };
+    }),
     sequence: {
       panel: framed,
       phases,
       ...(phaseX !== undefined ? { phaseX } : {}),
       ...(drawn.length ? { notes: margins, inner: panel } : {}),
+      ...(activations.length ? { activations } : {}),
+      ...(scene.model.layouts.some(l => l.algorithm === 'sequence' && l.activations)
+        ? { bars: true as const }
+        : {}),
     },
   };
 }
@@ -556,6 +655,7 @@ function withOldOrder(scene: Scene): Scene {
         rows: Object.fromEntries(old.edges.map(e => [e.id, e.row!])),
         phases: old.sequence!.phases,
         grow: Math.max(0, lifeline(old) - lifeline(scene)),
+        ...(old.sequence!.activations ? { activations: old.sequence!.activations } : {}),
       },
     },
   };
@@ -1088,6 +1188,14 @@ export function leafSize(
   size: { width: number; height?: number; minHeight?: number } | undefined,
   look: ResolvedAppearance,
 ) {
+  // A code node fits its listing: no growth cap, and a given size wraps and clips it.
+  if (o.code) {
+    const c = codeLayout(o.code, o.label, look, {
+      width: size?.width,
+      height: size?.height,
+    });
+    return { w: c.w, h: Math.max(c.h, size?.minHeight ?? 0), overflow: false };
+  }
   const base = defaultShapeSize(o.shape);
   if (o.shape === 'diamond') return diamondSize(o, size, base, look);
   const w = size?.width ?? fitWidth(o, base, look);
@@ -3871,6 +3979,7 @@ function layoutPass(
         ids: [g.id],
       });
   }
+  for (const o of objects) if (o.code) diagnostics.push(...codeNotes(o, m, look));
   settleLegendShades(m);
   diagnostics.push(...paletteNotes(m), ...legendNotes(m));
   for (const w of m.warnings) diagnostics.push({ level: 'warning', ...w, ids: [] });
@@ -3899,6 +4008,52 @@ function layoutPass(
   };
   packFolds.set(scene, { groups: foldGroups, wrap: wrapRoot });
   return scene;
+}
+
+/** What `check` says about a code node: an unknown language, long lines and a clipped body. */
+function codeNotes(o: SceneObject, m: Model, look: ResolvedAppearance): Diagnostic[] {
+  const code = o.code!,
+    out: Diagnostic[] = [],
+    size = m.hints.find(h => h.type === 'size' && h.id === o.id),
+    laid = codeLayout(code, o.label, look, { width: o.w, height: o.h });
+  if (code.src?.problem)
+    out.push({
+      level: code.src.problem.level,
+      code: 'code-src',
+      message: `${o.id}: ${code.src.problem.message}`,
+      line: o.line,
+      ids: [o.id],
+    });
+  if (code.lang && !(CODE_LANGS as readonly string[]).includes(code.lang))
+    out.push({
+      level: 'info',
+      code: 'code-lang',
+      message: `${o.id}: lang=${code.lang} has no highlighting, so it draws as plain text. Known languages: ${CODE_LANGS.join(', ')}.`,
+      line: o.line,
+      ids: [o.id],
+    });
+  if (laid.long.length && !code.src?.placeholder) {
+    const longest = laid.long.reduce((a, b) =>
+        code.lines[b].length > code.lines[a].length ? b : a,
+      ),
+      lines = laid.long.length === 1 ? 'line' : 'lines';
+    out.push({
+      level: 'warning',
+      code: code.wrap ? 'code-wrap' : 'code-clip',
+      message: `${o.id}: ${laid.long.length} ${lines} ${code.wrap ? (laid.long.length === 1 ? 'wraps' : 'wrap') : laid.long.length === 1 ? 'is cut off' : 'are cut off'} at ${laid.cols} columns; the longest is body line ${longest + 1} (${code.lines[longest].length} columns). Break ${laid.long.length === 1 ? 'it' : 'them'}, or raise max-width=.`,
+      line: code.src ? o.line : code.sourceLine + longest,
+      ids: [o.id],
+    });
+  }
+  if (laid.more)
+    out.push({
+      level: 'warning',
+      code: 'code-clipped',
+      message: `${o.id}'s size cuts off the last ${laid.more} ${laid.more === 1 ? 'line' : 'lines'} of its body. Make it taller, or remove the size line.`,
+      line: size?.line ?? o.line,
+      ids: [o.id],
+    });
+  return out;
 }
 
 /**

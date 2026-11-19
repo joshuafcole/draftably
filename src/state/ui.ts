@@ -172,6 +172,14 @@ export function setInspectorOpen(open: boolean) {
   state.setInspectorOpen(open);
 }
 
+/**
+ * A request to put the caret in the Inspector's Label field, for a thing just made that the
+ * user names next. The number only counts requests.
+ */
+const [labelFocus, setLabelFocus] = createSignal(0);
+export { labelFocus };
+export const focusLabelField = () => setLabelFocus(n => n + 1);
+
 /** The right panel shows this tab. */
 const tabOpen = (tab: RightTab) => state.inspectorOpen() && state.rightTab() === tab;
 export const propertiesOpen = () => tabOpen('properties');

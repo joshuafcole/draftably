@@ -1,19 +1,28 @@
-diagram "Sign-in sequence" version=1
-subtitle "Who talks to whom, in order, when a user signs in"
+diagram "Successful password sign-in" version=1
+subtitle "The web app hands the password check to the auth service"
 
-# A sequence diagram: participants across the top, one message per edge line, read top to bottom.
+# A sequence diagram: each message says what it is, phases name the steps, and the key explains each mark.
+footnote "Valid credentials only; error paths are left out."
+
 node user "User" shape=pill color=sky
 node app "Web app"
 node auth "Auth service" color=violet
 node db "User store" color=amber
 
-edge m1 user -> app "submit email + password"
-edge m2 app -> auth "verify credentials"
-edge m3 auth -> db "load user"
-edge m4 db -> auth "user record" kind=async
-edge m5 auth -> auth "check password hash"
-edge m6 auth -> app "session token" kind=async
-edge m7 app -> user "signed in" kind=async
+# message= says what a message is. answers= makes a reply and names the message it answers.
+edge m1 user -> app "submit email + password" message=interaction
+edge m2 app -> auth "verify credentials" message=call
+edge m3 auth -> db "load user" message=call
+edge m4 db -> auth "user record" answers=m3
+# An action is work one participant does. It is not a message to itself.
+action m5 auth "check password hash"
+edge m6 auth -> app "session token" answers=m2
+edge m7 app -> user "signed in" message=outcome
+
+# A phase is a run of messages, drawn as a row band.
+phase submit "Submit" m1 m2
+phase verify "Verify" m3 m4 m5
+phase result "Return" m6 m7
 
 # A note on a message sits level with its row, in the margin, and moves nothing.
 note "The token lasts 15 minutes." near=m6

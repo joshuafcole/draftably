@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { RouteLab, type RouteInput } from '../src/engines/routing-engine.js';
+import { RouteLab, type RouteInput } from '../src/engines/routing-engine';
 import type { Point, Rect } from '../src/model/types';
 
 const box = (id: string, x: number, y: number, w = 160, h = 56, parentId?: string) => ({

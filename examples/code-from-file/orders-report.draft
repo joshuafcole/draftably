@@ -1,0 +1,9 @@
+diagram "Where the orders report reads" version=1
+subtitle "One pass over orders gives both totals and counts"
+
+# src= reads lines 4 to 14 of queries/orders.sql. Open it with draftably open to see the file.
+
+node report "Orders report" color=blue
+node sql "queries/orders.sql" shape=code src="queries/orders.sql#L4-L14" numbers=on
+range sql.pass lines=8-12 color=green "one pass"
+edge runs report -> sql.pass "runs"

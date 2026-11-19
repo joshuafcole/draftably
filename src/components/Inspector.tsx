@@ -1,4 +1,4 @@
-import { For, Match, Show, Switch, type JSX } from 'solid-js';
+import { createEffect, For, Match, on, Show, Switch, type JSX } from 'solid-js';
 import * as edits from '../model/edits';
 import {
   ancestors,
@@ -33,7 +33,7 @@ import {
   textValue,
 } from '../state/session/canvas-text';
 import { NOTE_SIDES, noteSide, type Note } from '../model/note';
-import { setRightTab } from '../state/ui';
+import { labelFocus, setRightTab } from '../state/ui';
 import { Checkbox, Field, IconButton, NumberField, SelectField, tip } from './controls';
 import { CommandButton as IconCommand } from './CommandButton';
 import { describeLink } from '../state/links';
@@ -169,10 +169,27 @@ function ShadePicker(props: { family: string; shade?: Shade; group?: boolean }) 
   );
 }
 
-function TextField(props: { label: string; value: string; onCommit: (value: string) => void }) {
+function TextField(props: {
+  label: string;
+  value: string;
+  onCommit: (value: string) => void;
+  ref?: (el: HTMLInputElement) => void;
+  /** Runs after Enter saves the field, to hand the keys on. */
+  onEnter?: () => void;
+}) {
   return (
     <Field label={props.label}>
-      <input value={props.value} onChange={e => props.onCommit(e.currentTarget.value)} />
+      <input
+        ref={props.ref}
+        value={props.value}
+        onChange={e => props.onCommit(e.currentTarget.value)}
+        onKeyDown={e => {
+          if (e.key !== 'Enter' || !props.onEnter) return;
+          // Leaving the field saves it, as Enter does; then the keys go on.
+          e.currentTarget.blur();
+          props.onEnter();
+        }}
+      />
     </Field>
   );
 }
@@ -243,6 +260,17 @@ function NothingSelected() {
       <Show when={s.doc.layout.intent.start || s.doc.layout.intent.end}>
         <IntentSummary />
       </Show>
+      {/* The file's layout line holds the switch, so only a file can change it. */}
+      <Show when={s.doc.layout.sequence && s.fileMode()}>
+        <Section title="Sequence">
+          <Checkbox
+            label="Activation bars"
+            checked={!!s.doc.layout.sequence?.bars}
+            onChange={v => s.transact('Edit activation bars', d => edits.setActivations(d, v))}
+          />
+          <p class="hint">A bar runs from each call to the reply that answers it.</p>
+        </Section>
+      </Show>
       <Section>
         {/* Editor preferences, which belong to the session and not to the drawing. */}
         <Checkbox
@@ -308,32 +336,94 @@ const SIDE_OPTIONS = (['auto', 'left', 'right', 'top', 'bottom'] as PortSide[]).
 
 const MARKER_OPTIONS = MARKERS.map(m => [m, capitalize(m.replace('-', ' '))] as const);
 
+/** What a sequence message can be. An action is work one participant does, so it has one end. */
+const KIND_OPTIONS = [
+  ['', 'Not set'],
+  ['interaction', 'Message'],
+  ['call', 'Call: the sender waits'],
+  ['send', 'Send: the sender does not wait'],
+  ['reply', 'Reply'],
+  ['outcome', 'Result shown'],
+] as const;
+const SELF_KIND_OPTIONS = [...KIND_OPTIONS, ['action', 'Local action']] as const;
+
 function EdgeInspector(props: { id: string }) {
   const s = useDiagramSession();
   const edge = () => findEdge(s.doc, props.id)!;
   const cfg = () => s.doc.layout.edges[props.id] || {};
   const route = () => s.routesById().get(props.id);
+  // A message just added is named next: the caret goes to its label, with the label selected.
+  // The file draws again a moment later and sets the field once more, so select it then too.
+  let label: HTMLInputElement | undefined;
+  createEffect(
+    on(
+      labelFocus,
+      () => {
+        const select = () => {
+          if (!label) return;
+          const untouched = label.value === edge()?.label;
+          label.focus();
+          if (untouched) label.select();
+        };
+        setTimeout(select, 0);
+        setTimeout(() => document.activeElement === label && select(), 400);
+      },
+      { defer: true },
+    ),
+  );
   return (
     <>
       <Heading title="Connection" />
       <Section>
         <TextField
+          ref={el => (label = el)}
+          // In a sequence, Enter hands the keys back to the canvas, so Tab adds the next message.
+          onEnter={cfg().row !== undefined ? () => s.focusCanvas() : undefined}
           label="Label"
           value={edge().label}
           onCommit={v => s.transact('Edit label', d => edits.setEdgeLabel(d, props.id, v))}
         />
-        <Checkbox
-          label="Directed"
-          checked={edge().directed}
-          onChange={v =>
-            s.transact('Edit directed', d => edits.setEdge(d, props.id, { directed: v }))
-          }
-        />
-        <Checkbox
-          label="Dashed"
-          checked={edge().dashed}
-          onChange={v => s.transact('Edit dashed', d => edits.setEdge(d, props.id, { dashed: v }))}
-        />
+        <Show when={cfg().row !== undefined}>
+          <SelectField
+            label="Kind"
+            value={edge().message ?? ''}
+            options={edge().from === edge().to ? SELF_KIND_OPTIONS : KIND_OPTIONS}
+            onChange={v =>
+              s.transact('Edit kind', d => edits.setMessage(d, props.id, v || undefined))
+            }
+          />
+          <Show when={edge().message === 'reply'}>
+            <SelectField
+              label="Reply to"
+              value={edge().replyTo ?? ''}
+              options={[
+                ['', 'Not set'] as const,
+                ...edits
+                  .replyTargets(s.doc, props.id)
+                  .map(e => [e.id, e.label ? `${e.id}: ${e.label}` : e.id] as const),
+              ]}
+              onChange={v =>
+                s.transact('Edit reply', d => edits.setReplyTo(d, props.id, v || undefined))
+              }
+            />
+          </Show>
+        </Show>
+        <Show when={!edge().message}>
+          <Checkbox
+            label="Directed"
+            checked={edge().directed}
+            onChange={v =>
+              s.transact('Edit directed', d => edits.setEdge(d, props.id, { directed: v }))
+            }
+          />
+          <Checkbox
+            label="Dashed"
+            checked={edge().dashed}
+            onChange={v =>
+              s.transact('Edit dashed', d => edits.setEdge(d, props.id, { dashed: v }))
+            }
+          />
+        </Show>
         <Show when={!s.fileMode()}>
           <Checkbox
             label="Emphasis"
@@ -344,24 +434,26 @@ function EdgeInspector(props: { id: string }) {
           />
         </Show>
       </Section>
-      <Section title="Ends">
-        <div class="fields-2">
-          <SelectField
-            label="Tail"
-            value={tailOf(edge())}
-            options={MARKER_OPTIONS}
-            disabled={!edge().directed}
-            onChange={v => s.transact('Edit tail', d => edits.setEdge(d, props.id, { tail: v }))}
-          />
-          <SelectField
-            label="Head"
-            value={headOf(edge())}
-            options={MARKER_OPTIONS}
-            disabled={!edge().directed}
-            onChange={v => s.transact('Edit head', d => edits.setEdge(d, props.id, { head: v }))}
-          />
-        </div>
-      </Section>
+      <Show when={!edge().message}>
+        <Section title="Ends">
+          <div class="fields-2">
+            <SelectField
+              label="Tail"
+              value={tailOf(edge())}
+              options={MARKER_OPTIONS}
+              disabled={!edge().directed}
+              onChange={v => s.transact('Edit tail', d => edits.setEdge(d, props.id, { tail: v }))}
+            />
+            <SelectField
+              label="Head"
+              value={headOf(edge())}
+              options={MARKER_OPTIONS}
+              disabled={!edge().directed}
+              onChange={v => s.transact('Edit head', d => edits.setEdge(d, props.id, { head: v }))}
+            />
+          </div>
+        </Section>
+      </Show>
       <Section title="Ports">
         <div class="fields-2">
           <SelectField
@@ -387,11 +479,22 @@ function EdgeInspector(props: { id: string }) {
         <div class="fields-2">
           <CommandButton command="reverse-edge">Reverse</CommandButton>
           <CommandButton command="auto-ports">Use auto ports</CommandButton>
-          <CommandButton command="insert-step">Insert step · Tab</CommandButton>
+          <Show
+            when={cfg().row !== undefined}
+            fallback={<CommandButton command="insert-step">Insert step · Tab</CommandButton>}
+          >
+            <CommandButton command="insert-event-before">Insert before</CommandButton>
+            <CommandButton command="insert-event-after">Insert after</CommandButton>
+            <CommandButton command="move-event-up">Move up</CommandButton>
+            <CommandButton command="move-event-down">Move down</CommandButton>
+          </Show>
           <Show when={!s.fileMode()}>
             <CommandButton command="reset-route">Reset bends</CommandButton>
           </Show>
         </div>
+        <Show when={cfg().row !== undefined}>
+          <p class="hint">Tab and Shift Tab insert a message. Alt with ↑ or ↓ moves this one.</p>
+        </Show>
         <Show when={!s.fileMode()}>
           <p class="hint">
             Double-click a line to add a bend. Double-click a bend to remove it. Alt-drag a label to

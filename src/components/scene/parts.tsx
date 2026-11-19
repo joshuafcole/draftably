@@ -1,5 +1,21 @@
-import { For, Show } from 'solid-js';
-import type { ResolvedAppearance } from '../../model/appearance';
+import { createMemo, For, Show } from 'solid-js';
+import type { ResolvedAppearance, Swatch } from '../../model/appearance';
+import {
+  CODE_ADVANCE,
+  CODE_TYPE,
+  codeLayout,
+  codeRuns,
+  columnX,
+  lineBand,
+  moreText,
+  rowNumber,
+  wrapMarkPath,
+  type CodeBlock,
+} from '../../model/code';
+import { detailInk } from '../../model/colors';
+import { codeColors, codeTokens, coloredRuns } from '../../model/highlight';
+import { BAND_OPACITY, rangeMarks } from '../../model/ranges';
+import { truncateText } from '../../model/fonts';
 import type { NodeLabel } from '../../model/labels';
 import { markerMarkup } from '../../model/legend';
 import type { Rect } from '../../model/types';
@@ -157,5 +173,189 @@ export function ResizeHandles(props: { rect: Rect; zoom: number; corners?: boole
         />
       )}
     </For>
+  );
+}
+
+/**
+ * A code node's caption band, line numbers and listing, placed by column arithmetic exactly as
+ * `renderSvg` places them (`model/code.ts`).
+ */
+export function CodeBody(props: {
+  code: CodeBlock;
+  caption: string;
+  w: number;
+  h: number;
+  look: ResolvedAppearance;
+  swatch: Swatch;
+  strike?: boolean;
+  fade?: number;
+}) {
+  const laid = createMemo(() =>
+    codeLayout(props.code, props.caption, props.look, { width: props.w, height: props.h }),
+  );
+  const numbers = createMemo(() =>
+    laid().rows.flatMap((row, i) => {
+      const text = rowNumber(props.code, laid(), row, i);
+      return text ? [{ text, y: row.y + CODE_TYPE.lineHeight / 2 }] : [];
+    }),
+  );
+  const tokens = createMemo(() => codeTokens(props.code));
+  const colors = createMemo(() => codeColors(props.look, props.swatch.fill, props.swatch.ink));
+  const bands = createMemo(() =>
+    (tokens() ?? []).flatMap((t, line) => {
+      const band = (t.line === 'added' || t.line === 'removed') && lineBand(laid(), line);
+      return band ? [{ ...band, fill: colors()[t.line as 'added'].fill }] : [];
+    }),
+  );
+  const ranges = createMemo(() =>
+    rangeMarks(props.code, laid(), props.look, props.w, props.swatch.fill),
+  );
+  const bandInk = (line: number) => {
+    const t = tokens()?.[line]?.line;
+    return t === 'added' || t === 'removed' ? colors()[t].ink : undefined;
+  };
+  const muted = () => detailInk(props.look, props.swatch),
+    mid = CODE_TYPE.lineHeight / 2,
+    font = {
+      'font-family': CODE_TYPE.family,
+      'font-size': String(CODE_TYPE.size),
+      'font-weight': String(CODE_TYPE.weight),
+    };
+  return (
+    <g class="code-body" pointer-events="none">
+      <For each={bands()}>
+        {b => <rect x={1} y={b.y} width={props.w - 2} height={b.h} fill={b.fill} />}
+      </For>
+      <For each={ranges()}>
+        {m => (
+          <g class="code-range" opacity={m.opacity < 1 ? m.opacity : undefined}>
+            <rect
+              x={1}
+              y={m.y}
+              width={props.w - 2}
+              height={m.h}
+              fill={m.band}
+              fill-opacity={BAND_OPACITY}
+            />
+            <line
+              x1={m.barX}
+              y1={m.y}
+              x2={m.barX}
+              y2={m.y + m.h}
+              stroke={m.bar}
+              stroke-width={m.barW}
+              stroke-dasharray={m.dash}
+            />
+          </g>
+        )}
+      </For>
+      <Show when={laid().caption}>
+        <line
+          x1={0}
+          y1={laid().caption}
+          x2={props.w}
+          y2={laid().caption}
+          stroke={props.swatch.stroke}
+          stroke-width={1}
+          stroke-opacity={0.5}
+        />
+        <text
+          x={laid().gutter}
+          y={laid().caption / 2}
+          dominant-baseline="central"
+          font-family={props.look.annotation.family}
+          font-size={String(props.look.annotation.size)}
+          font-weight={String(props.look.annotation.weight)}
+          fill={props.swatch.ink}
+          fill-opacity={props.fade}
+          text-decoration={props.strike ? 'line-through' : undefined}
+        >
+          {truncateText(props.caption, props.w - 2 * laid().gutter, props.look.annotation)}
+        </text>
+      </Show>
+      <Show when={props.code.numbers}>
+        <text dominant-baseline="central" {...font} fill={muted()}>
+          <For each={numbers()}>
+            {n => (
+              <tspan x={laid().gutter + (laid().numberCols - n.text.length) * CODE_ADVANCE} y={n.y}>
+                {n.text}
+              </tspan>
+            )}
+          </For>
+        </text>
+      </Show>
+      <text
+        dominant-baseline="central"
+        {...font}
+        fill={props.swatch.ink}
+        fill-opacity={props.fade}
+        text-decoration={props.strike ? 'line-through' : undefined}
+      >
+        <For each={laid().rows}>
+          {row => (
+            <For
+              each={coloredRuns(
+                row,
+                codeRuns(row, props.code.lines[row.line]),
+                tokens()?.[row.line],
+              )}
+            >
+              {run => (
+                <tspan
+                  x={columnX(laid(), run.col)}
+                  y={row.y + mid}
+                  fill={run.cls ? colors().tokens[run.cls] : bandInk(row.line)}
+                >
+                  {run.text}
+                </tspan>
+              )}
+            </For>
+          )}
+        </For>
+        <Show when={laid().moreShown}>
+          <tspan x={columnX(laid(), 0)} y={laid().moreY + mid} fill={muted()}>
+            {moreText(laid().more)}
+          </tspan>
+        </Show>
+      </text>
+      <For each={ranges().filter(m => m.tag)}>
+        {m => (
+          <g class="code-range-tag" opacity={m.opacity < 1 ? m.opacity : undefined}>
+            <rect
+              x={m.tag!.x}
+              y={m.tag!.y}
+              width={m.tag!.w}
+              height={m.tag!.h}
+              rx={3}
+              fill={m.band}
+            />
+            <text
+              x={m.tag!.x + m.tag!.w / 2}
+              y={m.tag!.y + m.tag!.h / 2}
+              text-anchor="middle"
+              dominant-baseline="central"
+              font-family={props.look.annotation.family}
+              font-size={String(props.look.annotation.size)}
+              font-weight={String(props.look.annotation.weight)}
+              fill={m.tag!.ink}
+            >
+              {m.tag!.text}
+            </text>
+          </g>
+        )}
+      </For>
+      <For each={laid().rows.filter(r => r.wraps)}>
+        {row => (
+          <path
+            d={wrapMarkPath(props.w - laid().gutter / 2, row.y)}
+            fill="none"
+            stroke={muted()}
+            stroke-width={1.1}
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+        )}
+      </For>
+    </g>
   );
 }

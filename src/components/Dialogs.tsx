@@ -125,6 +125,8 @@ const SHORTCUTS: [string, string][] = [
   ['Automatic ports on selection', 'Alt Shift R'],
   ['Lock a connection side', 'Alt + port drag'],
   ['Insert step on selected connection', 'Tab'],
+  ['Sequence: insert a message after / before', 'Tab / Shift Tab'],
+  ['Sequence: move a message up / down', 'Alt ↑ / Alt ↓'],
   ['Add connected box', 'Shift Enter'],
   ['Tidy', 'L'],
   ['Layout timeline', 'Alt T'],

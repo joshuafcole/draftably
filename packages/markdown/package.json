@@ -1,6 +1,6 @@
 {
   "name": "@draftably/markdown",
-  "version": "0.2.2",
+  "version": "0.2.4",
   "description": "Build static SVG diagram assets from Markdown draft fences.",
   "license": "MIT",
   "type": "module",

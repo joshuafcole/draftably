@@ -66,6 +66,8 @@ describe('set, rm and mv', () => {
     expect(out).toContain('near store cache_key side=below');
     expect(out).toContain('"Cache key"');
     expect(() => renameId(source, 'key', 'store')).toThrow('already used');
-    expect(() => setFields(source, 'nope', ['color=red'])).toThrow('No node, group or edge nope');
+    expect(() => setFields(source, 'nope', ['color=red'])).toThrow(
+      'No node, group, edge or action nope',
+    );
   });
 });

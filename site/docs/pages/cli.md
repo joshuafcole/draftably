@@ -5,7 +5,8 @@ command with `--help` for its own options, and `draftably --version` for the ver
 
 Any file argument may also be a PNG, SVG or PDF that draftably exported. The command reads the
 source embedded in it. A PDF can hold several diagrams, so name one as
-`diagrams.pdf#architecture.draft`. `check` reads them all.
+`diagrams.pdf#architecture.draft`. `check` reads them all. A source read from an image never
+reads the files its `src=` code nodes name; draftably's own exports carry that code inline.
 
 ## open
 
@@ -84,7 +85,7 @@ draftably inspect architecture.draft --png architecture.png --scale 2
 ```
 
 Prints the canonical geometry of every node and route, or draws the diagram. SVG and PNG output
-embed the source.
+embed the source, with each `src=` code file inlined as a body.
 
 | Option             | Effect                                                                |
 | ------------------ | --------------------------------------------------------------------- |
@@ -109,7 +110,8 @@ draftably pdf diagrams/ -o diagrams.pdf --title "System notes" --page letter
 
 Saves diagrams as one vector PDF, with one diagram per page and its heading and key. A folder adds
 each `.draft` in it, in name order. It stops on a file with errors.
-Each file's source is attached, so `check`, `extract` and `open` can read the PDF.
+Each file's source is attached, with each `src=` code file inlined, so `check`, `extract` and
+`open` can read the PDF.
 
 | Option          | Effect                                                                                                                          |
 | --------------- | ------------------------------------------------------------------------------------------------------------------------------- |
@@ -299,6 +301,13 @@ draftably open architecture.draft --replace
 ### The browser does not open
 
 `open` opens the browser on macOS only. On other systems, open the URL on the `Viewer:` line.
+
+### A code node draws `Needs <file>`
+
+A code node with `src=` draws a placeholder where draftably cannot read files: the Playground, the
+static Editor and the bundled examples. Open the `.draft` with `draftably open`, or check it with
+the CLI. If `check` reports `code-src`, the message names the cause: a missing file, a path outside
+the served folder, a range past the end of the file, or a file over 200 KB.
 
 ### An export has no source
 

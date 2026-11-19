@@ -5,7 +5,7 @@ import { checkSource, compile } from '../src/dsl/compile';
 import { projectScene } from '../src/dsl/project';
 import { formatSource, parseModel, printSource, readSource } from '../src/dsl/syntax';
 import { translateEdit } from '../src/dsl/translate';
-import { LayoutLab } from '../src/engines/layout-engine.js';
+import { LayoutLab } from '../src/engines/layout-engine';
 import { clone } from '../src/model/geometry';
 import type { Diagram } from '../src/model/types';
 

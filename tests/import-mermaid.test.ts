@@ -98,18 +98,23 @@ a->b: plain
 a-xb: lost
 a--xb: late
 a<<->>b: both`);
-    expect(r.status).toBe('ready');
+    // The dotted cross loses its cross, so the import asks for a review.
+    expect(r.status).toBe('needs-review');
     expect(lines(r.nativeSource!, 'group')).toEqual(['group box_1 "Client"']);
     expect(lines(r.nativeSource!, 'node')).toEqual(['node a "App" in=box_1', 'node b "b"']);
     expect(lines(r.nativeSource!, 'layout')).toEqual(['layout root sequence']);
     expect(lines(r.nativeSource!, 'edge')).toEqual([
-      'edge m1 a -> b "call"',
-      'edge m2 b -> a "reply" kind=async',
+      'edge m1 a -> b "call" message=call',
+      'edge m2 b -> a "reply" answers=m1',
       'edge m3 a -> b "plain" head=none',
       'edge m4 a -> b "lost" head=cross',
-      'edge m5 a -> b "late" head=cross kind=async',
+      // A dotted line with another end is a reply with the plain arrowhead. It runs the same
+      // way as the call, so it answers nothing.
+      'edge m5 a -> b "late" message=reply',
       'edge m6 a -> b "both" tail=arrow',
     ]);
+    expect(r.nativeSource).not.toContain('kind=async');
+    expect(r.diagnostics.map(d => d.code)).toEqual(['MERMAID_SEQUENCE_DOTTED_END']);
     await compile(r.nativeSource!);
   });
 
@@ -154,18 +159,62 @@ Note right of c: elsewhere`);
     await compile(r.nativeSource!);
   });
 
+  it('answers the nearest call with no answer yet, and each call once', async () => {
+    const r = await run(`a->>b: outer
+b->>c: inner
+c-->>b: inner done
+a-)b: fire
+b-->>a: outer done
+b-->>a: extra
+c-->>c: to itself`);
+    expect(lines(r.nativeSource!, 'edge')).toEqual([
+      'edge m1 a -> b "outer" message=call',
+      'edge m2 b -> c "inner" message=call',
+      'edge m3 c -> b "inner done" answers=m2',
+      'edge m4 a -> b "fire" message=send',
+      // The nearest message from a to b with no answer is the send, then the call.
+      'edge m5 b -> a "outer done" answers=m4',
+      'edge m6 b -> a "extra" answers=m1',
+      'edge m7 c -> c "to itself" message=reply',
+    ]);
+    await compile(r.nativeSource!);
+  });
+
+  it('keeps bars off, with both counts, when they are not from a call to its reply', async () => {
+    const r = await run(`a->>b: go
+activate a
+b-->>a: back
+deactivate a`);
+    expect(lines(r.nativeSource!, 'layout')).toEqual(['layout root sequence']);
+    const warning = r.diagnostics.find(d => d.code === 'MERMAID_SEQUENCE_ACTIVATION')!;
+    expect(warning.message).toContain('gives 1 bar where the source draws 1');
+    // Nested activations that match turn the bars on.
+    const nested = await run(`a->>+b: one
+b->>+c: two
+c-->>-b: two done
+b-->>-a: one done`);
+    expect(lines(nested.nativeSource!, 'layout')).toEqual(['layout root sequence activations=on']);
+    expect(nested.diagnostics).toEqual([]);
+  });
+
   it('reports what has no native form and refuses half arrows', async () => {
     const r = await run(`autonumber
 actor a
 a->>+b: go
 b-->>-a: back
 a-)b: send`);
+    // The bar runs from the call to its reply, so the native bars are the source's.
     expect(r.diagnostics.map(d => d.code).sort()).toEqual([
-      'MERMAID_SEQUENCE_ACTIVATION',
       'MERMAID_SEQUENCE_ACTOR_TYPE',
-      'MERMAID_SEQUENCE_ASYNC_ARROW',
       'MERMAID_SEQUENCE_AUTONUMBER',
     ]);
+    expect(lines(r.nativeSource!, 'layout')).toEqual(['layout root sequence activations=on']);
+    expect(lines(r.nativeSource!, 'edge')).toEqual([
+      'edge m1 a -> b "go" message=call',
+      'edge m2 b -> a "back" answers=m1',
+      'edge m3 a -> b "send" message=send',
+    ]);
+    await compile(r.nativeSource!);
     expect((await run('a-|\\b: half')).status).toBe('failed');
   });
 });

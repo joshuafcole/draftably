@@ -1,0 +1,11 @@
+diagram "The fix"
+theme drafting
+
+node fix "the fix" shape=code lang=diff <<DIFF
+  @@ -12,6 +12,4 @@ def body_for(aggregate, domain):
+  -            yield Subquery(
+  -                select=[*domain.keys, column.expr],
+  -                source=domain.join_all(),
+  -            )
+  +            yield shared(domain).column(column.expr)
+DIFF

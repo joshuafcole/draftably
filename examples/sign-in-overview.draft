@@ -1,0 +1,14 @@
+diagram "Sign-in, in brief" version=1
+subtitle "Three steps for a reader who does not need the auth detail"
+
+# The short companion of the sign-in sequence: the same participants in the same order, fewer messages.
+footnote "The auth service and the user store are left out. See the sign-in sequence for them."
+
+node user "User" shape=pill color=sky
+node app "Web app"
+
+edge m1 user -> app "submit email + password" message=interaction
+action m2 app "verify with the auth service"
+edge m3 app -> user "signed in" message=outcome
+
+layout root sequence

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { LayoutLab } from '../src/engines/layout-engine.js';
+import { LayoutLab } from '../src/engines/layout-engine';
 import { renderSvg } from '../src/cli/svg';
 import { checkSource } from '../src/dsl/compile';
 import { legendNotes } from '../src/dsl/legend-notes';

@@ -10,7 +10,7 @@
 import { LEGEND_LINES, THEME_IDS } from '../model/appearance';
 import { FONT_ROLES } from '../model/fonts';
 import { EDITORS } from '../model/link';
-import { MARKERS } from '../model/markers';
+import { MARKERS, MESSAGE_KINDS } from '../model/markers';
 import { NOTE_SIDES } from '../model/note';
 import type { LayoutAlgorithmId, LayoutSettings, PortSide, RoutingSettings } from '../model/types';
 import type { DslShape } from './syntax';
@@ -111,12 +111,15 @@ export const DSL_SHAPES = [
   'text',
   'marker',
   'portal',
+  'code',
 ] as const satisfies readonly DslShape[];
 /** Shapes a node's box can draw as it was: a marker's box is a thin cut, so it has no other shape. */
 export const PAST_SHAPES = ['box', 'pill', 'circle', 'diamond', 'text'] as const satisfies Exclude<
   (typeof DSL_SHAPES)[number],
-  'marker' | 'portal'
+  'marker' | 'portal' | 'code'
 >[];
+/** Attributes only a code node takes. */
+export const CODE_ATTRS = ['lang', 'tab', 'wrap', 'numbers', 'start', 'max-width', 'src'] as const;
 export const FRAMES = ['box', 'soft', 'none'] as const;
 export const SIDES = [
   'auto',
@@ -140,6 +143,7 @@ export const SIDES = [
  * - `span`: a number of columns, or `var` for a field of variable length.
  * - `height`: a number, or `auto` for the title's height at that width.
  * - `pair`: two numbers, `a,b`; `points`: up to `ROUTE_POINTS` pairs, `x1,y1;x2,y2`.
+ * - `lines`: a run of line numbers, `a-b`, or one line, `a`.
  */
 export type OpenValue =
   | 'number'
@@ -153,7 +157,8 @@ export type OpenValue =
   | 'span'
   | 'height'
   | 'pair'
-  | 'points';
+  | 'points'
+  | 'lines';
 
 /** What an attribute's value may be: a closed vocabulary of words, or an open kind of word. */
 export type AttributeValue = readonly string[] | OpenValue;
@@ -235,7 +240,15 @@ export const LANGUAGE = {
       href: 'text',
       count: 'count',
       span: 'span',
-    },
+      lang: 'text',
+      tab: 'number',
+      wrap: ON_OFF,
+      numbers: ON_OFF,
+      start: 'number',
+      'max-width': 'number',
+      src: 'text',
+    } satisfies Record<(typeof CODE_ATTRS)[number], AttributeValue> &
+      Record<string, AttributeValue>,
   },
   group: {
     marks: true,
@@ -261,8 +274,11 @@ export const LANGUAGE = {
       directed: TRUE_FALSE,
       head: MARKERS,
       tail: MARKERS,
+      message: MESSAGE_KINDS,
+      answers: 'id',
     },
   },
+  action: { attrs: {} },
   layout: {
     attrs: {
       // Engine settings first, so that `fold`, which a recipe line takes too, reads as one word.
@@ -277,11 +293,13 @@ export const LANGUAGE = {
       unit: ['bit', 'byte'],
       'unit-width': 'number',
       ruler: ON_OFF,
+      activations: ON_OFF,
       engine: ENGINES,
     },
     words: { recipe: ['flow', 'row', 'column', 'lanes', 'sequence', 'cells'] },
     // Every layout line takes `common`, and the root's takes `root`. An `engine=` line adds
-    // `engine`; otherwise a `cells` line adds `cells`, any other recipe `recipe`, and `flow` `flow`.
+    // `engine`; otherwise a `cells` line adds `cells`, any other recipe `recipe`, `flow` `flow` and
+    // `sequence` `sequence`.
     forms: {
       common: ['direction', 'min-width', 'min-height'],
       root: ['fit'],
@@ -289,6 +307,7 @@ export const LANGUAGE = {
       cells: ['columns', 'unit', 'unit-width', 'ruler'],
       recipe: ['gap'],
       flow: ['fold'],
+      sequence: ['activations'],
     },
   },
   theme: {
@@ -310,6 +329,10 @@ export const LANGUAGE = {
     words: { line: LEGEND_LINES },
     // `legend family "meaning" shade=`, or `legend line dashed "meaning"`.
     forms: { family: ['shade'], line: [] },
+  },
+  range: {
+    marks: true,
+    attrs: { lines: 'lines', match: 'text', span: 'number', color: 'color' },
   },
   note: {
     attrs: { near: 'id', side: NOTE_SIDES, width: 'number', states: 'ids', leader: ON_OFF },

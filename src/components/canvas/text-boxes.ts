@@ -2,6 +2,7 @@ import { PHASE_TAB } from '../../cli/svg';
 import { panelSwatch, resolveAppearance, type ResolvedAppearance } from '../../model/appearance';
 import type { DiagramFrame } from '../../model/frame';
 import { measureText } from '../../model/fonts';
+import { phaseLabelLines } from '../../model/labels';
 import { NOTE_PAD } from '../../model/note';
 import type { Run } from '../../model/rich-text';
 import type { Diagram, Rect } from '../../model/types';
@@ -91,8 +92,8 @@ export function textBoxes(doc: Diagram, frame: DiagramFrame): TextBox[] {
       rect: {
         x: (seq!.phaseX ?? seq!.panel.x) + PHASE_TAB - 2,
         y: ph.y + PHASE_TAB - 2,
-        w: measureText(ph.label, type) + 4,
-        h: type.lineHeight,
+        w: Math.max(...phaseLabelLines(ph.label, look).map(l => measureText(l, type))) + 4,
+        h: phaseLabelLines(ph.label, look).length * type.lineHeight + 4,
       },
       type,
       fill: look.canvas,

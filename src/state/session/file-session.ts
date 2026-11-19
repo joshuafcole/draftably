@@ -37,9 +37,10 @@ import {
   UnstorableLayout,
   writeArrangement,
 } from '../../dsl/layout-edits';
-import type { RoutingResult } from '../../engines/routing-engine.js';
+import type { RoutingResult } from '../../engines/routing-engine';
 import { runShared } from '../../lib/engine-tasks';
 import { cacheScene, cachedScene } from '../../lib/scene-cache';
+import type { CodeFiles } from '../../model/code-src';
 import { normalize, routingFingerprint } from '../../model/document';
 import type { Diagram, LayoutSettings, RoutingSettings } from '../../model/types';
 import { clone } from '../../model/geometry';
@@ -77,6 +78,8 @@ export interface FileSessionInfo {
   example?: string;
   /** The file's path relative to the served folder (files only). */
   file?: string;
+  /** The files its `src=` code nodes name, read by the file server (files only). */
+  files?: CodeFiles;
 }
 
 /**
@@ -272,14 +275,31 @@ export function createFileSession(s: DocumentPart & CanvasTextPart) {
   } = { adopt: () => {}, quick: () => {}, awaiting: () => {} };
   const setRouteSink = (sink: typeof routeSink) => (routeSink = sink);
 
+  /**
+   * The text of the files the source's `src=` code nodes name, from the file server. Examples and
+   * the static app have none, so those nodes draw a placeholder.
+   */
+  let codeFiles: CodeFiles | undefined;
+  /** The files as one string, which keys compiled scenes along with the source. */
+  let codeFilesKey = '';
+  /** Take the server's copy of the `src=` files; true when it differs from the one shown. */
+  function takeFiles(files: CodeFiles | undefined) {
+    const key = files && Object.keys(files).length ? JSON.stringify(files) : '';
+    if (key === codeFilesKey) return false;
+    codeFiles = key ? files : undefined;
+    codeFilesKey = key;
+    return true;
+  }
+
   /** Recently compiled sources. A preview and the commit that follows compile the same source. */
   const compiled = new Map<string, Promise<Compiled>>();
   function compileCached(source: string): Promise<Compiled> {
-    let scene = compiled.get(source);
+    const key = codeFilesKey ? source + '\0' + codeFilesKey : source;
+    let scene = compiled.get(key);
     if (!scene) {
-      scene = compileOffThread(source);
-      compiled.set(source, scene);
-      scene.catch(() => compiled.delete(source));
+      scene = compileOffThread(source, key);
+      compiled.set(key, scene);
+      scene.catch(() => compiled.delete(key));
       while (compiled.size > 16) compiled.delete(compiled.keys().next().value!);
     }
     return scene;
@@ -291,21 +311,23 @@ export function createFileSession(s: DocumentPart & CanvasTextPart) {
    * with quick routes; its full routes follow. A source the worker refuses is compiled here again,
    * which reports the error with its line.
    */
-  async function compileOffThread(source: string): Promise<Compiled> {
+  async function compileOffThread(source: string, key: string): Promise<Compiled> {
+    // The files `key` was made from: a files event during the await below must not mix in.
+    const files = codeFiles;
     // Opened before, by this build: the routes stand if this view projects the same document.
-    const kept = await cachedScene<{ scene: Scene; routes: Routes }>(source);
+    const kept = await cachedScene<{ scene: Scene; routes: Routes }>(key);
     if (kept) return kept;
     const view = viewState();
     let scene: Scene;
     try {
-      scene = await runShared({ kind: 'compile', source });
+      scene = await runShared({ kind: 'compile', source, files });
     } catch {
-      return { scene: await compile(source) };
+      return { scene: await compile(source, files) };
     }
-    const routes = runShared({ kind: 'scene', source, view }).then(
+    const routes = runShared({ kind: 'scene', source, view, files }).then(
       ({ fingerprint, routing }) => {
         const routes = { fingerprint, result: routing };
-        void cacheScene(source, { scene, routes });
+        void cacheScene(key, { scene, routes });
         return routes;
       },
       () => undefined,
@@ -469,6 +491,8 @@ export function createFileSession(s: DocumentPart & CanvasTextPart) {
         }
         diskSource = sending;
         diskRevision = body.revision;
+        // The save may name another src= file; draw it once the server has read it.
+        if (takeFiles(body.files)) void showSource(localSource);
         if (!saveAgain) break;
       }
       state.setStatus('saved');
@@ -663,7 +687,7 @@ export function createFileSession(s: DocumentPart & CanvasTextPart) {
     // Nothing the file stores changed (for example a move of an object that was not selected).
     if (next === localSource) return snapBack('That change is not saved to diagram files.');
     try {
-      checkSource(next);
+      checkSource(next, codeFiles);
     } catch (error) {
       if (error instanceof DslError) return snapBack(`That edit cannot be saved. ${error.message}`);
       throw error;
@@ -743,7 +767,7 @@ export function createFileSession(s: DocumentPart & CanvasTextPart) {
       return false;
     }
     try {
-      checkSource(next);
+      checkSource(next, codeFiles);
     } catch (error) {
       if (error instanceof DslError) {
         toast(`That change cannot be saved. ${error.message}`);
@@ -1023,6 +1047,7 @@ export function createFileSession(s: DocumentPart & CanvasTextPart) {
           }),
     );
     state.setInfo(info);
+    takeFiles(info.files);
     return acceptDisk(info.source, info.revision, { arrangement });
   }
 
@@ -1054,8 +1079,15 @@ export function createFileSession(s: DocumentPart & CanvasTextPart) {
     window.addEventListener('pageshow', resumeListening);
     events.addEventListener('source', event => {
       if (fileEvents !== events) return;
-      const { source, revision } = JSON.parse((event as MessageEvent).data);
+      const { source, revision, files } = JSON.parse((event as MessageEvent).data);
+      if (takeFiles(files) && revision === diskRevision) void showSource(localSource);
       onExternalChange(source, revision);
+    });
+    // A file a `src=` code node names changed on disk: draw the current source with it.
+    events.addEventListener('files', event => {
+      if (fileEvents !== events) return;
+      const { files } = JSON.parse((event as MessageEvent).data);
+      if (takeFiles(files) && !state.sourceError()) void showSource(localSource);
     });
     events.addEventListener('error', () => {
       if (fileEvents === events) state.setStatus('offline');
@@ -1065,6 +1097,7 @@ export function createFileSession(s: DocumentPart & CanvasTextPart) {
       try {
         const info: FileSessionInfo = await (await fetch(`./api/session${query}`)).json();
         if (fileEvents !== events) return;
+        if (takeFiles(info.files) && info.revision === diskRevision) void showSource(localSource);
         if (info.revision !== diskRevision) onExternalChange(info.source, info.revision);
         else if (state.status() === 'offline')
           state.setStatus(state.sourceError() ? 'invalid' : 'saved');
@@ -1100,6 +1133,8 @@ export function createFileSession(s: DocumentPart & CanvasTextPart) {
     }
   }
   return {
+    /** The `src=` files the server read, which exports inline. */
+    codeFiles: () => codeFiles,
     openSource,
     receiveSource,
     liveSource,

@@ -1,7 +1,7 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { LayoutLab } from '../src/engines/layout-engine.js';
+import { LayoutLab } from '../src/engines/layout-engine';
 import { compile, type Scene } from '../src/dsl/compile';
 import { GROUP_INSET, GROUP_TITLE_CHROME } from '../src/dsl/frame';
 import { writeArrangement } from '../src/dsl/layout-edits';
@@ -45,9 +45,10 @@ function paddings(scene: Scene) {
 const geometry = (scene: Scene) => scene.objects.map(({ id, x, y, w, h }) => ({ id, x, y, w, h }));
 
 describe('group fit', () => {
-  // Swim lanes span the whole drawing by design, so they are not fitted to their content.
+  // Swim lanes and a sequence's bands span the whole drawing by design, so they are not fitted
+  // to their content.
   const files = readdirSync(examples).filter(
-    f => f.endsWith('.draft') && !/^layout root lanes/m.test(read(f)),
+    f => f.endsWith('.draft') && !/^layout root (lanes|sequence)/m.test(read(f)),
   );
 
   // A routing channel (src/dsl/channels.ts) is two standoffs plus an edge gap per extra line on

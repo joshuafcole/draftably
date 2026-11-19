@@ -1,5 +1,5 @@
 import { Show } from 'solid-js';
-import type { BrushMode } from '../../engines/sculpt-engine.js';
+import type { BrushMode } from '../../engines/sculpt-engine';
 import { Checkbox, IconButton, RangeField, Select } from '../controls';
 import { useDiagramSession } from '../session-context';
 

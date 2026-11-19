@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Host contract budgets (docs/intent/host-contract/plan.md, "Performance"): the built
+ * Host contract budgets (docs/CHECKS.md, "Host contract budgets"): the built
  * `@draftably/runtime` element on plain pages in Chromium, with no bundler.
  *
  *   pnpm bench:host [--runs 5] [--out tmp/bench/host.json] [--strict]

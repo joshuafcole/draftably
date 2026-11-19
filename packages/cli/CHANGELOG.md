@@ -1,5 +1,69 @@
 # draftably
 
+## 0.15.0
+
+### Minor Changes
+
+- df6625b: The Mermaid sequence import writes what each message is: a solid arrow is a call, an open arrow is a send, and a dotted line is a reply that names the call it answers. It turns activation bars on when each bar in the source runs from a call to its reply, and it no longer writes kind=async for a sequence.
+- df6625b: Sequence diagrams say what each message is. An edge takes message=interaction, call, send, reply or outcome, answers= makes an edge a reply to the message it names, and an action line draws work one participant does as a box on its lifeline. The drawing adds a key for the marks in use. Headers are compact, a label between distant participants sits in one gap clear of every lifeline, and a long phase label wraps. `layout root sequence activations=on` draws an activation bar on a participant from each call to the reply that answers it; bars are off by default. Every sequence says under its drawing that rows show order, not elapsed time. A note on a message stays inside the phase band of that message. In the editor, Tab and Shift Tab insert a message, Alt with an up or down arrow moves one, a selected call shows its reply, and the Inspector has a switch for activation bars.
+
+### Patch Changes
+
+- 1ae7385: The editor works out the frame round the drawing once per change, however many parts of the canvas read it. A glide or a drag placed the notes three times a frame before.
+- 9f233d7: A click activates its canvas even without a pointerdown or focusin before it, so with two editors on a page, Enter on one editor's focused Fit button no longer fits the other.
+
+## 0.14.0
+
+### Minor Changes
+
+- 10e1ade: Diagrams now follow a dark page. On a page whose `color-scheme` allows dark, `<draft-diagram>`, `mountViewer`, `<draft-editor>` and `mountEditor` draw a source in the default theme (no `theme` line, or `theme drafting`) in a dark variant of the default theme: graphite surfaces, light text and lines, and the same color families stepped for a dark page. It has the default theme's type and spacing, so every box stays in place. A change of scheme, such as a class on the page that sets `color-scheme`, switches the drawing at once. The viewer draws nothing again: its SVG holds both schemes as `light-dark()` colors. The viewer's frame defaults follow the scheme too, and so do the editor's controls (panels, menus, the zoom control) unless the element sets its own `data-theme`.
+
+  A page that declares no `color-scheme` stays light, also on a dark system, so a light-only site never shows a dark diagram. A dark-mode site opts in with one line: `color-scheme: dark` on its dark class, or this to follow the system setting:
+
+  ```css
+  :root {
+    color-scheme: light dark;
+  }
+  ```
+
+  To keep a diagram light on a dark page, set its scheme:
+
+  ```css
+  draft-diagram,
+  draft-editor {
+    color-scheme: light;
+  }
+  ```
+
+  Another theme in the source (`fieldnotes`, `signal`, `ink`, `blueprint`), a `theme-color` line, or a color on the `theme` line keeps the file's colors everywhere. The editor no longer adds a `theme drafting` line on its own. `renderSvg` still draws light by default; its new `colorScheme` option takes `'dark'`, or `'auto'` for `light-dark()` colors.
+
+### Patch Changes
+
+- 7ac4e4c: `<draft-editor>` now sends `draft-update` for its first source and for each source update, as `<draft-diagram>` does. Its result is an `EditorUpdate`: a commit has no `value` or `diagnostics`, and a source that does not parse is an `error` with a `DRAFT_PARSE` diagnostic. The element's `status` is then `error`. The editor's `draft-diagnostics` now holds that parse error too, before its slot warnings.
+
+  The editor also sends a cancelable `draft-link` when the user presses a link mark, with `{ itemId, href, target: '_blank' }`. Call `preventDefault()` to open the link yourself. The editor sends no `draft-render` or `draft-itemactivate`: a press selects an item, so listen for `draft-select`. The events table now says which element sends each event.
+
+  A slot name with an unknown prefix, such as `bdy:api`, now adds `DRAFT_SLOT_UNKNOWN` and shows nothing. Before, its content drew over the item.
+
+  Breaking for TypeScript: `HostEvents['update']` is now `UpdateResult | EditorUpdate`. On a commit, `value` may be `undefined`: check it, as in `detail.status === 'committed' && detail.value`.
+
+- d3dd542: A press on the editor's drawing now moves focus into the editor. Before, a focused field outside it, such as a `data-draft-input` field in a `<draft-diagram>` slot, kept the focus: Backspace and Delete edited the field, not the selected node. A press on a field, or on content marked `data-draft-input`, still keeps its own focus.
+- 912a4f5: The agent skill has a section on embedding diagrams in a web app: the route by who draws, the
+  install line, `host.css`, the Vite 5–7 setting, event props, content on nodes, server rendering,
+  and the no-bundler and CDN route.
+- db18254: The framework components pass every other attribute, such as `data-theme`, `id` or `aria-*`, to
+  their element. Before, React, Solid and Svelte dropped them with no warning, so
+  `<DraftEditor data-theme="dark" />` stayed light.
+
+  The Svelte components no longer write `options="[object Object]"` on their elements in server
+  HTML. `DraftEditor` sets its other attributes in the browser, so its server HTML has none.
+
+  Event props can cancel. `onLink` and `onContextmenu` (`@link`, `onlink`, …) receive the event's
+  `detail` with a `preventDefault()` that cancels the DOM event, so
+  `onContextmenu={e => e.preventDefault()}` stops the browser's menu with no listener on the
+  element. `@draftably/runtime/host` exports `hostDetail(event)` and the `HostEventDetail` type for
+  the same purpose.
+
 ## 0.13.0
 
 ### Minor Changes

@@ -3,7 +3,7 @@
  * geometry (layout animation, a held "before" preview, or a timeline/brush preview).
  */
 import { createMemo, createSignal } from 'solid-js';
-import type { PriorRoute, RoutingResult } from '../../engines/routing-engine.js';
+import type { PriorRoute, RoutingResult } from '../../engines/routing-engine';
 import { routingFingerprint } from '../../model/document';
 import { drawingBounds } from '../../model/bounds';
 import {

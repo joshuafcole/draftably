@@ -70,11 +70,34 @@ export function markerFill(kind: Exclude<EndMarker, 'none'>, ink: string, surfac
   return fill === 'ink' ? ink : fill === 'surface' ? surface : 'none';
 }
 
-type Ends = { directed?: boolean; head?: EndMarker; tail?: EndMarker };
+/**
+ * What `message=` accepts on a sequence message, plus `action`, which an `action` line makes.
+ * Each says what the author means; none is read from a line's style.
+ */
+export const MESSAGE_KINDS = ['interaction', 'call', 'send', 'reply', 'outcome'] as const;
+export type MessageKind = (typeof MESSAGE_KINDS)[number] | 'action';
+
+type Ends = { directed?: boolean; head?: EndMarker; tail?: EndMarker; message?: MessageKind };
+
+/**
+ * The marks a kind of message draws: a call has a solid head, a send leaves a dot on its
+ * sender, and a local action is a box with no ends. The rest keep the plain arrow.
+ */
+const MESSAGE_ENDS: Partial<Record<MessageKind, { head?: EndMarker; tail?: EndMarker }>> = {
+  call: { head: 'triangle' },
+  send: { tail: 'circle' },
+  action: { head: 'none' },
+};
 
 /** An undirected edge has no marks, whatever else it holds. */
-export const headOf = (e: Ends): EndMarker => (e.directed === false ? 'none' : (e.head ?? 'arrow'));
-export const tailOf = (e: Ends): EndMarker => (e.directed === false ? 'none' : (e.tail ?? 'none'));
+export const headOf = (e: Ends): EndMarker =>
+  e.directed === false
+    ? 'none'
+    : ((e.message && MESSAGE_ENDS[e.message]?.head) ?? e.head ?? 'arrow');
+export const tailOf = (e: Ends): EndMarker =>
+  e.directed === false
+    ? 'none'
+    : ((e.message && MESSAGE_ENDS[e.message]?.tail) ?? e.tail ?? 'none');
 
 /** Whether an edge has anything beyond the plain arrow, which labels and lines ignore. */
 export const hasMarkers = (e: Ends) => headOf(e) !== 'arrow' || tailOf(e) !== 'none';

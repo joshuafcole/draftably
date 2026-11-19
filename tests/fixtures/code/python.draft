@@ -1,0 +1,16 @@
+diagram "The function that builds them"
+theme drafting
+
+node gen "builder.py" shape=code lang=python numbers=on start=40 <<PY
+	def body_for(aggregate, domain):
+	    """Yield one subquery per aggregate column."""
+	    for column in aggregate.columns:
+	        if column.needs_domain:
+	            # each aggregate gets its own copy of the domain
+	            for key in domain.keys:
+	                if key.is_shared:
+	                    yield Subquery(
+	                        select=[*domain.keys, column.expr],
+	                        source=domain.join_all(),  # "copy" here
+	                    )
+PY

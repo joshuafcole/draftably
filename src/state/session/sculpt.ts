@@ -6,14 +6,14 @@
 import { batch, createEffect, createSignal, on } from 'solid-js';
 import { unwrap } from 'solid-js/store';
 import { LANES_HOLD } from '../../dsl/layout-edits';
-import { LayoutLab } from '../../engines/layout-engine.js';
+import { LayoutLab } from '../../engines/layout-engine';
 import {
   SculptLab,
   type BrushSettings,
   type DabOptions,
   type DabResult,
   type Timeline,
-} from '../../engines/sculpt-engine.js';
+} from '../../engines/sculpt-engine';
 import { documentIdentity, normalize, routingFingerprint } from '../../model/document';
 import { clamp, clone } from '../../model/geometry';
 import type { Diagram, NodeGeometry, Point } from '../../model/types';

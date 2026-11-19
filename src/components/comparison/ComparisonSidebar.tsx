@@ -3,9 +3,9 @@ import {
   ExplorerLab,
   type ComparisonConfig,
   type ComparisonRun,
-} from '../../engines/explorer-engine.js';
-import { LayoutLab } from '../../engines/layout-engine.js';
-import type { LayoutScope } from '../../engines/layout-engine.js';
+} from '../../engines/explorer-engine';
+import { LayoutLab } from '../../engines/layout-engine';
+import type { LayoutScope } from '../../engines/layout-engine';
 import { ENGINE_PARAMS, paramAttr } from '../../dsl/syntax';
 import { INTENT_LABELS, intentPlacements } from '../../model/edits';
 import type { IntentRole, LayoutAlgorithmId } from '../../model/types';

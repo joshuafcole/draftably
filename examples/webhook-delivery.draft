@@ -1,0 +1,26 @@
+diagram "Webhook delivery with one retry" version=1
+subtitle "The sender does not wait, so the receiver answers twice"
+
+# A sequence of sends: no sender waits, one message gets two replies, and actions show each side's own work.
+footnote "One failed attempt, then success."
+
+node app "Billing app"
+node hooks "Webhook worker" color=violet
+node shop "Merchant server" color=amber
+
+edge m1 app -> hooks "invoice.paid event" message=send
+action a1 hooks "sign the payload"
+edge m2 hooks -> shop "POST /webhooks, first try" message=send
+edge m3 shop -> hooks "503 Service Unavailable" answers=m2
+action a2 hooks "wait 30 seconds"
+edge m4 hooks -> shop "POST /webhooks again" message=send
+action a3 shop "check the signature\nand store the event"
+edge m5 shop -> hooks "200 OK" answers=m4
+edge m6 hooks -> app "delivered" answers=m1
+
+phase first "First attempt" m2 m3
+phase retry "Retry" a2 m4 a3 m5
+
+note "The worker gives up after 5 tries." near=a2
+
+layout root sequence

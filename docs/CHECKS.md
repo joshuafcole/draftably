@@ -4,7 +4,7 @@
 
 ```sh
 pnpm check:fast   # typecheck, lint, format check, Vitest: about 10 seconds
-pnpm check        # check:fast, the engine suites (about 80 seconds) and the build
+pnpm check        # check:fast, the engine suites (about 20 seconds) and the build
 ```
 
 Run `check:fast` while iterating and `check` before pushing. CI runs `pnpm release:check`, which
@@ -28,6 +28,16 @@ to avoid a second runtime build.
 | `tests/engine-parity.ts`                | 320 comparisons of the engines against the original release in `reference/v7/` across 13 examples and 11 algorithms. Timing fields are excluded.                                                                                                                                                                                                         |
 
 Engine reports are written to the ignored `tmp/verification-current/` folder.
+
+`pnpm test:engines` runs the three engine suites at once (`scripts/test-engines.ts`). Parity takes
+nearly all of the time, so it runs as one share per core: `tests/engine-parity.ts --shard i/n`
+makes every n-th group of comparisons. The runner merges the reports and fails when a group is
+missing. `--jobs N` sets the number of shares. Each suite still runs alone with `node`, and
+`node tests/engine-parity.ts` makes all 320 comparisons in one process (about 55 seconds). Two
+comparisons take 10 seconds each, so more cores do not bring a run below about 15 seconds.
+
+`tests/engine-helpers.test.ts` (Vitest) checks pure helpers of the layout and routing engines:
+topology, settings, targets, path geometry, ports, conflicts and the heaps.
 
 `pnpm runtime:build && pnpm runtime:pack-check` proves the portable runtime from its package archive.
 `pnpm markdown:build && pnpm markdown:pack-check` builds and installs the Markdown adapter beside
@@ -78,8 +88,8 @@ Performance PRs paste a before → after table.
 
 `pnpm bench:host` (also the last part of `pnpm bench`, or `pnpm bench --only host`) builds the
 runtime and loads the built `<draft-diagram>` on plain pages in Chromium, with no bundler. It
-measures the budgets in [the host contract plan](intent/host-contract/plan.md#performance) and
-prints median and p95 per row with ✓ or ✗. Add `--runs N` (default 5) and `--strict` to fail on ✗.
+measures the budgets below and prints median and p95 per row with ✓ or ✗. Add `--runs N`
+(default 5) and `--strict` to fail on ✗.
 
 | Area                                         | Budget                                                    |
 | -------------------------------------------- | --------------------------------------------------------- |
@@ -216,6 +226,12 @@ installed Playwright Chromium) against a temporary copy of `examples/checkout.dr
 redoes, appends a connected node from outside, restarts the server, writes invalid source, and
 races an outside write against a viewer save. At each step it compares the browser's geometry
 with `pnpm draftably inspect --json`. Screenshots go to `tmp/proof/`. It takes about 10 seconds.
+
+`pnpm build && pnpm prove:sequence` drives the editor on a copy of
+`examples/checkout-sequence.draft` with one click and then keys only. It checks that Tab and
+Shift Tab add a message, select it and put the caret in its label, that Alt with an arrow moves a
+message and keeps the selection and the keys, and that a move the file cannot keep changes
+nothing. Screenshots go to `tmp/proof-sequence/`.
 It launches full Chromium rather than the headless shell the other proofs use, so on a new
 machine run `pnpm exec playwright-core install chromium` once; without it the proof stops at
 once and prints that command.

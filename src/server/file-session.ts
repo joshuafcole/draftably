@@ -12,6 +12,8 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import path from 'node:path';
 import { checkSource } from '../dsl/compile';
 import { DslError } from '../dsl/syntax';
+import type { CodeFiles } from '../model/code-src';
+import { codeFolders, readCodeFiles } from './code-files';
 
 export interface SessionInfo {
   name: string;
@@ -20,6 +22,8 @@ export interface SessionInfo {
   revision: string;
   /** Where the file's relative links start: its git root, or its folder outside a repository. */
   root: string;
+  /** The files its `src=` code nodes name, read from beside it. */
+  files: CodeFiles;
 }
 
 /** The nearest folder at or above `dir` that holds `.git`, or `dir` when there is none. */
@@ -40,20 +44,70 @@ export interface FileSession {
   close(): void;
 }
 
-export function createFileSession(file: string): FileSession {
+/**
+ * `served` is the folder the viewer serves: `src=` files outside it are refused. It defaults to
+ * the file's git root.
+ */
+export function createFileSession(file: string, served?: string): FileSession {
   file = path.resolve(file);
   if (!fs.existsSync(file)) throw Error(`No such file: ${file}`);
   const dir = path.dirname(file),
     name = path.basename(file),
     root = gitRoot(dir);
+  served = path.resolve(served ?? root);
   let source = fs.readFileSync(file, 'utf8'),
-    revision = revisionOf(source);
+    revision = revisionOf(source),
+    files: CodeFiles = {},
+    filesKey = '';
   const clients = new Set<ServerResponse>();
+  const send = (event: string, body: unknown) => {
+    const data = JSON.stringify(body);
+    for (const res of clients) res.write(`event: ${event}\ndata: ${data}\n\n`);
+  };
 
   const broadcast = () => {
-    const data = JSON.stringify({ source, revision });
-    for (const res of clients) res.write(`event: source\ndata: ${data}\n\n`);
+    readFiles();
+    send('source', { source, revision, files });
   };
+
+  // The folders of the files `src=` names are watched too, so editing one redraws the viewer.
+  const codeWatchers = new Map<string, fs.FSWatcher>();
+  let codeTimer: NodeJS.Timeout | undefined;
+  /** Read the `src=` files again and follow their folders. True when any text changed. */
+  function readFiles() {
+    files = readCodeFiles(source, file, served!);
+    const folders = new Set(codeFolders(source, file, served!).filter(d => d !== dir));
+    for (const [d, w] of codeWatchers)
+      if (!folders.has(d)) {
+        w.close();
+        codeWatchers.delete(d);
+      }
+    for (const d of folders) {
+      if (codeWatchers.has(d) || !fs.existsSync(d)) continue;
+      // A folder that cannot be watched (EACCES, ENOSPC) only loses live redraws.
+      try {
+        const w = fs.watch(d, () => {
+          clearTimeout(codeTimer);
+          codeTimer = setTimeout(checkFiles, 40);
+        });
+        w.on('error', () => {
+          w.close();
+          codeWatchers.delete(d);
+        });
+        codeWatchers.set(d, w);
+      } catch {
+        // Not watched; the file is still read on each change to the .draft.
+      }
+    }
+    const key = JSON.stringify(files),
+      changed = key !== filesKey;
+    filesKey = key;
+    return changed;
+  }
+  const checkFiles = () => {
+    if (readFiles()) send('files', { files, revision });
+  };
+  readFiles();
 
   // Writes made here already updated `revision`, so their watcher events are ignored.
   let timer: NodeJS.Timeout | undefined;
@@ -71,7 +125,13 @@ export function createFileSession(file: string): FileSession {
     broadcast();
   };
   const watcher = fs.watch(dir, (_event, changed) => {
-    if (changed && changed !== name) return;
+    // A `src=` file beside the .draft changed.
+    if (changed && changed !== name) {
+      if (!Object.keys(files).length) return;
+      clearTimeout(codeTimer);
+      codeTimer = setTimeout(checkFiles, 40);
+      return;
+    }
     clearTimeout(timer);
     timer = setTimeout(check, 40);
   });
@@ -115,7 +175,8 @@ export function createFileSession(file: string): FileSession {
       revision = revisionOf(source);
       return json(res, 500, { error: `Could not write ${name}: ${(error as Error).message}` });
     }
-    json(res, 200, { revision });
+    readFiles();
+    json(res, 200, { revision, files });
   };
 
   return {
@@ -124,7 +185,15 @@ export function createFileSession(file: string): FileSession {
       const url = (req.url ?? '').split('?')[0];
       if (url === '/api/session' && req.method === 'GET') {
         check();
-        json(res, 200, { name, path: file, source, revision, root } satisfies SessionInfo);
+        checkFiles();
+        json(res, 200, {
+          name,
+          path: file,
+          source,
+          revision,
+          root,
+          files,
+        } satisfies SessionInfo);
       } else if (url === '/api/source' && req.method === 'PUT') {
         let body = '';
         req.setEncoding('utf8');
@@ -144,8 +213,10 @@ export function createFileSession(file: string): FileSession {
     },
     close() {
       watcher.close();
+      for (const w of codeWatchers.values()) w.close();
       clearInterval(heartbeat);
       clearTimeout(timer);
+      clearTimeout(codeTimer);
       for (const res of clients) res.end();
       clients.clear();
     },

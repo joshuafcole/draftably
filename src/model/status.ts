@@ -17,6 +17,7 @@ import {
   type Swatch,
 } from './appearance';
 import { descendants, pastRect, styleOf } from './graph';
+import type { MessageKind } from './markers';
 import type { Diagram, DiagramEdge } from './types';
 
 export type Status = 'same' | 'added' | 'removed' | 'changed' | 'context';
@@ -151,6 +152,7 @@ export const isDiff = (doc: Diagram) =>
   !!doc.appearance.compare ||
   Object.values(doc.styles).some(s => s.status) ||
   doc.graph.edges.some(e => e.status) ||
+  doc.graph.nodes.some(n => n.code?.ranges?.some(r => r.status)) ||
   [...doc.graph.nodes, ...doc.graph.groups].some(o => o.wasAt || ('wasSize' in o && o.wasSize));
 
 /**
@@ -205,16 +207,26 @@ export const listedStates = (doc: Diagram) => (doc.appearance.states ?? []).filt
 export function withState(doc: Diagram, id: string): Diagram {
   const state = doc.appearance.states?.find(s => s.id === id);
   if (!state) return doc;
-  /** The IDs listed, with every member of a listed group. */
-  const expand = (ids: readonly string[]) => {
+  // A listed code range puts its node in focus; the node's other ranges then fade with the rest.
+  const viaRange = new Set<string>(),
+    rangeIds = new Map(
+      doc.graph.nodes.flatMap(n => n.code?.ranges?.map(r => [`${n.id}.${r.name}`, n.id]) ?? []),
+    );
+  /** The IDs listed, with every member of a listed group and the node of a listed code range. */
+  const expand = (ids: readonly string[], ranges?: Set<string>) => {
     const out = new Set<string>();
     for (const x of ids) {
       out.add(x);
+      const node = rangeIds.get(x);
+      if (node && !ids.includes(node)) {
+        out.add(node);
+        ranges?.add(node);
+      }
       if (doc.graph.groups.some(g => g.id === x)) for (const d of descendants(doc, x)) out.add(d);
     }
     return out;
   };
-  const focus = expand(state.ids),
+  const focus = expand(state.ids, viaRange),
     context = expand(state.context ?? []);
   const parent = new Map(
     [...doc.graph.nodes, ...doc.graph.groups].map(o => [o.id, o.parentId] as const),
@@ -242,7 +254,15 @@ export function withState(doc: Diagram, id: string): Diagram {
           : rest;
     return spot ? { ...e, spot } : e;
   });
-  return { ...doc, styles, graph: { ...doc.graph, edges }, drawnState: id };
+  const nodes = doc.graph.nodes.map(n => {
+    if (!n.code?.ranges || !focus.has(n.id)) return n;
+    const ranges = n.code.ranges.map(r => {
+      const spot = focus.has(`${n.id}.${r.name}`) ? on : viaRange.has(n.id) ? rest : undefined;
+      return spot ? { ...r, spot } : r;
+    });
+    return { ...n, code: { ...n.code, ranges } };
+  });
+  return { ...doc, styles, graph: { ...doc.graph, nodes, edges }, drawnState: id };
 }
 
 /**
@@ -261,7 +281,11 @@ export function usedStatuses(doc: Diagram): StatusCount[] {
       count:
         status === 'moved' || status === 'resized'
           ? places[status]
-          : marks.filter(m => m === status).length,
+          : marks.filter(m => m === status).length +
+            doc.graph.nodes.reduce(
+              (n, o) => n + (o.code?.ranges?.filter(r => r.status === status).length ?? 0),
+              0,
+            ),
       lines: doc.graph.edges.filter(e => e.status === status).length,
     }))
     .filter(c => c.count || c.lines);
@@ -282,4 +306,95 @@ export function placeChanges(doc: Diagram): Record<PlaceChange, number> {
 
 /** The color key's rows: a diff draws no family colors, so it lists only its statuses. */
 export const drawnLegend = (doc: Diagram): LegendEntry[] =>
-  isDiff(doc) ? [] : (doc.appearance.legend ?? []);
+  isDiff(doc)
+    ? []
+    : [
+        ...(doc.appearance.legend ?? []),
+        ...messageKey(doc),
+        // Bars are drawn only with `activations=on`, and only then need a row.
+        ...(doc.layout.sequence?.activations?.length
+          ? [{ activation: true as const, label: 'at work on a call' }]
+          : []),
+        // A sequence's rows stand at even steps, so every one says that they are not a clock.
+        ...(doc.layout.sequence ? [{ caption: true as const, label: SEQUENCE_CAPTION }] : []),
+      ];
+
+/** What every sequence says under its drawing. */
+export const SEQUENCE_CAPTION = 'Rows show order, not elapsed time.';
+
+/**
+ * The events that belong with one event of a sequence: a message, the reply that answers it,
+ * and the message a reply answers. Only pairs the file states, never a guess from direction.
+ */
+export function replyPair(doc: Diagram, id: string): string[] {
+  const edge = doc.graph.edges.find(e => e.id === id);
+  if (!edge || doc.layout.edges[id]?.row === undefined) return [];
+  return [
+    id,
+    ...(edge.replyTo ? [edge.replyTo] : []),
+    ...doc.graph.edges.filter(e => e.replyTo === id).map(e => e.id),
+  ];
+}
+
+/**
+ * A sequence in words, for a reader who cannot see it: the participants, then each event in
+ * order with its kind. An exported SVG carries it as its description unless the host gives one.
+ */
+export function sequenceDescription(doc: Diagram): string | undefined {
+  if (!doc.layout.sequence) return undefined;
+  const name = new Map(doc.graph.nodes.map(n => [n.id, n.title.split('\n')[0]])),
+    step = new Map(doc.graph.edges.map((e, i) => [e.id, i + 1])),
+    kind = (e: DiagramEdge) =>
+      e.message === 'reply'
+        ? e.replyTo && step.has(e.replyTo)
+          ? `reply to step ${step.get(e.replyTo)}`
+          : 'reply'
+        : e.message && e.message !== 'interaction' && e.message !== 'action'
+          ? MESSAGE_LABELS[e.message]
+          : '';
+  const events = doc.graph.edges.map((e, i) => {
+    const text = e.label.replace(/\s+/g, ' ').trim(),
+      who =
+        e.message === 'action'
+          ? `${name.get(e.from)} does`
+          : e.from === e.to
+            ? `${name.get(e.from)} to itself`
+            : `${name.get(e.from)} to ${name.get(e.to)}`;
+    return `${i + 1}. ${who}${text ? `: ${text}` : ''}${kind(e) ? ` (${kind(e)})` : ''}.`;
+  });
+  return [
+    `Sequence between ${[...name.values()].join(', ')}, in order from top to bottom.`,
+    ...events,
+  ].join(' ');
+}
+
+/** What each kind of message means, as its row of the key says it. */
+const MESSAGE_LABELS: Record<MessageKind, string> = {
+  interaction: 'message',
+  call: 'call: the sender waits',
+  send: 'send: the sender does not wait',
+  reply: 'reply',
+  outcome: 'result shown',
+  action: 'local action',
+};
+
+/**
+ * The key a sequence draws for its kinds of message: one row for each mark in use, so a reader
+ * never has to guess what a solid head or a box means. Nothing unless a message has a kind. A
+ * plain message and a shown result draw the same arrow, so they share a row.
+ */
+export function messageKey(doc: Diagram): LegendEntry[] {
+  const used = new Set(doc.graph.edges.flatMap(e => (e.message ? [e.message] : [])));
+  if (!used.size) return [];
+  // A message with no kind draws the plain arrow too, so it reads as a message.
+  if (doc.graph.edges.some(e => !e.message && !e.dashed && e.directed)) used.add('interaction');
+  const plain = (['interaction', 'outcome'] as const).filter(k => used.has(k));
+  return [
+    ...(plain.length
+      ? [{ message: plain[0], label: plain.map(k => MESSAGE_LABELS[k]).join(' / ') }]
+      : []),
+    ...(['call', 'send', 'reply', 'action'] as const)
+      .filter(k => used.has(k))
+      .map(k => ({ message: k, label: MESSAGE_LABELS[k] })),
+  ];
+}

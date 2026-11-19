@@ -22,8 +22,11 @@ import {
 } from 'pdf-lib';
 import { compile } from '../dsl/compile';
 import { projectScene } from '../dsl/project';
+import { inlineSources } from '../dsl/inline-sources';
 import { formatSource } from '../dsl/syntax';
-
+import type { CodeFiles } from '../model/code-src';
+import { cliRootName, readCodeFiles } from '../server/code-files';
+import { gitRoot } from '../server/file-session';
 import { FACES, type FaceId } from '../model/fonts';
 import { listedStates, withState } from '../model/status';
 import { svgHref } from './links';
@@ -50,6 +53,8 @@ export interface PdfOptions {
 export interface PdfInput {
   name: string;
   source: string;
+  /** The files its `src=` code nodes name; see `readCodeFiles`. */
+  files?: CodeFiles;
 }
 
 /** Fixed page sizes in CSS pixels (96 per inch), portrait; slide is 16:9 and always landscape. */
@@ -88,7 +93,16 @@ export function pdfInputs(args: string[]): PdfInput[] {
           .map(n => path.join(f, n))
       : [f],
   );
-  return files.map(f => ({ name: f, source: fs.readFileSync(path.resolve(f), 'utf8') }));
+  return files.map(f => {
+    const full = path.resolve(f),
+      source = fs.readFileSync(full, 'utf8'),
+      root = gitRoot(path.dirname(full));
+    return {
+      name: f,
+      source,
+      files: readCodeFiles(source, full, root, cliRootName(root)),
+    };
+  });
 }
 
 interface Sheet {
@@ -106,7 +120,7 @@ async function sheets(inputs: PdfInput[], opts: PdfOptions) {
     const fail = (lines: string[]) => {
       throw Error(`${input.name} has errors; fix them or leave it out. ${lines.join(' ')}`);
     };
-    const scene = await compile(input.source).catch((e: Error) => fail([e.message]));
+    const scene = await compile(input.source, input.files).catch((e: Error) => fail([e.message]));
     const errors = scene.diagnostics.filter(d => d.level === 'error');
     if (errors.length) fail(errors.map(d => `${d.line ? `Line ${d.line}: ` : ''}${d.message}`));
     const doc = projectScene(scene),
@@ -283,10 +297,14 @@ export async function buildPdf(inputs: PdfInput[], opts: PdfOptions = {}) {
       for (let n = 2; used.has(name); n++)
         name = path.basename(input.name, '.draft') + `-${n}.draft`;
       used.add(name);
-      await pdf.attach(new TextEncoder().encode(formatSource(input.source)), name, {
-        mimeType: 'text/plain',
-        description: title,
-      });
+      await pdf.attach(
+        new TextEncoder().encode(formatSource(inlineSources(input.source, input.files))),
+        name,
+        {
+          mimeType: 'text/plain',
+          description: title,
+        },
+      );
     }
   }
   return { bytes: await pdf.save(), pages: pdf.getPageCount() };

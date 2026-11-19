@@ -120,7 +120,7 @@ lower the padding. A file can still set `theme drafting padding-y=10` for a dens
   - add-metric e1: GET → Client metric store loops under test_metric_catalog.
 - **Where**:
   - `find()` / `findIn()` and the side choice in
-    [src/engines/routing-engine.js](../../../src/engines/routing-engine.js). Each edge is routed
+    [src/engines/routing/find.ts](../../../src/engines/routing/find.ts). Each edge is routed
     alone; the score prices length and bends, and `HOOK_PENALTY` (80) applies only to a route
     that leaves and enters by the same side. An entry into the side facing away from the source
     pays nothing extra.
@@ -214,7 +214,7 @@ job`).
   - Three-sided fans: pgm v0/e2 (server → five stores over top, right and bottom); tasks e1
     (Prisma entered from below twice and from the right).
 - **Where**: `vertexClosed` and the side loop in `find`'s candidate scoring in
-  [src/engines/routing-engine.js](../../../src/engines/routing-engine.js) ("A diamond's ports sit
+  [src/engines/routing/sidepairs.ts](../../../src/engines/routing/sidepairs.ts) ("A diamond's ports sit
   on its four vertices…"); diamond placement within a rank in the layout recipes (centre vs
   column line).
 - **Approach**:
@@ -241,7 +241,7 @@ job`).
   - hn-offline e2: 3 flips from Upstream shifting under the wider server.
   - scan e1: Analysis cache lands bottom left, fingerprint runs ~700px back.
 - **Where**: `layeredTarget` in
-  [src/engines/layout-engine.js](../../../src/engines/layout-engine.js) (#73's prior applies only
+  [src/engines/layout/layered.ts](../../../src/engines/layout/layered.ts) (#73's prior applies only
   to flat `engine=layered` roots); the stress/force refinement; `foldRanks` cut choice for
   flow-down folds.
 - **Approach**:
@@ -266,7 +266,7 @@ job`).
   - hn-deploy e1: four lines in a 50px gap at 12/16/39/34.
   - kroger e1: router → Postgres and `error toast` both run in the server's top inset.
 - **Where**: `slot()`, `fan()` and `TIGHT_PITCH` / `FAN_PITCH` in
-  [src/engines/routing-engine.js](../../../src/engines/routing-engine.js); the tidy pass's
+  [src/engines/routing/ports.ts](../../../src/engines/routing/ports.ts); the tidy pass's
   corridor spacing.
 - **Approach**: after routing, re-space each corridor (lines within 40px running the same way) to
   one pitch, the smallest any of its fans needs, and align a fan's trunks to one turn line when

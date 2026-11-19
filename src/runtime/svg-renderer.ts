@@ -21,10 +21,30 @@ import { noteMarkup, placeNotes } from '../model/note';
 import { detailInk, drawnSwatch, participantAccent } from '../model/colors';
 import { truncateText } from '../model/fonts';
 import { drawingBounds } from '../model/bounds';
+import {
+  CODE_ADVANCE,
+  CODE_TYPE,
+  codeLayout,
+  codeRuns,
+  columnX,
+  lineBand,
+  moreText,
+  rowNumber,
+  wrapMarkPath,
+} from '../model/code';
+import { codeColors, codeTokens, coloredRuns } from '../model/highlight';
+import { BAND_OPACITY, rangeMarks, type RangeMark } from '../model/ranges';
 import { cellsBandOf, isCell, isOpenCell, styleOf } from '../model/graph';
 import { brokenRectPath } from '../model/geometry';
 import { ICONS } from '../model/icons';
-import { edgeLabelLines, edgeLabelType, groupTitleLines, nodeLabel } from '../model/labels';
+import {
+  edgeLabelLines,
+  edgeLabelType,
+  groupTitleLines,
+  nodeLabel,
+  PHASE_TAB,
+  phaseLabelLines,
+} from '../model/labels';
 import { groupLinkMark, LINK_MARK_PATH, linkMark, linkTarget, type LinkMark } from '../model/link';
 import {
   headOf,
@@ -39,6 +59,7 @@ import { computeRoutes, HALO_WIDTH } from '../model/routes';
 import { findBundles } from '../model/bundles';
 import {
   drawnLegend,
+  sequenceDescription,
   edgeInk,
   HALO_GAP,
   haloInk,
@@ -153,6 +174,101 @@ function outline(shape: string, r: Rect, radius: number, paint: string, ink = ''
     return `<rect x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" rx="${radius}" stroke-dasharray="${PORTAL_DASH}" ${paint}/>`;
   const rx = shape === 'pill' ? r.h / 2 : radius;
   return `<rect x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" rx="${rx}" ${paint}/>`;
+}
+
+/**
+ * A code node's caption band, line numbers and listing. Each run of characters is a `tspan` at
+ * its own column, so no renderer has to keep spaces.
+ */
+function codeMarkup(
+  n: Diagram['graph']['nodes'][number],
+  r: Rect,
+  look: ResolvedAppearance,
+  c: { fill: string; stroke: string; ink: string },
+  p: StatusPaint,
+) {
+  const code = n.code!,
+    laid = codeLayout(code, n.title, look, { width: r.w, height: r.h }),
+    muted = detailInk(look, c),
+    mid = CODE_TYPE.lineHeight / 2,
+    tokens = codeTokens(code),
+    colors = codeColors(look, c.fill, c.ink),
+    out: string[] = [];
+  // Added and removed diff lines: a band behind every row of the line.
+  tokens?.forEach((t, line) => {
+    const band = (t.line === 'added' || t.line === 'removed') && lineBand(laid, line);
+    if (band)
+      out.push(
+        `<rect x="${r.x + 1}" y="${r.y + band.y}" width="${r.w - 2}" height="${band.h}" fill="${colors[t.line as 'added'].fill}"/>`,
+      );
+  });
+  // Named ranges: bands under the text and bars in the left margin; their tags go on top.
+  const marks = rangeMarks(code, laid, look, r.w, c.fill);
+  for (const m of marks) out.push(rangeMarkup(m, r));
+  if (laid.caption)
+    out.push(
+      `<line x1="${r.x}" y1="${r.y + laid.caption}" x2="${r.x + r.w}" y2="${r.y + laid.caption}" stroke="${c.stroke}" stroke-width="1" stroke-opacity="0.5"/>`,
+      `<text x="${r.x + laid.gutter}" y="${r.y + laid.caption / 2}" dominant-baseline="central" ${font(look.annotation)} fill="${c.ink}"${strikeAttr(p)}>${esc(truncateText(n.title, r.w - 2 * laid.gutter, look.annotation))}</text>`,
+    );
+  const spans: string[] = [],
+    numbers: string[] = [];
+  laid.rows.forEach((row, i) => {
+    const y = r.y + row.y + mid,
+      number = rowNumber(code, laid, row, i);
+    if (number)
+      numbers.push(
+        `<tspan x="${r.x + laid.gutter + (laid.numberCols - number.length) * CODE_ADVANCE}" y="${y}">${number}</tspan>`,
+      );
+    const t = tokens?.[row.line],
+      bandInk = t?.line === 'added' || t?.line === 'removed' ? colors[t.line].ink : undefined;
+    for (const run of coloredRuns(row, codeRuns(row, code.lines[row.line]), t)) {
+      const ink = run.cls ? colors.tokens[run.cls] : bandInk;
+      spans.push(
+        `<tspan x="${r.x + columnX(laid, run.col)}" y="${y}"${ink ? ` fill="${ink}"` : ''}>${esc(run.text)}</tspan>`,
+      );
+    }
+    if (row.wraps)
+      out.push(
+        `<path d="${wrapMarkPath(r.x + r.w - laid.gutter / 2, r.y + row.y)}" fill="none" stroke="${muted}" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/>`,
+      );
+  });
+  if (laid.moreShown)
+    spans.push(
+      `<tspan x="${r.x + columnX(laid, 0)}" y="${r.y + laid.moreY + mid}" fill="${muted}">${esc(moreText(laid.more))}</tspan>`,
+    );
+  if (numbers.length)
+    out.push(
+      `<text dominant-baseline="central" ${font(CODE_TYPE)} fill="${muted}">${numbers.join('')}</text>`,
+    );
+  if (spans.length)
+    out.push(
+      `<text dominant-baseline="central" ${font(CODE_TYPE)} fill="${c.ink}"${strikeAttr(p)}>${spans.join('')}</text>`,
+    );
+  for (const m of marks) if (m.tag) out.push(tagMarkup(m, r, look));
+  return out.join('');
+}
+
+/** A range's band and its bar in the left margin. */
+function rangeMarkup(m: RangeMark, r: Rect) {
+  const fade = m.opacity < 1 ? ` opacity="${m.opacity}"` : '';
+  return (
+    `<g class="code-range"${fade}>` +
+    `<rect x="${r.x + 1}" y="${r.y + m.y}" width="${r.w - 2}" height="${m.h}" fill="${m.band}" fill-opacity="${BAND_OPACITY}"/>` +
+    `<line x1="${r.x + m.barX}" y1="${r.y + m.y}" x2="${r.x + m.barX}" y2="${r.y + m.y + m.h}" stroke="${m.bar}" stroke-width="${m.barW}"${m.dash ? ` stroke-dasharray="${m.dash}"` : ''}/>` +
+    '</g>'
+  );
+}
+
+/** A range's label: a tag in its band's color at the right margin. */
+function tagMarkup(m: RangeMark, r: Rect, look: ResolvedAppearance) {
+  const t = m.tag!,
+    fade = m.opacity < 1 ? ` opacity="${m.opacity}"` : '';
+  return (
+    `<g class="code-range-tag"${fade}>` +
+    `<rect x="${r.x + t.x}" y="${r.y + t.y}" width="${t.w}" height="${t.h}" rx="3" fill="${m.band}"/>` +
+    `<text x="${r.x + t.x + t.w / 2}" y="${r.y + t.y + t.h / 2}" text-anchor="middle" dominant-baseline="central" ${font(look.annotation)} fill="${t.ink}">${esc(t.text)}</text>` +
+    '</g>'
+  );
 }
 
 /** The accent ring around an object a `rest=plain` state focuses. */
@@ -310,6 +426,7 @@ function sceneMarkup(
       `<line x1="${x}" y1="${r.y + r.h}" x2="${x}" y2="${r.y + r.h + n.lifeline}" stroke="${look.muted}" stroke-width="${LIFELINE.width}" stroke-dasharray="${LIFELINE.dash}"/>`,
     );
   }
+  out.push(...backdrop.bars);
   const under = surfaces(doc, look);
   // Lines a bundle carries are drawn as its trunk (model/bundles.ts).
   const bundles = shared ? [] : findBundles(doc, vg, routes),
@@ -400,14 +517,16 @@ function sceneMarkup(
           accent && style.shape === 'box'
             ? `<path d="${accentPath(r, radius)}" fill="${accent}"/>`
             : '',
-          `<text x="${r.x + label.x}" y="${r.y + label.y}" text-anchor="middle" dominant-baseline="central" ${font(look.title)} fill="${ink}"${strikeAttr(p)}>` +
-            label.lines
-              .map(
-                (line, i) =>
-                  `<tspan x="${r.x + label.x}" y="${r.y + label.y + label.offsets[i]}"${line.detail ? ` ${detail}` : ''}>${esc(line.text)}</tspan>`,
-              )
-              .join('') +
-            '</text>',
+          n.code
+            ? codeMarkup(n, r, look, c, p)
+            : `<text x="${r.x + label.x}" y="${r.y + label.y}" text-anchor="middle" dominant-baseline="central" ${font(look.title)} fill="${ink}"${strikeAttr(p)}>` +
+              label.lines
+                .map(
+                  (line, i) =>
+                    `<tspan x="${r.x + label.x}" y="${r.y + label.y + label.offsets[i]}"${line.detail ? ` ${detail}` : ''}>${esc(line.text)}</tspan>`,
+                )
+                .join('') +
+              '</text>',
           badge
             ? `<rect x="${r.x + r.w - bw + 6}" y="${r.y - bh / 2}" width="${bw}" height="${bh}" rx="${bh / 2}" fill="${c.stroke}"/>` +
               `<text x="${r.x + r.w - bw / 2 + 6}" y="${r.y}" text-anchor="middle" dominant-baseline="central" ${font(look.annotation)} fill="${look.canvas}">${esc(badge)}</text>`
@@ -501,12 +620,14 @@ function openSvg(
   opts: SvgOptions,
 ) {
   const prefix = opts.idPrefix ?? 'draft',
+    // A sequence says itself in words when the host gives no description.
+    description = opts.description ?? sequenceDescription(doc),
     css = LINK_CSS.replace(/a\.link/g, `#${prefix}-svg a.link`),
     out = new SvgChunks(opts.maxOutputBytes);
   out.push(
-    `<svg xmlns="http://www.w3.org/2000/svg" id="${prefix}-svg" role="img" aria-labelledby="${prefix}-title${opts.description ? ` ${prefix}-description` : ''}" viewBox="${x} ${y} ${w} ${h}" width="${w}" height="${h}" data-theme="${look.theme}">`,
+    `<svg xmlns="http://www.w3.org/2000/svg" id="${prefix}-svg" role="img" aria-labelledby="${prefix}-title${description ? ` ${prefix}-description` : ''}" viewBox="${x} ${y} ${w} ${h}" width="${w}" height="${h}" data-theme="${look.theme}">`,
     `<title id="${prefix}-title">${esc(opts.title ?? doc.title)}</title>`,
-    opts.description ? `<desc id="${prefix}-description">${esc(opts.description)}</desc>` : '',
+    description ? `<desc id="${prefix}-description">${esc(description)}</desc>` : '',
     opts.metadata ?? '',
     `<defs><style${opts.styleNonce ? ` nonce="${esc(opts.styleNonce)}"` : ''}>${opts.fontCss ?? ''}${doc.graph.nodes.some(n => n.href) || doc.graph.groups.some(g => g.href) ? css : ''}</style>` +
       markers +
@@ -593,7 +714,7 @@ function statesSvg(doc: Diagram, look: ResolvedAppearance, opts: SvgOptions): st
  */
 export function sequenceBackdrop(doc: Diagram, look: ResolvedAppearance) {
   const seq = doc.layout.sequence;
-  if (!seq) return { panel: [], phases: [] };
+  if (!seq) return { panel: [], phases: [], bars: [] };
   const { panel } = seq,
     band = bandSwatch(look),
     tab = seq.phaseX ?? panel.x;
@@ -602,11 +723,20 @@ export function sequenceBackdrop(doc: Diagram, look: ResolvedAppearance) {
       panelDrawn(doc) &&
         `<rect class="sequence-panel" x="${panel.x}" y="${panel.y}" width="${panel.w}" height="${panel.h}" rx="${Math.min(10, look.radius + 4)}" fill="${panelSwatch(look).fill}" stroke="${band.stroke}" stroke-opacity="0.6"/>`,
     ].filter(Boolean) as string[],
+    // Activation bars go over the lifelines and under the messages, which end on their sides.
+    bars: (seq.activations ?? []).map(b => {
+      // A bar fades with its call when an emphasis state leaves the call out.
+      const dim = doc.graph.edges.find(e => e.id === b.call)?.spot === 'dim';
+      return `<rect class="sequence-activation" data-call="${esc(b.call)}" x="${b.x}" y="${b.y}" width="${b.w}" height="${b.h}" rx="1.5" fill="${look.canvas}" stroke="${look.connection}" stroke-width="1.2"${dim ? fade(statusPaint(look, undefined, 'dim')) : ''}/>`;
+    }),
     // Alternate phases are tinted, so neighbours read apart even without their divider.
     phases: seq.phases.flatMap((ph, i) => [
       `<rect class="sequence-phase" data-phase="${esc(ph.id)}" x="${panel.x}" y="${ph.y}" width="${panel.w}" height="${ph.h}" fill="${band.stroke}" fill-opacity="${phaseOpacity(i)}"/>`,
       `<line x1="${panel.x}" x2="${panel.x + panel.w}" y1="${ph.y}" y2="${ph.y}" stroke="${band.stroke}" stroke-opacity="0.5"/>`,
-      `<text x="${tab + PHASE_TAB}" y="${ph.y + PHASE_TAB}" dominant-baseline="hanging" ${font(look.annotation)} fill="${look.muted}">${esc(ph.label)}</text>`,
+      ...phaseLabelLines(ph.label, look).map(
+        (line, k) =>
+          `<text x="${tab + PHASE_TAB}" y="${ph.y + PHASE_TAB + (k + 0.5) * look.annotation.lineHeight}" dominant-baseline="central" ${font(look.annotation)} fill="${look.muted}">${esc(line)}</text>`,
+      ),
     ]),
   };
 }
@@ -620,8 +750,7 @@ function paintSurface(surface: Surface, mark: (paint: string) => string, attr = 
   ];
 }
 
-/** Inset of a phase label from its band's top left corner. */
-export const PHASE_TAB = 8;
+export { PHASE_TAB };
 
 /** A thin stripe across the top of a box, inside its rounded corners. */
 export function accentPath(r: Rect, radius: number) {

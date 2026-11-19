@@ -1,5 +1,5 @@
 import { createMemo, For, Show } from 'solid-js';
-import { SculptLab } from '../../engines/sculpt-engine.js';
+import { SculptLab } from '../../engines/sculpt-engine';
 import { center } from '../../model/geometry';
 import { findNode, isGroup, styleOf } from '../../model/graph';
 import { portPoint, sideToward, SIDE_VECTORS } from '../../model/routes';

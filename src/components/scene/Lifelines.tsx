@@ -36,10 +36,11 @@ export function Lifelines(props: {
 }
 
 /**
- * A sequence diagram's panel (`part="panel"`, under the groups) or its phase bands
- * (`part="phases"`, over the groups' column bands), as the SVG export draws them.
+ * A sequence diagram's panel (`part="panel"`, under the groups), its phase bands
+ * (`part="phases"`, over the groups' column bands) or its activation bars (`part="bars"`, over
+ * the lifelines), as the SVG export draws them.
  */
-export function SequenceBackdrop(props: { doc: Diagram; part: 'panel' | 'phases' }) {
+export function SequenceBackdrop(props: { doc: Diagram; part: 'panel' | 'phases' | 'bars' }) {
   const markup = () =>
     props.doc.layout.sequence
       ? sequenceBackdrop(props.doc, resolveAppearance(props.doc.appearance))[props.part].join('')

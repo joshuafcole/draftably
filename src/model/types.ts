@@ -6,7 +6,8 @@ export type PortSide = Side | 'auto';
 export type Direction = 'RIGHT' | 'DOWN';
 export type Theme = 'light' | 'dark';
 import type { DiagramAppearance, Shade } from './appearance';
-import type { EndMarker } from './markers';
+import type { CodeBlock } from './code';
+import type { EndMarker, MessageKind } from './markers';
 import type { Spot, Status } from './status';
 
 export type ShapeKind =
@@ -20,7 +21,9 @@ export type ShapeKind =
   /** A seam between two cells of a `cells` group. */
   | 'marker'
   /** Something outside the drawing, set at its frame after layout (`dsl/portals.ts`). */
-  | 'portal';
+  | 'portal'
+  /** A code listing; the node carries its body in `code`. */
+  | 'code';
 /** A color family: a built-in one, one the file defines, or `auto` for the theme's surface. */
 export type ColorKey = string;
 export type LabelMode = 'center' | 'top' | 'bottom' | 'left' | 'right' | 'detached';
@@ -51,6 +54,8 @@ export interface DiagramNode {
   image?: string;
   /** A sequence participant: length of the dashed lifeline below the box. */
   lifeline?: number;
+  /** A code node's body and options; its title, when set, is a caption above the code. */
+  code?: CodeBlock;
 }
 
 export interface DiagramGroup {
@@ -85,10 +90,20 @@ export interface DiagramEdge {
   tail?: EndMarker;
   emphasis: boolean;
   dashed: boolean;
+  /**
+   * A sequence message's meaning, from `message=`, or `action` for work one participant does
+   * (an `action` line; `from` and `to` are that participant). Unset for a plain message.
+   */
+  message?: MessageKind;
+  /** With `message: 'reply'`: the earlier message this one answers, from `answers=`. */
+  replyTo?: string;
   /** How it differs between two versions of the diagram. */
   status?: Status;
   /** How the drawn emphasis state treats it; see `withState`. */
   spot?: Spot;
+  /** A code node's range the line leaves from or ends at (`edge e1 a -> sql.copy2`). */
+  fromRange?: string;
+  toRange?: string;
 }
 
 export interface NodeLayout extends Rect {
@@ -119,8 +134,16 @@ export interface EdgeLayout {
   lane?: Lane;
   /** From a lane, at route time: where along its target's side the edge arrives, off centre. */
   toOffset?: number;
+  /**
+   * At route time, for an end on a code node's range: the end sits on the left or right side,
+   * this far below the side's middle, at the range's middle line.
+   */
+  fromAt?: number;
+  toAt?: number;
   /** A sequence message: drawn straight between the two lifelines at this height, not routed. */
   row?: number;
+  /** A message between distant lanes: the middle of the gap between lifelines its label sits in. */
+  labelX?: number;
   /**
    * Set by the compiler for a forward line in a `flow` scope: its route planned from the ranks.
    * The quick router takes it as it is when it clears every box.
@@ -326,8 +349,20 @@ export interface SequenceLayout {
    * From `was-order`: each message's row and the phase bands in the older message order, and how
    * much further that order runs down the panel.
    */
-  before?: { rows: Record<string, number>; phases: SequencePhase[]; grow: number };
+  before?: {
+    rows: Record<string, number>;
+    phases: SequencePhase[];
+    grow: number;
+    activations?: Activation[];
+  };
+  /** With `activations=on`: the bars on the lifelines of participants at work on a call. */
+  activations?: Activation[];
+  /** The `activations=on` switch itself, which the Inspector turns on and off. */
+  bars?: true;
 }
+
+/** One activation bar: its participant, the call that opened it, and its box. */
+export type Activation = Rect & { node: string; call: string };
 
 export type SequencePhase = { id: string; label: string; y: number; h: number };
 

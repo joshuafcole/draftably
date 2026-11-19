@@ -13,8 +13,8 @@ import { compile, type Diagnostic, type Scene } from '../dsl/compile';
 import { findConflicts, sceneConflicts } from '../dsl/conflicts';
 import { projectScene, visibleRects } from '../dsl/project';
 import { declaration, layoutStatement, statements } from '../dsl/source-edits';
-import { ExplorerLab } from '../engines/explorer-engine.js';
-import { LayoutLab } from '../engines/layout-engine.js';
+import { ExplorerLab } from '../engines/explorer-engine';
+import { LayoutLab } from '../engines/layout-engine';
 import {
   bare,
   ENGINE_PARAMS,

@@ -70,6 +70,16 @@ and the tool responds the instant you touch it.
 - A collapsed container keeps its header exactly where it was; collapsing must not move the
   title or crowd it.
 
+## Sequences
+
+- **One exchange, explained.** A reader should see who asks, who answers and who does the work
+  without the prose round the diagram. A message says what it is; a mark never stands for a
+  meaning the file did not state.
+- **Order, not time.** Equal steps down the page. Nothing is spaced to suggest how long it took.
+- **Labels stay off lifelines.** A label sits in one gap, and a note stays in the band of its
+  message.
+- **Say what is left out.** One footnote states the scope, such as "error paths are left out".
+
 ## Interaction
 
 - **The wheel zooms.** No modifier, no wheel panning; drag the background to pan, drag an object

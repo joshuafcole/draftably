@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { RouteLab, type RouteInput } from '../src/engines/routing-engine.js';
+import { RouteLab, type RouteInput } from '../src/engines/routing-engine';
 import { checkSource } from '../src/dsl/compile';
 import { projectScene } from '../src/dsl/project';
 

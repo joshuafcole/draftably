@@ -4,8 +4,8 @@
  * (passes, timeline steps, brush strokes) are written as arrangements instead; see
  * `writeArrangement` in `translate.ts`.
  */
-import { LayoutLab } from '../engines/layout-engine.js';
-import { RouteLab } from '../engines/routing-engine.js';
+import { LayoutLab } from '../engines/layout-engine';
+import { RouteLab } from '../engines/routing-engine';
 import type { Diagram, LayoutSettings, Rect, RoutingSettings } from '../model/types';
 import { layoutView, type Scene, type SceneObject } from './compile';
 import { contentOrigin, GROUP_INSET } from './frame';

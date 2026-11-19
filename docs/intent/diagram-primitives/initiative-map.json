@@ -5,10 +5,10 @@
     "slug": "diagram-primitives",
     "scale": "capability",
     "current_phase": "execution",
-    "last_updated": "2026-10-26",
+    "last_updated": "2026-11-12",
     "summary": "One `cells` layout recipe on groups draws touching sequences, tables and byte layouts; cells are ordinary nodes so lines, colors and marks reach them. Image cells build on PR #28.",
     "status": "active",
-    "next_action": "Byron reviews stack #136; m4 (image cells) waits for PR #28 image nodes."
+    "next_action": "m4 (image cells) waits for image nodes, PR #28, still open."
   },
   "artifacts": {
     "intent_brief": {
@@ -261,7 +261,7 @@
     "open_decisions": []
   },
   "implementation": {
-    "status": "planned",
+    "status": "active",
     "repository_snapshot": {
       "root": "/Users/byronwall/Projects/diagram-studio-worktrees/plan-primitives-56d967",
       "revision": "b39be5b",
@@ -327,38 +327,44 @@
       {
         "id": "m1",
         "title": "Sequences of touching cells",
-        "status": "active",
+        "status": "completed",
         "done_when": "inspect --svg shows touching cells, a header band, and a line ending at the cp marker; viewer matches; compiles under engine=layered; pnpm check passes.",
         "outcome": "A group with `layout g cells` draws one strip of touching cells, and a line ends on one cell.",
         "dependencies_introduced": ["router"],
         "proof": "Unit cases plus inspect --svg and viewer pictures of examples/prompt-request.draft.",
         "valid_intermediate_state": "Files without `cells` compile exactly as before.",
         "rollback": "Revert the PR; no file uses `cells` yet.",
-        "evidence": ["PR #135; tests/cells.test.ts"]
+        "evidence": [
+          "PR #135; tests/cells.test.ts",
+          "PR #135 (bd419ad2) on main; tests/cells.test.ts passed 2026-11-12"
+        ]
       },
       {
         "id": "m2",
         "title": "Tables",
-        "status": "active",
+        "status": "completed",
         "done_when": "Schema columns align and foreign-key lines end on rows; a line to the middle of a 3x3 grid crosses one cell and ends with a dot.",
         "outcome": "Cell groups wrap into grids with shared column widths, spans and one-column entity tables.",
         "dependencies_introduced": [],
         "proof": "Schema example picture and a column-width test.",
         "valid_intermediate_state": "Sequences from m1 unchanged.",
         "rollback": "Revert; `columns=` and `span=` errors return.",
-        "evidence": ["PR #137"]
+        "evidence": ["PR #137", "PR #137 (143251ae) on main; tests/cells.test.ts passed 2026-11-12"]
       },
       {
         "id": "m3",
         "title": "Byte layouts",
-        "status": "active",
+        "status": "completed",
         "done_when": "TCP header matches RFC 9293 field for field; PNG chunk shows a variable data field.",
         "outcome": "Cell groups with `unit=` draw byte and bit layouts with rulers and split fields.",
         "dependencies_introduced": [],
         "proof": "TCP and PNG examples compared with their spec figures.",
         "valid_intermediate_state": "Tables and sequences unchanged.",
         "rollback": "Revert; `unit=` and `ruler=` become unknown attributes.",
-        "evidence": ["PR #138"]
+        "evidence": [
+          "PR #138",
+          "PR #138 (0d846709) on main; examples/tcp-header.draft and examples/png-file.draft"
+        ]
       },
       {
         "id": "m4",
@@ -375,14 +381,17 @@
       {
         "id": "m5",
         "title": "Viewer editing of cells",
-        "status": "active",
+        "status": "completed",
         "done_when": "Reordering a cell writes one order line and the file reopens the same.",
         "outcome": "Viewer drag reorders cells and the inspector edits span.",
         "dependencies_introduced": [],
         "proof": "Real pointer browser proof; file round-trip.",
         "valid_intermediate_state": "Cell groups still move as one block.",
         "rollback": "Revert; cells stay file-edited.",
-        "evidence": ["PR #155"]
+        "evidence": [
+          "PR #155",
+          "PR #155 (0441adea) on main; tests/cells.test.ts covers the order line and span edit"
+        ]
       }
     ],
     "cut_line": [
@@ -410,6 +419,11 @@
     {
       "date": "2026-10-26",
       "event": "Implemented m1, m2, m3 and m5 as a gh stack (#134 plan, #135, #137, #138, #155). m4 waits for PR #28. Awaiting Byron review."
+    },
+    {
+      "date": "2026-11-12",
+      "event": "Map caught up with main: m1, m2, m3 and m5 merged through the primitives stack (PRs 135, 137, 138, 155). m4 still waits for PR #28.",
+      "evidence": "git merge-base checks against origin/main 20835652; tests/cells.test.ts passes"
     }
   ],
   "closure": null,

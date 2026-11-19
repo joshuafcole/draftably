@@ -1,5 +1,5 @@
-import { LayoutLab } from '../engines/layout-engine.js';
-import { RouteLab } from '../engines/routing-engine.js';
+import { LayoutLab } from '../engines/layout-engine';
+import { RouteLab } from '../engines/routing-engine';
 import { clamp, clone, finite } from './geometry';
 import { ICONS } from './icons';
 import {
@@ -17,7 +17,7 @@ import {
 } from './appearance';
 import { FONT_ROLES } from './fonts';
 import { EDITORS, type FileConfig } from './link';
-import { MARKERS } from './markers';
+import { MARKERS, MESSAGE_KINDS } from './markers';
 import type { Footnote } from './footnote';
 import { NOTE_SIDES, type Note } from './note';
 import { STATUSES } from './status';
@@ -28,6 +28,7 @@ import type {
   DiagramSettings,
   EdgeLayout,
   NodeLayout,
+  Activation,
   SequenceLayout,
   SequencePhase,
   ShapeKind,
@@ -187,6 +188,7 @@ export function normalize(input: unknown): Diagram {
       ...(n.parentId ? { parentId: n.parentId } : {}),
       ...(n.image ? { image: n.image } : {}),
       ...(finite(n.lifeline) && n.lifeline > 0 ? { lifeline: n.lifeline } : {}),
+      ...(n.code && Array.isArray(n.code.lines) ? { code: n.code } : {}),
     });
   }
   for (const g of data.graph.groups || []) {
@@ -239,6 +241,10 @@ export function normalize(input: unknown): Diagram {
         : {}),
       emphasis: !!e.emphasis,
       dashed: !!e.dashed || ['dependency', 'annotation'].includes(e.type),
+      ...(e.message === 'action' || MESSAGE_KINDS.includes(e.message)
+        ? { message: e.message }
+        : {}),
+      ...(e.message === 'reply' && typeof e.replyTo === 'string' ? { replyTo: e.replyTo } : {}),
       ...(STATUSES.includes(e.status) && e.status !== 'same' ? { status: e.status } : {}),
     });
   }
@@ -274,7 +280,8 @@ export function normalize(input: unknown): Diagram {
       style.shape !== undefined &&
       !SHAPES.includes(style.shape) &&
       style.shape !== 'marker' &&
-      style.shape !== 'portal'
+      style.shape !== 'portal' &&
+      style.shape !== 'code'
     )
       throw Error(n.id + ': unknown shape.');
     if (
@@ -359,6 +366,7 @@ export function normalize(input: unknown): Diagram {
     if (cfg.row !== undefined) {
       if (!finite(cfg.row)) throw Error(e.id + ': invalid message row.');
       next.row = cfg.row;
+      if (finite(cfg.labelX)) next.labelX = cfg.labelX;
     }
     if (cfg.waypoints) {
       if (
@@ -402,6 +410,17 @@ export function normalize(input: unknown): Diagram {
       list
         .filter(p => typeof p?.id === 'string' && finite(p.y) && finite(p.h))
         .map(p => ({ id: p.id, label: String(p.label ?? p.id), y: p.y, h: p.h }));
+    const bars = (list: unknown) =>
+      Array.isArray(list)
+        ? (list as Activation[])
+            .filter(
+              b =>
+                typeof b?.node === 'string' &&
+                [b.x, b.y, b.w, b.h].every(finite) &&
+                nodes.has(b.node),
+            )
+            .map(b => ({ node: b.node, call: String(b.call), x: b.x, y: b.y, w: b.w, h: b.h }))
+        : [];
     out.layout.sequence = {
       panel: { ...seq.panel },
       phases: phases(seq.phases),
@@ -414,9 +433,14 @@ export function normalize(input: unknown): Diagram {
               rows: { ...seq.before.rows },
               phases: phases(seq.before.phases),
               grow: finite(seq.before.grow) ? seq.before.grow : 0,
+              ...(bars(seq.before.activations).length
+                ? { activations: bars(seq.before.activations) }
+                : {}),
             },
           }
         : {}),
+      ...(bars(seq.activations).length ? { activations: bars(seq.activations) } : {}),
+      ...(seq.bars ? { bars: true as const } : {}),
     };
   }
   out.collapsed = Array.isArray(data.collapsed)

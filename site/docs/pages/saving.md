@@ -33,7 +33,8 @@ Some more facts about each case:
 ## Export a PNG, SVG or .draft file
 
 Each PNG and SVG file that draftably exports holds the diagram's source. Thus you can open it again
-and continue to edit.
+and continue to edit. A code node that reads its lines from a file with `src=` is saved with those
+lines inline, so the image opens without the file.
 
 In the Playground:
 

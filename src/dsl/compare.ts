@@ -135,6 +135,16 @@ export function compareDetailed(before: string, after: string) {
       if (s.kind === 'statement' && (s.mark || s.command === 'was-order'))
         throw new DslError('Compare plain files; this one already has change marks.', s.line);
   const [old, next] = [parseModel(docs[0]), parseModel(docs[1])];
+  // Marks carry a label, a shape and a count. They can't say that a message changed kind or
+  // that a self-message became an action, so the panels would show such a change as none.
+  for (const m of [old, next]) {
+    const typed = m.edges.find(e => e.message);
+    if (typed)
+      throw new DslError(
+        `A comparison can't show kinds of message or actions yet (${typed.id}). Compare versions without message= and action lines.`,
+        typed.line,
+      );
+  }
   const [was, now] = [old, next].map(
     m =>
       new Map<string, ModelObject | ModelEdge>([

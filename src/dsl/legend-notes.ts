@@ -17,7 +17,25 @@ import type { Diagnostic } from './compile';
 import type { Model } from './syntax';
 
 export function legendNotes(m: Model): Diagnostic[] {
-  return [...gapNotes(m), ...shadeNotes(m), ...proseNotes(m)];
+  return [...gapNotes(m), ...shadeNotes(m), ...proseNotes(m), ...kindNotes(m)];
+}
+
+/**
+ * A sequence that names kinds of message draws a key for them. A `kind=async` message beside
+ * them is dashed like a reply, and the key has no row that says what it is.
+ */
+function kindNotes(m: Model): Diagnostic[] {
+  const dashed = m.edges.filter(e => e.dashed && !e.message);
+  if (!dashed.length || !m.edges.some(e => e.message)) return [];
+  return [
+    {
+      level: 'warning',
+      code: 'message-kind',
+      message: `${dashed.map(e => e.id).join(', ')} ${dashed.length > 1 ? 'use' : 'uses'} kind=async beside messages that have a kind, so the key cannot say what its dashes mean. Replace kind=async with message=reply or message=send.`,
+      line: dashed[0].line,
+      ids: dashed.map(e => e.id),
+    },
+  ];
 }
 
 /** Neutrals frame things, so they need no row. */

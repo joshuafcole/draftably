@@ -3,15 +3,16 @@ import {
   type CandidateResult,
   type CandidateSpec,
   type ComparisonConfig,
-} from '../engines/explorer-engine.js';
-import { LayoutLab, type LayoutOptions, type LayoutResult } from '../engines/layout-engine.js';
-import { SculptLab, type Timeline } from '../engines/sculpt-engine.js';
+} from '../engines/explorer-engine';
+import { LayoutLab, type LayoutOptions, type LayoutResult } from '../engines/layout-engine';
+import type { CodeFiles } from '../model/code-src';
+import { SculptLab, type Timeline } from '../engines/sculpt-engine';
 import {
   RouteLab,
   type RouteInput,
   type RoutingOptions,
   type RoutingResult,
-} from '../engines/routing-engine.js';
+} from '../engines/routing-engine';
 import { compile, type Scene } from '../dsl/compile';
 import { projectScene, type ViewState } from '../dsl/project';
 import { routingFingerprint } from '../model/document';
@@ -28,9 +29,9 @@ export type EngineTask =
   /** Full-quality routes for a drawing shown meanwhile with quick routes. */
   | { kind: 'route'; input: RouteInput; options: RoutingOptions }
   /** A diagram file compiled: laid out, not routed. */
-  | { kind: 'compile'; source: string }
+  | { kind: 'compile'; source: string; files?: CodeFiles }
   /** A diagram file compiled, projected with the editor's view and routed, as the viewer shows it. */
-  | { kind: 'scene'; source: string; view: ViewState };
+  | { kind: 'scene'; source: string; view: ViewState; files?: CodeFiles };
 
 /** A compiled file and its routes, keyed by the projected document they were drawn for. */
 export interface SceneResult {
@@ -54,8 +55,8 @@ export type EngineResult<T extends EngineTask> = T extends { kind: 'layout' }
 export function runEngineTask(
   task: EngineTask,
 ): Promise<LayoutResult | CandidateResult | Timeline | RoutingResult | SceneResult | Scene> {
-  if (task.kind === 'scene') return compileScene(task.source, task.view);
-  if (task.kind === 'compile') return compiled(task.source);
+  if (task.kind === 'scene') return compileScene(task.source, task.view, task.files);
+  if (task.kind === 'compile') return compiled(task.source, task.files);
   if (task.kind === 'layout') return LayoutLab.compute(task.doc, task.options);
   if (task.kind === 'route') return Promise.resolve(RouteLab.compute(task.input, task.options));
   if (task.kind === 'candidate')
@@ -79,20 +80,25 @@ async function compileCandidate(source: string, spec: CandidateSpec): Promise<Ca
  * routes; the second task reuses the first one's layout.
  */
 const recent = new Map<string, Promise<Scene>>();
-function compiled(source: string) {
-  let scene = recent.get(source);
+function compiled(source: string, files?: CodeFiles) {
+  const key = files ? source + '\0' + JSON.stringify(files) : source;
+  let scene = recent.get(key);
   if (!scene) {
-    scene = compile(source);
-    scene.catch(() => recent.delete(source));
-    recent.set(source, scene);
+    scene = compile(source, files);
+    scene.catch(() => recent.delete(key));
+    recent.set(key, scene);
     while (recent.size > 4) recent.delete(recent.keys().next().value!);
   }
   return scene;
 }
 
 /** Compile, project and route a file exactly as the viewer's scene state would. */
-async function compileScene(source: string, view: ViewState): Promise<SceneResult> {
-  const scene = await compiled(source),
+async function compileScene(
+  source: string,
+  view: ViewState,
+  files?: CodeFiles,
+): Promise<SceneResult> {
+  const scene = await compiled(source, files),
     document = projectScene(scene, view),
     vg = visibleGraph(document),
     geometry = makeGeometry(document),

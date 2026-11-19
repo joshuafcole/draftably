@@ -57,6 +57,7 @@ export function projectScene(scene: Scene, view: ViewState = {}): Diagram {
       ...(o.hull ? { hull: o.hull } : {}),
       ...(o.titleLines ? { titleLines: o.titleLines } : {}),
       ...(o.lifeline ? { lifeline: o.lifeline } : {}),
+      ...(o.code ? { code: clone(o.code) } : {}),
     };
     if (o.type === 'group') {
       doc.graph.groups.push(entry);
@@ -102,7 +103,11 @@ export function projectScene(scene: Scene, view: ViewState = {}): Diagram {
       ...(e.tail ? { tail: e.tail } : {}),
       emphasis: false,
       dashed: e.dashed,
+      ...(e.message ? { message: e.message } : {}),
+      ...(e.replyTo ? { replyTo: e.replyTo } : {}),
       ...(e.status ? { status: e.status } : {}),
+      ...(e.fromRange ? { fromRange: e.fromRange } : {}),
+      ...(e.toRange ? { toRange: e.toRange } : {}),
     });
     set(doc.layout.edges, e.id, {
       ...(e.from !== 'auto' ? { fromSide: e.from } : {}),
@@ -119,6 +124,7 @@ export function projectScene(scene: Scene, view: ViewState = {}): Diagram {
           }
         : {}),
       ...(e.labelAt ? { labelAt: { ...e.labelAt } } : {}),
+      ...(e.labelX !== undefined ? { labelX: e.labelX } : {}),
     });
   }
   if (scene.sequence) doc.layout.sequence = clone(scene.sequence);

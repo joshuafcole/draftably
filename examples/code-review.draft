@@ -1,0 +1,36 @@
+diagram "Why the orders report is slow" version=1
+subtitle "The report query reads the orders table twice"
+
+# Code nodes: SQL and a diff colored by lang=, named line ranges, and edges that end on a range.
+
+node report "Orders report" color=blue
+node sql "orders_report.sql" shape=code lang=sql numbers=on <<SQL
+  SELECT c.name, totals.amount, counts.n
+  FROM customers AS c
+    JOIN (SELECT customer_id, SUM(total) AS amount
+          FROM orders GROUP BY customer_id) AS totals
+      ON totals.customer_id = c.id
+    JOIN (SELECT customer_id, COUNT(*) AS n
+          FROM orders GROUP BY customer_id) AS counts
+      ON counts.customer_id = c.id
+  WHERE c.active;
+SQL
+node fix "the fix" shape=code lang=diff <<DIFF
+  @@ -3,6 +3,4 @@
+  -  JOIN (SELECT customer_id, SUM(total) AS amount
+  -        FROM orders GROUP BY customer_id) AS totals
+  +  JOIN (SELECT customer_id, SUM(total) AS amount, COUNT(*) AS n
+  +        FROM orders GROUP BY customer_id) AS totals
+       ON totals.customer_id = c.id
+  -  JOIN (SELECT customer_id, COUNT(*) AS n
+  -        FROM orders GROUP BY customer_id) AS counts
+  -    ON counts.customer_id = c.id
+DIFF
+
+range sql.scan1 lines=3-5 color=red "scan 1"
+range sql.scan2 match="COUNT\\(\\*\\)" span=3 color=red "scan 2"
+range fix.one lines=4-5 color=green "one scan"
+
+edge runs report -> sql.scan1 "runs"
+edge merge sql.scan2 -> fix.one "merge into scan 1"
+note "Each scan reads every order row." near=sql side=below

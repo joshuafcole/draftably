@@ -13,6 +13,7 @@ export const COMMANDS = [
   'state',
   'phase',
   'was-order',
+  'action',
   'node',
   'group',
   'edge',
@@ -21,6 +22,7 @@ export const COMMANDS = [
   'theme-color',
   'legend',
   'note',
+  'range',
   'footnote',
   'bundle',
   'routing',
@@ -51,7 +53,9 @@ export type TokenKind =
   | 'value'
   | 'number'
   | 'comment'
-  | 'space';
+  | 'space'
+  /** A line of a code node's `<<TAG` body, or its closing line: plain text, never statements. */
+  | 'body';
 
 export interface Token {
   text: string;
@@ -121,12 +125,30 @@ export const tokenClass = (t: Token) =>
 
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
+/**
+ * The tokens of each line of `source`. A code node's body (the lines after a `<<TAG` that ends a
+ * statement, up to a line holding only `TAG`) is one `body` token per line, as the parser reads it.
+ */
+export function tokenizeSource(lines: string[]): Token[][] {
+  const out: Token[][] = [];
+  for (let i = 0; i < lines.length; i++) {
+    const toks = tokenizeLine(lines[i]);
+    out.push(toks);
+    const words = toks.filter(t => t.kind !== 'space' && t.kind !== 'comment');
+    const tag = words.length > 1 && /^<<([A-Za-z_][A-Za-z0-9_]*)$/.exec(words.at(-1)!.text)?.[1];
+    const end = tag ? lines.findIndex((t, j) => j > i && t.trim() === tag) : -1;
+    if (end < 0) continue;
+    for (let j = i + 1; j <= end; j++) out.push(lines[j] ? [{ text: lines[j], kind: 'body' }] : []);
+    i = end;
+  }
+  return out;
+}
+
 /** Highlighted HTML for source, one `<span class="tok-…">` per token and `\n` between lines. */
 export function highlightHtml(source: string): string {
-  return source
-    .split('\n')
-    .map(line =>
-      tokenizeLine(line)
+  return tokenizeSource(source.split('\n'))
+    .map(toks =>
+      toks
         .map(t =>
           t.kind === 'space' ? esc(t.text) : `<span class="${tokenClass(t)}">${esc(t.text)}</span>`,
         )

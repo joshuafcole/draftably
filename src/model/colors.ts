@@ -52,7 +52,12 @@ export function drawnShade(doc: Diagram, look: ResolvedAppearance, id: string): 
     nearestShade(
       look,
       family,
-      lane ? laneShade(look) : group ? groupShadeFor(look.theme, look.dark) : NODE_SHADE,
+      // A code listing sits on the quiet end of its family, like a lane.
+      lane || style.shape === 'code'
+        ? laneShade(look)
+        : group
+          ? groupShadeFor(look.theme, look.dark)
+          : NODE_SHADE,
     );
   const parentId = findObject(doc, id)?.parentId,
     parent = parentId ? findGroup(doc, parentId) : undefined;

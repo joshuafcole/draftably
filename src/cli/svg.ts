@@ -7,5 +7,9 @@ import { renderSvg as writeSvg, type SvgOptions } from '../runtime/svg-renderer'
 export { accentPath, PHASE_TAB, sequenceBackdrop, type SvgOptions } from '../runtime/svg-renderer';
 
 export function renderSvg(doc: Diagram, options: SvgOptions = {}): string {
-  return writeSvg(doc, { fontCss: fontFaceCss(resolveAppearance(doc.appearance)), ...options });
+  const code = doc.graph.nodes.some(n => n.code);
+  return writeSvg(doc, {
+    fontCss: fontFaceCss(resolveAppearance(doc.appearance), code),
+    ...options,
+  });
 }

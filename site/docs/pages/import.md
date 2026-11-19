@@ -55,19 +55,26 @@ D2 variables and rules become plain values in the native file.
 
 A Mermaid sequence becomes a native [sequence diagram](#sequence-diagrams):
 
-| Mermaid                                | Draftably                                                     |
-| -------------------------------------- | ------------------------------------------------------------- |
-| `participant`                          | `node`                                                        |
-| `box`                                  | `group`                                                       |
-| `-->>`                                 | `kind=async`                                                  |
-| `-x`                                   | `head=cross`                                                  |
-| `->`                                   | `head=none`                                                   |
-| `Note over A,B` after a message A to B | A note anchored to that message; otherwise to the participant |
-| Top-level `alt`, `opt`, `par`, `loop`… | A phase band per branch, labeled such as `alt: ok`            |
+| Mermaid                                | Draftably                                                                                                              |
+| -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `participant`                          | `node`                                                                                                                 |
+| `box`                                  | `group`                                                                                                                |
+| `->>`                                  | `message=call`                                                                                                         |
+| `-)`                                   | `message=send`                                                                                                         |
+| `-->>`, `--)`                          | A reply: `answers=id` when an earlier call or send runs the other way and has no answer yet; otherwise `message=reply` |
+| `-x`                                   | `head=cross`, with no kind                                                                                             |
+| `->`                                   | `head=none`, with no kind                                                                                              |
+| `<<->>`                                | `tail=arrow`, with no kind                                                                                             |
+| `--x`, `-->`, `<<-->>`                 | A reply with the plain arrowhead; the import warns                                                                     |
+| `activate`, `deactivate`, `+`, `-`     | `activations=on`, when each bar runs from a call to its reply                                                          |
+| `Note over A,B` after a message A to B | A note anchored to that message; otherwise to the participant                                                          |
+| Top-level `alt`, `opt`, `par`, `loop`… | A phase band per branch, labeled such as `alt: ok`                                                                     |
 
 Branch logic stays only in the band label, so the import warns. A nested block has no band of its
-own. The import also warns about activation bars, `autonumber`, `rect`, `create`, `destroy`,
-participant symbols, participant links and the open async arrow `-)`.
+own. A native activation bar runs from a call to the reply that answers it. The import turns
+bars on only when that gives the bars the source draws. Otherwise it leaves them off and the
+warning counts both sets. The import also warns about `autonumber`, `rect`, `create`, `destroy`,
+participant symbols, participant links and a dotted line whose end is not an arrowhead.
 
 ## Limits
 

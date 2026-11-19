@@ -10,6 +10,7 @@ import {
   type LanguageStatement,
   parseModel,
 } from '../src/lib';
+import { CODE_ATTRS } from '../src/dsl/language';
 
 /** Boxes and lines the samples below point at. */
 const CONTEXT = [
@@ -35,10 +36,12 @@ const SAMPLES: Record<LanguageStatement, string> = {
   node: '~node n "N" was="M"',
   group: '~group h "H" was="I"',
   edge: '~edge f b -> a was="old"',
+  action: 'layout root sequence\naction act a "work"',
   layout: 'layout root flow',
   theme: 'theme drafting',
   'theme-color': 'theme-color blue shade=500 fill="#112233"',
   legend: 'legend blue "Blue things"',
+  range: 'node k shape=code <<END\nlet x = 1\nEND\n~range k.r lines=1-1',
   note: 'note n1 "A note" near=a',
   footnote: 'footnote 1 "A footnote"',
   routing: 'routing clearance=8',
@@ -68,12 +71,20 @@ const OPEN: Record<Exclude<AttributeValue, readonly string[]>, string> = {
   height: 'auto',
   pair: '1,2',
   points: '1,2;3,4',
+  lines: '1-1',
 };
 
 const statements = Object.keys(LANGUAGE) as LanguageStatement[];
 const attrsOf = (s: LanguageStatement) =>
   Object.entries(LANGUAGE[s].attrs) as Array<[string, AttributeValue]>;
 const sample = (s: LanguageStatement, extra = '') => `${CONTEXT}\n${SAMPLES[s]}${extra}\n`;
+/** A code node with `extra` on its line: a code attribute on any other node is refused first. */
+const codeSample = (extra: string) =>
+  `${CONTEXT}\nnode k shape=code${extra} <<END\nlet x = 1\nEND\n`;
+const sampleOf = (s: LanguageStatement, attr: string, extra: string) =>
+  s === 'node' && (CODE_ATTRS as readonly string[]).includes(attr)
+    ? codeSample(extra)
+    : sample(s, extra);
 const valueFor = (v: AttributeValue) => (typeof v === 'string' ? OPEN[v] : v[0]);
 const layoutWarnings = (source: string) =>
   parseModel(source).warnings.filter(w => w.code === 'layout-attribute');
@@ -173,14 +184,14 @@ describe('the language table', () => {
         // A word may still break a rule of another statement (a marker sits between cells), but
         // never the vocabulary's own.
         for (const word of value) {
-          notUnknown(sample(s, ` ${attr}=${word}`), s, attr);
+          notUnknown(sampleOf(s, attr, ` ${attr}=${word}`), s, attr);
           try {
-            parseModel(sample(s, ` ${attr}=${word}`));
+            parseModel(sampleOf(s, attr, ` ${attr}=${word}`));
           } catch (error) {
             expect(String(error), `${s} ${attr}=${word}`).not.toContain(`Expected ${attr}=`);
           }
         }
-        expect(() => parseModel(sample(s, ` ${attr}=bogus`)), `${s} ${attr}`).toThrow(
+        expect(() => parseModel(sampleOf(s, attr, ` ${attr}=bogus`)), `${s} ${attr}`).toThrow(
           `Expected ${attr}=${value.join('|')}; got bogus.`,
         );
       }
@@ -233,7 +244,7 @@ describe('the language table', () => {
       if (marked) expect(() => parseModel(source), s).not.toThrow();
       else
         expect(() => parseModel(source), s).toThrow(
-          'Only node, group and edge lines take a + mark.',
+          'Only node, group, edge and range lines take a + mark.',
         );
     }
   });
@@ -274,6 +285,8 @@ describe('the table as types', () => {
       directed: true,
       head: true,
       tail: true,
+      message: true,
+      answers: true,
     };
     // @ts-expect-error `tail` has no entry.
     const missing: Covered<'edge'> = { ...edge, tail: undefined };
@@ -328,7 +341,7 @@ describe('the table as types', () => {
     const exact: [
       Equal<Engine, (typeof lib.ENGINES)[number]>,
       Equal<Theme, 'drafting' | 'fieldnotes' | 'signal' | 'ink' | 'blueprint'>,
-      Equal<Shape, 'box' | 'pill' | 'circle' | 'diamond' | 'text' | 'marker' | 'portal'>,
+      Equal<Shape, 'box' | 'pill' | 'circle' | 'diamond' | 'text' | 'marker' | 'portal' | 'code'>,
       Equal<
         Words<(typeof LANGUAGE.node.attrs)['was-shape']>,
         'box' | 'pill' | 'circle' | 'diamond' | 'text'

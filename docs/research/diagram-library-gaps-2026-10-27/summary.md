@@ -16,7 +16,7 @@ This recommendation comes from a comparison with 15 alternatives across 28 diagr
 The research used commit `2995a98eef31803fa8669a7ada5c8f8892486bb7` and primary sources checked
 October 28, 2026. Codex reviewed the findings against this checkout. The baseline source files
 remain unchanged. The full Pro report and detailed syntax proposals are available in
-[the committed report](../../intent/diagram-library-coverage/assets/pro-results/diagram-library-gaps-2026-10-27/gap-analysis.md).
+[the archived report](https://github.com/byronwall/draftably/blob/1ae738518c60e44e06f7f483ffa0e61e28a784c2/docs/intent/diagram-library-coverage/assets/pro-results/diagram-library-gaps-2026-10-27/gap-analysis.md).
 
 ## What Draftably already covers
 
@@ -142,4 +142,4 @@ not proof that its image features have shipped. Coordinate that plan before star
 
 ## Preserved Pro result materials
 
-[Complete original Pro artifacts](../../intent/diagram-library-coverage/assets/pro-results/diagram-library-gaps-2026-10-27/ASSET_INDEX.md) are preserved under the intent entry. ZIP containers remain local.
+[Complete original Pro artifacts (archived)](https://github.com/byronwall/draftably/blob/1ae738518c60e44e06f7f483ffa0e61e28a784c2/docs/intent/diagram-library-coverage/assets/pro-results/diagram-library-gaps-2026-10-27/ASSET_INDEX.md) are archived at revision 1ae73851. ZIP containers remain local.

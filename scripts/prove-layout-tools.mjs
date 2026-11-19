@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * End-to-end proof for the layout tools in file mode (docs/intent/layout-in-files).
+ * End-to-end proof for the layout tools in file mode (docs/CHECKS.md, "Layout tools in file mode").
  *
  * Opens a copy of examples/order-pipeline.draft through `pnpm draftably open` and drives the real
  * editor in Chromium: apply a Compare candidate (a layout recipe), run Improve, keep a timeline

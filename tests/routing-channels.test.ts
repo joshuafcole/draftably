@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { RouteLab, type RouteInput } from '../src/engines/routing-engine.js';
+import { RouteLab, type RouteInput } from '../src/engines/routing-engine';
 import { compile } from '../src/dsl/compile';
 import { planChannels, trimChannels, type Channel } from '../src/dsl/channels';
 import { GROUP_INSET } from '../src/dsl/frame';
