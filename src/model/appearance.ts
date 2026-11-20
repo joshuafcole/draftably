@@ -12,13 +12,7 @@ import type { FileConfig } from './link';
 import type { MessageKind } from './markers';
 
 export type ThemeId = 'drafting' | 'fieldnotes' | 'signal' | 'ink' | 'blueprint' | 'drafting-dark';
-export const THEME_IDS = [
-  'drafting',
-  'fieldnotes',
-  'signal',
-  'ink',
-  'blueprint',
-] as const satisfies readonly ThemeId[];
+export const THEME_IDS: ThemeId[] = ['drafting', 'fieldnotes', 'signal', 'ink', 'blueprint'];
 export const DEFAULT_THEME: ThemeId = 'drafting';
 
 /** Shade stops. Lower numbers are lighter and higher numbers darker, in every theme. */

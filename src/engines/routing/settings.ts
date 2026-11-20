@@ -15,13 +15,10 @@ export const defaults: RoutingSettings = {
   cornerRadius: 6,
   standoff: 20,
 };
-/** The settings the router reads; `hops` and `bundle` are drawn after routing (`model/`). */
-type RouterSetting = Exclude<keyof RoutingSettings, 'hops' | 'bundle'>;
-
 /** Checked settings: defaults under `raw`, with every number held to its range. */
 export function settings(raw: Partial<RoutingSettings> = {}): RoutingSettings {
   const s = { ...defaults, ...raw },
-    ranges: Record<RouterSetting, [number, number]> = {
+    ranges: Record<keyof RoutingSettings, [number, number]> = {
       clearance: [4, 30],
       portGap: [6, 28],
       bendPenalty: [0, 100],
@@ -35,7 +32,9 @@ export function settings(raw: Partial<RoutingSettings> = {}): RoutingSettings {
       cornerRadius: [0, 16],
       standoff: [0, 40],
     };
-  for (const [k, [lo, hi]] of Object.entries(ranges) as Array<[RouterSetting, [number, number]]>) {
+  for (const [k, [lo, hi]] of Object.entries(ranges) as Array<
+    [keyof RoutingSettings, [number, number]]
+  >) {
     if (typeof s[k] !== 'number' || !Number.isFinite(s[k]))
       throw Error('Routing ' + k + ' must be a finite number.');
     s[k] = clamp(s[k], lo, hi);

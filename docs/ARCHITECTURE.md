@@ -187,7 +187,6 @@ TypeScript shared by the browser and the command line.
 | File                | Responsibility                                                                                  |
 | ------------------- | ----------------------------------------------------------------------------------------------- |
 | `syntax.ts`         | Source lines with comments, the formatter, and the validated model.                             |
-| `language.ts`       | `LANGUAGE`: every statement, attribute and closed vocabulary, as data the parser reads.         |
 | `compile.ts`        | Layout recipes and refinements for one fixed render context; diagnostics with lines.            |
 | `channels.ts`       | Routing channels: extra room inside a group where lines must travel; compile lays out twice.    |
 | `lanes.ts`          | Lanes outside a flow's band for returns and skips; fold wraps keep theirs (compile.ts).         |

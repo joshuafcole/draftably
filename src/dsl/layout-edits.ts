@@ -6,7 +6,7 @@
  */
 import { LayoutLab } from '../engines/layout-engine';
 import { RouteLab } from '../engines/routing-engine';
-import type { Diagram, LayoutSettings, Rect, RoutingSettings } from '../model/types';
+import type { Diagram, DiagramSettings, LayoutSettings, Rect } from '../model/types';
 import { layoutView, type Scene, type SceneObject } from './compile';
 import { contentOrigin, GROUP_INSET } from './frame';
 import { UnsupportedEdit } from './translate';
@@ -231,17 +231,18 @@ export function setLayoutRecipe(
 }
 
 /** The `routing` statement for router settings, or null when they are all defaults. */
-export function routingStatement(routing: RoutingSettings): Statement | null {
+export function routingStatement(routing: DiagramSettings['routing']): Statement | null {
   const attrs: Array<[string, Word]> = [];
   for (const [attr, p] of Object.entries(ROUTING_PARAMS)) {
     const v = routing[p.key];
-    if (v !== RouteLab.defaults[p.key]) attrs.push([attr, value(v)]);
+    if (v !== (RouteLab.defaults as DiagramSettings['routing'])[p.key])
+      attrs.push([attr, value(v)]);
   }
   return attrs.length ? statement('routing', [], attrs) : null;
 }
 
 /** Replace the file's router settings. Defaults are left out; all defaults removes the line. */
-export function setRouting(source: SourceDoc, routing: RoutingSettings) {
+export function setRouting(source: SourceDoc, routing: DiagramSettings['routing']) {
   const next = routingStatement(routing),
     existing = statements(source).find(s => s.command === 'routing');
   if (existing && next) {

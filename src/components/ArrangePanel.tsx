@@ -392,9 +392,7 @@ function ExactLayout() {
   };
   const algorithm = () => Engine.algorithms.find(a => a.id === rebuildEngine());
   const engines = () =>
-    Engine.algorithms
-      .filter(a => !s.fileMode() || ENGINES.includes(a.id as never))
-      .map(a => [a.id, a.name]);
+    Engine.algorithms.filter(a => !s.fileMode() || ENGINES.includes(a.id)).map(a => [a.id, a.name]);
   const writes = () => {
     const id = s.arrangeScope(),
       engine = rebuildEngine();

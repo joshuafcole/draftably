@@ -9,7 +9,7 @@
 import metrics from './font-metrics.json';
 
 export type FontRole = 'sans' | 'serif' | 'mono';
-export const FONT_ROLES = ['sans', 'serif', 'mono'] as const satisfies readonly FontRole[];
+export const FONT_ROLES: FontRole[] = ['sans', 'serif', 'mono'];
 
 export interface FontFace {
   /** Registered family name; unique so an installed copy of the font is never used instead. */

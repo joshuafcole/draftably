@@ -1200,9 +1200,11 @@ function routingKey(
   rects: Map<string, Rect>,
   options: { previous?: PriorRoute[]; quick?: boolean },
 ) {
-  const input = routeInput(doc, vg, rects),
+  // `hops` and `bundle` are drawn after routing: they neither reach the router nor key its routes.
+  const { hops: _hops, bundle: _bundle, ...routing } = doc.settings.routing ?? {},
+    input = routeInput(doc, vg, rects),
     settings = {
-      ...doc.settings.routing,
+      ...routing,
       previous: options.previous ?? [],
       quick: !!options.quick,
     };

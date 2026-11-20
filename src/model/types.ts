@@ -268,11 +268,6 @@ export interface LayoutSettings {
 }
 
 export interface RoutingSettings {
-  /**
-   * `on` draws a small arc where a level run passes over an upright line it doesn't share an end
-   * with. Drawing only: the routes are unchanged.
-   */
-  hops?: 'on' | 'off';
   clearance: number;
   portGap: number;
   edgeGap: number;
@@ -285,6 +280,15 @@ export interface RoutingSettings {
   passes: number;
   cornerRadius: number;
   standoff: number;
+}
+
+/** `routing` words that change how routes are drawn. The router never reads them. */
+export interface RouteDrawing {
+  /**
+   * `on` draws a small arc where a level run passes over an upright line it doesn't share an end
+   * with. Drawing only: the routes are unchanged.
+   */
+  hops?: 'on' | 'off';
   /**
    * Run this many or more lines between one pair of ends as one trunk (`model/bundles.ts`);
    * unset or 0 draws every line on its own. Read after routing, never by the router.
@@ -295,7 +299,7 @@ export interface RoutingSettings {
 export interface DiagramSettings extends LayoutSettings {
   snap: boolean;
   showManual: boolean;
-  routing: RoutingSettings;
+  routing: RoutingSettings & RouteDrawing;
 }
 
 export interface Camera {

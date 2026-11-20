@@ -12,18 +12,21 @@ import {
   NODE_SHADE,
   HEX_COLOR,
   isBuiltInFamily,
+  LEGEND_LINES,
   OVERRIDE_LIMITS,
   SHADES,
+  THEME_IDS,
   type DiagramAppearance,
   type LegendLine,
   type Shade,
   type ThemeId,
 } from '../model/appearance';
-import type { FontRole } from '../model/fonts';
-import type { EndMarker, MessageKind } from '../model/markers';
+import { FONT_ROLES, type FontRole } from '../model/fonts';
+import { MARKERS, MESSAGE_KINDS, type EndMarker, type MessageKind } from '../model/markers';
+import { EDITORS } from '../model/link';
 import { CODE_MAX_WIDTH, CODE_TAB, codeLines, type CodeBlock } from '../model/code';
 import { langOf, parseSrc, srcBody, type CodeFiles } from '../model/code-src';
-import { NO_STATE, NOTE_WIDTH } from '../model/note';
+import { NO_STATE, NOTE_SIDES, NOTE_WIDTH } from '../model/note';
 import type { Status } from '../model/status';
 import type {
   ColorKey,
@@ -31,35 +34,9 @@ import type {
   LayoutSettings,
   Point,
   PortSide,
-  RoutingSettings,
+  DiagramSettings,
   ShapeKind,
 } from '../model/types';
-import {
-  attributesOf,
-  CODE_ATTRS,
-  CONFIG_KEYS,
-  ENGINE_PARAMS,
-  ENGINES,
-  LANGUAGE,
-  ROUTING_PARAMS,
-  statementSpec,
-  THEME_ATTRS,
-  type Fit,
-  type Param,
-} from './language';
-
-// The vocabularies moved to `./language` with the table they feed; importers find them here too.
-export {
-  CONFIG_KEYS,
-  DSL_SHAPES,
-  ENGINE_PARAMS,
-  ENGINES,
-  FITS,
-  PAST_SHAPES,
-  ROUTING_PARAMS,
-  THEME_ATTRS,
-  type Fit,
-} from './language';
 
 export class DslError extends Error {
   constructor(
@@ -395,6 +372,10 @@ export interface EngineRecipe {
   params: Partial<LayoutSettings>;
 }
 
+/** Image shapes a drawing can aim for (`fit=`, `vary --fit`): width over height. */
+export const FITS = { wide: 2, slide: 1.78, square: 1, page: 0.77, tall: 0.6 } as const;
+export type Fit = keyof typeof FITS;
+
 export interface ModelLayout {
   scope: string;
   algorithm: Algorithm;
@@ -486,7 +467,7 @@ export interface Model {
   layouts: ModelLayout[];
   hints: Hint[];
   /** Router settings from a `routing` statement. */
-  routing: Partial<RoutingSettings>;
+  routing: Partial<DiagramSettings['routing']>;
   /** Theme, overrides and color definitions from `theme` and `theme-color` statements. */
   appearance: DiagramAppearance;
   /** Source line of the `theme` statement, and of each `theme-color` by `family:shade`. */
@@ -528,6 +509,85 @@ export interface ModelRange {
   status?: Status;
   line: number;
 }
+
+/** `config` keys and the setting each sets. */
+export const CONFIG_KEYS = {
+  'link-base': 'linkBase',
+  editor: 'editor',
+  'strike-removed': 'strikeRemoved',
+} as const;
+
+/** Theme attributes in the file and the override each sets. */
+export const THEME_ATTRS = {
+  'padding-x': 'paddingX',
+  'padding-y': 'paddingY',
+  radius: 'radius',
+  'title-font': 'titleFont',
+  'annotation-font': 'annotationFont',
+  canvas: 'canvas',
+  text: 'text',
+  connection: 'connection',
+} as const;
+
+// --- Engine and routing parameters ------------------------------------------------------------
+
+type Param<K extends string> =
+  { key: K; min: number; max: number } | { key: K; choices: readonly string[] };
+
+/**
+ * Layout engines a file can name. `separate` is left out: it only repairs overlaps in the current
+ * drawing, so it cannot be recomputed from the source.
+ */
+export const ENGINES: readonly LayoutAlgorithmId[] = [
+  'compound-flow',
+  'boundary-align',
+  'compound-spring',
+  'tidy',
+  'stress',
+  'force',
+  'flow',
+  'layered',
+  'tree',
+  'grid',
+];
+
+/** Engine settings by source attribute. Ranges match the engine's own limits. */
+export const ENGINE_PARAMS: Record<string, Param<keyof LayoutSettings>> = {
+  'rank-gap': { key: 'rankGap', min: 12, max: 220 },
+  'group-gap': { key: 'groupGap', min: 12, max: 180 },
+  'node-gap': { key: 'nodeGap', min: 4, max: 160 },
+  'boundary-pull': { key: 'boundaryPull', min: 0, max: 100 },
+  'hierarchy-sweeps': { key: 'hierarchySweeps', min: 1, max: 4 },
+  'edge-length': { key: 'edgeLength', min: 20, max: 260 },
+  repulsion: { key: 'repulsion', min: 0, max: 100 },
+  'flow-strength': { key: 'flowStrength', min: 0, max: 100 },
+  alignment: { key: 'alignment', min: 0, max: 100 },
+  compactness: { key: 'compactness', min: 0, max: 100 },
+  'grid-strength': { key: 'gridStrength', min: 0, max: 100 },
+  ordering: { key: 'ordering', choices: ['stable', 'crossings'] },
+  fold: { key: 'fold', choices: ['auto', 'never'] },
+  aspect: { key: 'aspect', choices: ['1', '1.333', '1.6', '2', '0.75'] },
+  root: { key: 'rootId', choices: [] },
+};
+
+/** Router settings by source attribute. Ranges match the router's own limits. */
+export const ROUTING_PARAMS: Record<string, Param<keyof DiagramSettings['routing']>> = {
+  clearance: { key: 'clearance', min: 4, max: 30 },
+  'port-gap': { key: 'portGap', min: 6, max: 28 },
+  'edge-gap': { key: 'edgeGap', min: 4, max: 48 },
+  'bend-penalty': { key: 'bendPenalty', min: 0, max: 100 },
+  'crossing-penalty': { key: 'crossingPenalty', min: 0, max: 1200 },
+  'shared-penalty': { key: 'sharedPenalty', min: 0, max: 20 },
+  'parallel-penalty': { key: 'parallelPenalty', min: 0, max: 60 },
+  'port-stability': { key: 'portStability', min: 0, max: 150 },
+  'fanout-penalty': { key: 'fanoutPenalty', min: 0, max: 160 },
+  passes: { key: 'passes', min: 1, max: 5 },
+  'corner-radius': { key: 'cornerRadius', min: 0, max: 16 },
+  standoff: { key: 'standoff', min: 0, max: 40 },
+  bundle: { key: 'bundle', min: 2, max: 12 },
+  hops: { key: 'hops', choices: ['off', 'on'] },
+};
+
 /** What to write instead of a layout attribute that a line does not take. */
 function layoutHint(key: string, engine: boolean) {
   if (engine && key === 'gap') return 'Engine lines space boxes with node-gap= and rank-gap=.';
@@ -546,8 +606,24 @@ export const isIdentifier = (s: string) => ID.test(s);
 
 export const COLORS: DslColor[] = ['auto', ...BUILT_IN_FAMILIES];
 const FAMILY = /^[A-Za-z_][A-Za-z0-9_-]*$/;
+export const DSL_SHAPES: DslShape[] = [
+  'box',
+  'pill',
+  'circle',
+  'diamond',
+  'text',
+  'marker',
+  'portal',
+  'code',
+];
+/** Attributes only a code node takes. */
+const CODE_ATTRS = ['lang', 'tab', 'wrap', 'numbers', 'start', 'max-width', 'src'];
+/** Shapes a node's box can draw as it was: a marker's box is a thin cut, so it has no other shape. */
+export const PAST_SHAPES = DSL_SHAPES.filter(s => s !== 'marker' && s !== 'portal' && s !== 'code');
+const FRAMES = ['box', 'soft', 'none'] as const;
 /** A `count=` symbol for an unknown number: a letter or a short word, such as `N` or `many`. */
 const COUNT_SYMBOL = /^[A-Za-z]{1,8}$/;
+const SIDES: PortSide[] = ['auto', 'left', 'right', 'top', 'bottom'];
 
 /**
  * Parse and validate source. Throws `DslError` with a line number for the first problem. `files`
@@ -654,7 +730,7 @@ export function parseModel(source: string | SourceDoc, files?: CodeFiles): Model
     );
     const status: Status | undefined = s.mark && MARKS[s.mark];
     assert(
-      !s.mark || statementSpec(command)?.marks,
+      !s.mark || ['node', 'group', 'edge', 'range'].includes(command),
       `Only node, group, edge and range lines take a ${s.mark} mark.`,
     );
     /** Two numbers in one word, `x,y`, each within `min` and `max`. */
@@ -692,7 +768,7 @@ export function parseModel(source: string | SourceDoc, files?: CodeFiles): Model
         ...(size ? { wasSize: { w: size[0], h: size[1] } } : {}),
         ...(attrs.has('was') ? { was: attrs.get('was')!.value } : {}),
         ...(attrs.has('was-shape')
-          ? { wasShape: choice('was-shape', 'box', LANGUAGE.node.attrs['was-shape']) as DslShape }
+          ? { wasShape: choice('was-shape', 'box', PAST_SHAPES) as DslShape }
           : {}),
         ...(attrs.has('was-count') ? { wasCount: countOf('was-count', 1) } : {}),
       };
@@ -711,7 +787,7 @@ export function parseModel(source: string | SourceDoc, files?: CodeFiles): Model
     switch (command) {
       case 'diagram':
         count(1);
-        allow(attributesOf('diagram'));
+        allow(['version', 'width']);
         assert(!diagramLine, 'Only one diagram declaration is allowed.');
         diagramLine = line;
         m.title = text(args[0]);
@@ -721,9 +797,9 @@ export function parseModel(source: string | SourceDoc, files?: CodeFiles): Model
         break;
       case 'compare': {
         count(0, 2);
-        allow(attributesOf('compare'));
+        allow(['direction', 'aspect']);
         once('compare');
-        const direction = choice('direction', 'auto', LANGUAGE.compare.attrs.direction);
+        const direction = choice('direction', 'auto', ['auto', 'right', 'down'] as const);
         m.appearance.compare = {
           before: text(args[0]) || 'Before',
           after: text(args[1]) || 'After',
@@ -734,7 +810,7 @@ export function parseModel(source: string | SourceDoc, files?: CodeFiles): Model
       }
       case 'config': {
         count(0);
-        allow(attributesOf('config'));
+        allow(Object.keys(CONFIG_KEYS));
         assert(attrs.size, `config needs a setting: ${Object.keys(CONFIG_KEYS).join(', ')}.`);
         const config = (m.appearance.config ??= {});
         for (const [key, w] of attrs) {
@@ -746,11 +822,9 @@ export function parseModel(source: string | SourceDoc, files?: CodeFiles): Model
               line,
             });
           configLines.set(key, line);
-          if (key === 'editor')
-            config.editor = choice('editor', 'vscode', LANGUAGE.config.attrs.editor);
+          if (key === 'editor') config.editor = choice('editor', 'vscode', EDITORS);
           else if (key === 'strike-removed')
-            config.strikeRemoved =
-              choice(key, 'off', LANGUAGE.config.attrs['strike-removed']) === 'on';
+            config.strikeRemoved = choice(key, 'off', ['on', 'off'] as const) === 'on';
           else {
             assert(w.quoted, `Expected ${key}="path" in double quotes.`);
             config.linkBase = w.value;
@@ -760,7 +834,7 @@ export function parseModel(source: string | SourceDoc, files?: CodeFiles): Model
       }
       case 'state': {
         assert(args.length >= 1, 'A state needs an ID: state write "Write path" api orders.');
-        allow(attributesOf('state'));
+        allow(['rest', 'chips', 'context']);
         const sid = id(args[0]),
           label = args[1]?.quoted ? args[1].value : undefined,
           ids = args.slice(label === undefined ? 1 : 2).map(w => id(w)),
@@ -775,9 +849,9 @@ export function parseModel(source: string | SourceDoc, files?: CodeFiles): Model
           state = { id: sid, label: label ?? sid, ids: [], rest: 'dim' };
           states.push(state);
         }
-        if (attrs.has('rest')) state.rest = choice('rest', 'dim', LANGUAGE.state.attrs.rest);
+        if (attrs.has('rest')) state.rest = choice('rest', 'dim', ['dim', 'plain'] as const);
         if (attrs.has('chips')) {
-          if (choice('chips', 'shown', LANGUAGE.state.attrs.chips) === 'hidden')
+          if (choice('chips', 'shown', ['shown', 'hidden'] as const) === 'hidden')
             state.hidden = true;
           else delete state.hidden;
         }
@@ -800,7 +874,7 @@ export function parseModel(source: string | SourceDoc, files?: CodeFiles): Model
           args.length >= 3 && args[1]?.quoted,
           'A phase needs an ID, a label and its messages: phase preview "Preview" m1 m2.',
         );
-        allow(attributesOf('phase'));
+        allow([]);
         const pid = id(args[0]);
         assert(!m.phases.some(p => p.id === pid), `Duplicate phase ${pid}.`);
         m.phases.push({ id: pid, label: args[1].value, ids: args.slice(2).map(w => id(w)), line });
@@ -808,13 +882,13 @@ export function parseModel(source: string | SourceDoc, files?: CodeFiles): Model
       }
       case 'was-order':
         assert(args.length, 'was-order lists the older message order: was-order m2 m1.');
-        allow(attributesOf('was-order'));
+        allow([]);
         once('was-order');
         m.wasOrder = { ids: args.map(w => id(w)), line };
         break;
       case 'subtitle':
         count(1);
-        allow(attributesOf('subtitle'));
+        allow([]);
         once('subtitle');
         assert(text(args[0]).trim(), 'A subtitle needs its text in quotes.');
         (m.appearance.heading ??= {}).subtitle = text(args[0]);
@@ -841,7 +915,25 @@ export function parseModel(source: string | SourceDoc, files?: CodeFiles): Model
         );
         for (const key of CODE_ATTRS)
           assert(code || !attrs.has(key), `${key}= belongs on a code node (shape=code).`);
-        allow(attributesOf(command));
+        allow(
+          command === 'node'
+            ? [
+                ...CODE_ATTRS,
+                'in',
+                'color',
+                'shade',
+                'shape',
+                'was',
+                'was-shape',
+                'was-count',
+                'was-at',
+                'was-size',
+                'href',
+                'count',
+                'span',
+              ]
+            : ['in', 'color', 'shade', 'was', 'was-at', 'href', 'frame', 'fold'],
+        );
         const oid = id(args[0]);
         assert(oid !== 'root', 'root is reserved for the outer layout scope.');
         assert(!objectIds.has(oid), `Duplicate node/group id ${oid}.`);
@@ -865,8 +957,8 @@ export function parseModel(source: string | SourceDoc, files?: CodeFiles): Model
           return {
             lines: read ? read.lines : codeLines(s.body!.lines, tab),
             ...(lang && !read?.placeholder ? { lang } : {}),
-            wrap: choice('wrap', 'on', LANGUAGE.node.attrs.wrap) === 'on',
-            numbers: choice('numbers', 'off', LANGUAGE.node.attrs.numbers) === 'on',
+            wrap: choice('wrap', 'on', ['on', 'off'] as const) === 'on',
+            numbers: choice('numbers', 'off', ['on', 'off'] as const) === 'on',
             start: num('start', read?.start ?? 1, 0, 1_000_000),
             maxWidth: num('max-width', CODE_MAX_WIDTH, 120, 8000),
             sourceLine: read
@@ -895,17 +987,17 @@ export function parseModel(source: string | SourceDoc, files?: CodeFiles): Model
           parent: attrs.has('in') ? id(attrs.get('in')) : 'root',
           color,
           ...(shade !== undefined ? { shade } : {}),
-          shape: command === 'node' ? choice('shape', 'box', LANGUAGE.node.attrs.shape) : 'box',
+          shape: command === 'node' ? choice('shape', 'box', DSL_SHAPES) : 'box',
           ...(code ? { code: codeBlock() } : {}),
           ...(s.mark ? { status } : {}),
           ...was(),
           ...(attrs.has('href') ? { href: text(attrs.get('href')) } : {}),
           ...(attrs.has('count') ? { count: countOf('count', 2) } : {}),
-          ...(command === 'group' && choice('fold', 'auto', LANGUAGE.group.attrs.fold) === 'never'
+          ...(command === 'group' && choice('fold', 'auto', ['auto', 'never']) === 'never'
             ? { fold: 'never' as const }
             : {}),
-          ...(command === 'group' && choice('frame', 'box', LANGUAGE.group.attrs.frame) !== 'box'
-            ? { frame: choice('frame', 'box', LANGUAGE.group.attrs.frame) as 'soft' | 'none' }
+          ...(command === 'group' && choice('frame', 'box', FRAMES) !== 'box'
+            ? { frame: choice('frame', 'box', FRAMES) as 'soft' | 'none' }
             : {}),
           ...(attrs.has('span')
             ? {
@@ -919,8 +1011,18 @@ export function parseModel(source: string | SourceDoc, files?: CodeFiles): Model
       }
       case 'edge': {
         count(4, 5);
-        allow(attributesOf('edge'));
-        const edge = LANGUAGE.edge.attrs;
+        allow([
+          'kind',
+          'from',
+          'to',
+          'was',
+          'constraint',
+          'directed',
+          'head',
+          'tail',
+          'message',
+          'answers',
+        ]);
         assert(
           args[2]?.value === '->' && !args[2].quoted,
           'Edges use: edge id source -> target "label".',
@@ -928,16 +1030,16 @@ export function parseModel(source: string | SourceDoc, files?: CodeFiles): Model
         const eid = id(args[0]);
         assert(!edgeIds.has(eid), `Duplicate edge id ${eid}.`);
         edgeIds.add(eid);
-        const undirected = choice('directed', 'true', edge.directed) === 'false',
-          head = choice('head', 'arrow', edge.head),
-          tail = choice('tail', 'none', edge.tail);
+        const undirected = choice('directed', 'true', ['true', 'false']) === 'false',
+          head = choice('head', 'arrow', MARKERS),
+          tail = choice('tail', 'none', MARKERS);
         assert(
           !undirected || !(attrs.has('head') || attrs.has('tail')),
           `Edge ${eid} has directed=false, so it has no ends to mark. Remove head= and tail=, or remove directed=false.`,
         );
         // `answers=` alone makes a reply: only a reply answers a message.
         const named = attrs.has('message')
-            ? choice('message', 'interaction', edge.message)
+            ? choice('message', 'interaction', MESSAGE_KINDS)
             : undefined,
           message = named ?? (attrs.has('answers') ? ('reply' as const) : undefined);
         assert(
@@ -955,15 +1057,15 @@ export function parseModel(source: string | SourceDoc, files?: CodeFiles): Model
           source: id(args[1]),
           target: id(args[3]),
           label: text(args[4]),
-          dashed: choice('kind', 'sync', edge.kind) === 'async' || message === 'reply',
+          dashed: choice('kind', 'sync', ['sync', 'async']) === 'async' || message === 'reply',
           ...(message ? { message } : {}),
           ...(attrs.has('answers') ? { replyTo: id(attrs.get('answers')) } : {}),
-          from: choice('from', 'auto', edge.from),
-          to: choice('to', 'auto', edge.to),
+          from: choice('from', 'auto', SIDES),
+          to: choice('to', 'auto', SIDES),
           ...(undirected ? { directed: false as const } : {}),
           ...(head !== 'arrow' ? { head } : {}),
           ...(tail !== 'none' ? { tail } : {}),
-          ...(choice('constraint', 'true', edge.constraint) === 'false'
+          ...(choice('constraint', 'true', ['true', 'false']) === 'false'
             ? { constraint: false as const }
             : {}),
           ...(s.mark ? { status } : {}),
@@ -978,7 +1080,7 @@ export function parseModel(source: string | SourceDoc, files?: CodeFiles): Model
           args.length === 3 && args[2].quoted && args[2].value.trim(),
           'An action needs an ID, its participant and a label: action check auth "check hash".',
         );
-        allow(attributesOf('action'));
+        allow([]);
         const aid = id(args[0]),
           who = id(args[1]);
         assert(!edgeIds.has(aid), `Duplicate edge id ${aid}.`);
@@ -1021,35 +1123,38 @@ export function parseModel(source: string | SourceDoc, files?: CodeFiles): Model
               attrs.delete(key);
             }
         };
-        const forms = LANGUAGE.layout.forms,
-          layout = LANGUAGE.layout.attrs;
-        const common = [...forms.common, ...(scope === 'root' ? forms.root : [])];
+        const common = [
+          'direction',
+          'min-width',
+          'min-height',
+          ...(scope === 'root' ? ['fit'] : []),
+        ];
         let engine: EngineRecipe | undefined;
         if (named !== undefined) {
           count(1);
           assert(
-            ENGINES.includes(named as never),
+            ENGINES.includes(named),
             `Unknown layout engine ${named}; use ${ENGINES.join(', ')}.`,
           );
-          allow([...forms.engine, ...common]);
+          allow(['engine', ...common, ...Object.keys(ENGINE_PARAMS)]);
           engine = { algorithm: named, params: readParams(ENGINE_PARAMS) };
         } else {
           count(2);
           const recipe = args[1]?.value;
           allow(
             recipe === 'cells'
-              ? [...forms.cells, ...common]
+              ? ['columns', 'unit', 'unit-width', 'ruler', ...common]
               : [
-                  ...forms.recipe,
-                  ...(recipe === 'flow' ? forms.flow : []),
-                  ...(recipe === 'sequence' ? forms.sequence : []),
+                  'gap',
+                  ...(recipe === 'flow' ? ['fold'] : []),
+                  ...(recipe === 'sequence' ? ['activations'] : []),
                   ...common,
                 ],
           );
         }
         const algorithm = (named ? 'flow' : args[1]?.value) as Algorithm;
         assert(
-          LANGUAGE.layout.words.recipe.includes(algorithm),
+          ['flow', 'row', 'column', 'lanes', 'sequence', 'cells'].includes(algorithm),
           `The ${algorithm} recipe is not supported; use flow, row, column, lanes, sequence or cells, or engine=.`,
         );
         assert(
@@ -1064,17 +1169,17 @@ export function parseModel(source: string | SourceDoc, files?: CodeFiles): Model
           scope,
           algorithm,
           ...(engine ? { engine } : {}),
-          direction: choice('direction', 'auto', layout.direction),
-          fold: named ? 'auto' : choice('fold', 'auto', layout.fold),
-          ...(attrs.has('fit') ? { fit: choice('fit', 'slide', layout.fit) } : {}),
-          ...(choice('activations', 'off', layout.activations) === 'on'
+          direction: choice('direction', 'auto', ['auto', 'right', 'down'] as const),
+          fold: named ? 'auto' : choice('fold', 'auto', ['auto', 'never'] as const),
+          ...(attrs.has('fit') ? { fit: choice('fit', 'slide', Object.keys(FITS) as Fit[]) } : {}),
+          ...(choice('activations', 'off', ['on', 'off'] as const) === 'on'
             ? { activations: true as const }
             : {}),
           ...(attrs.has('columns') ? { columns: num('columns', 1, 1, 512) } : {}),
           ...(attrs.has('unit')
             ? {
-                unit: choice('unit', 'byte', layout.unit),
-                ruler: choice('ruler', 'on', layout.ruler) === 'on',
+                unit: choice('unit', 'byte', ['bit', 'byte'] as const),
+                ruler: choice('ruler', 'on', ['on', 'off'] as const) === 'on',
                 ...(attrs.has('unit-width') ? { unitWidth: num('unit-width', 24, 8, 200) } : {}),
               }
             : {}),
@@ -1087,11 +1192,10 @@ export function parseModel(source: string | SourceDoc, files?: CodeFiles): Model
       }
       case 'theme': {
         count(1);
-        allow(attributesOf('theme'));
+        allow(Object.keys(THEME_ATTRS));
         once('theme');
-        const name = args[0].value as ThemeId,
-          themes = LANGUAGE.theme.words.name;
-        assert(themes.includes(name as never), `Unknown theme ${name}; use ${themes.join(', ')}.`);
+        const name = args[0].value as ThemeId;
+        assert(THEME_IDS.includes(name), `Unknown theme ${name}; use ${THEME_IDS.join(', ')}.`);
         m.appearance.theme = name;
         m.themeLine = line;
         const o = m.appearance.overrides;
@@ -1100,14 +1204,14 @@ export function parseModel(source: string | SourceDoc, files?: CodeFiles): Model
           if (key === 'paddingX' || key === 'paddingY' || key === 'radius')
             o[key] = num(attr, 0, OVERRIDE_LIMITS[key].min, OVERRIDE_LIMITS[key].max);
           else if (key === 'titleFont' || key === 'annotationFont')
-            o[key] = choice<FontRole>(attr, 'sans', LANGUAGE.theme.attrs[attr as 'title-font']);
+            o[key] = choice<FontRole>(attr, 'sans', FONT_ROLES);
           else o[key] = hex(attr);
         }
         break;
       }
       case 'theme-color': {
         count(1);
-        allow(attributesOf('theme-color'));
+        allow(['shade', 'fill', 'stroke', 'ink']);
         const family = args[0].value;
         assert(
           !args[0].quoted && FAMILY.test(family) && family !== 'auto',
@@ -1131,12 +1235,11 @@ export function parseModel(source: string | SourceDoc, files?: CodeFiles): Model
         if (args[0]?.value === 'line' && !args[0].quoted) {
           // `legend line dashed "meaning"`: a short connection in that style, then its meaning.
           count(3);
-          allow([...LANGUAGE.legend.forms.line]);
-          const style = args[1].value as LegendLine,
-            styles = LANGUAGE.legend.words.line;
+          allow([]);
+          const style = args[1].value as LegendLine;
           assert(
-            !args[1].quoted && styles.includes(style),
-            `Expected legend line ${styles.join('|')} "meaning".`,
+            !args[1].quoted && LEGEND_LINES.includes(style),
+            `Expected legend line ${LEGEND_LINES.join('|')} "meaning".`,
           );
           once(`legend:line:${style}`);
           assert(text(args[2]).trim(), 'A legend entry needs its meaning in quotes.');
@@ -1145,7 +1248,7 @@ export function parseModel(source: string | SourceDoc, files?: CodeFiles): Model
           break;
         }
         count(2);
-        allow([...LANGUAGE.legend.forms.family]);
+        allow(['shade']);
         const family = args[0].value;
         assert(
           !args[0].quoted && FAMILY.test(family) && family !== 'auto',
@@ -1164,7 +1267,7 @@ export function parseModel(source: string | SourceDoc, files?: CodeFiles): Model
       }
       case 'range': {
         count(1, 2);
-        allow(attributesOf('range'));
+        allow(['lines', 'match', 'span', 'color']);
         const rid = id(args[0]),
           dot = rid.lastIndexOf('.');
         assert(
@@ -1220,7 +1323,7 @@ export function parseModel(source: string | SourceDoc, files?: CodeFiles): Model
       case 'note': {
         // `note "text"`, or `note id "text"` with an ID a host or tool can address it by.
         count(1, 2);
-        allow(attributesOf('note'));
+        allow(['near', 'side', 'width', 'states', 'leader']);
         const body = args[args.length - 1],
           nid = args.length === 2 ? id(args[0]) : undefined;
         assert(body.quoted && body.value.trim(), 'A note needs its text in quotes.');
@@ -1231,10 +1334,10 @@ export function parseModel(source: string | SourceDoc, files?: CodeFiles): Model
           ...(nid ? { id: nid } : {}),
           text: body.value,
           ...(attrs.has('near') ? { near: id(attrs.get('near')) } : {}),
-          ...(attrs.has('side') ? { side: choice('side', 'below', LANGUAGE.note.attrs.side) } : {}),
+          ...(attrs.has('side') ? { side: choice('side', 'below', NOTE_SIDES) } : {}),
           ...(attrs.has('width') ? { width: num('width', NOTE_WIDTH, 80, 1200) } : {}),
           ...(attrs.has('states') ? { states: idList('states') } : {}),
-          ...(attrs.has('leader') && choice('leader', 'off', LANGUAGE.note.attrs.leader) === 'on'
+          ...(attrs.has('leader') && choice('leader', 'off', ['on', 'off'] as const) === 'on'
             ? { leader: true }
             : {}),
         });
@@ -1244,7 +1347,7 @@ export function parseModel(source: string | SourceDoc, files?: CodeFiles): Model
       case 'footnote': {
         // `footnote "text"`, or `footnote 1 "text"` with a marker that labels point at as [1].
         count(1, 2);
-        allow(attributesOf('footnote'));
+        allow([]);
         const body = args[args.length - 1],
           mark = args.length === 2 ? args[0] : undefined;
         assert(body.quoted && body.value.trim(), 'A footnote needs its text in quotes.');
@@ -1262,14 +1365,14 @@ export function parseModel(source: string | SourceDoc, files?: CodeFiles): Model
       }
       case 'routing':
         count(0);
-        allow(attributesOf('routing'));
+        allow(Object.keys(ROUTING_PARAMS));
         once('routing');
         m.routing = readParams(ROUTING_PARAMS);
         break;
       case 'bundle': {
         // `bundle a b "name"`: the lines between a and b run as one trunk, under that name.
         count(2, 3);
-        allow(attributesOf('bundle'));
+        allow([]);
         const [a, b] = [id(args[0]), id(args[1])],
           name = args[2] === undefined ? undefined : text(args[2]);
         assert(a !== b, 'A bundle runs between two different ends: bundle a b "name".');
@@ -1283,7 +1386,7 @@ export function parseModel(source: string | SourceDoc, files?: CodeFiles): Model
       case 'route': {
         // `route id via=x1,y1;x2,y2`: the points a line passes through, in its parent's content area.
         count(1);
-        allow(attributesOf('route'));
+        allow(['via', 'strength']);
         const rid = id(args[0]);
         once(`route:${rid}`);
         const w = attrs.get('via');
@@ -1301,7 +1404,7 @@ export function parseModel(source: string | SourceDoc, files?: CodeFiles): Model
         m.routes.push({
           id: rid,
           via,
-          strength: choice('strength', 'soft', LANGUAGE.route.attrs.strength),
+          strength: choice('strength', 'soft', ['soft', 'required'] as const),
           line,
         });
         break;
@@ -1309,7 +1412,7 @@ export function parseModel(source: string | SourceDoc, files?: CodeFiles): Model
       case 'label': {
         // `label id at=0.4 offset=12`: a fraction along the line, and a distance off it.
         count(1);
-        allow(attributesOf('label'));
+        allow(['at', 'offset']);
         const lid = id(args[0]);
         once(`label:${lid}`);
         assert(attrs.has('at'), 'A label needs at=: how far along its line it sits, from 0 to 1.');
@@ -1323,25 +1426,22 @@ export function parseModel(source: string | SourceDoc, files?: CodeFiles): Model
       }
       case 'order':
         count(2, 300);
-        allow(attributesOf('order'));
+        allow([]);
         m.hints.push({ type: 'order', scope: id(args[0]), ids: args.slice(1).map(id), line });
         once('order:' + args[0].value);
         break;
       case 'align': {
         count(3, 300);
-        allow(attributesOf('align'));
+        allow(['strength']);
         const axis = args[0]?.value;
-        assert(
-          LANGUAGE.align.words.axis.includes(axis as 'x' | 'y'),
-          'Expected align x or align y.',
-        );
+        assert(axis === 'x' || axis === 'y', 'Expected align x or align y.');
         const ids = args.slice(1).map(id);
         once(`align:${axis}:${ids.join(',')}`);
         m.hints.push({
           type: 'align',
           axis: axis as 'x' | 'y',
           ids,
-          strength: choice('strength', 'prefer', LANGUAGE.align.attrs.strength),
+          strength: choice('strength', 'prefer', ['prefer', 'required'] as const),
           line,
         });
         break;
@@ -1355,24 +1455,24 @@ export function parseModel(source: string | SourceDoc, files?: CodeFiles): Model
         const hid = id(args[0]);
         once(`${command}:${hid}`);
         if (command === 'near') {
-          allow(attributesOf('near'));
+          allow(['side', 'gap', 'offset', 'strength']);
           const ref = id(args[1]);
           assert(ref !== hid, 'An object cannot be placed relative to itself.');
           m.hints.push({
             type: 'near',
             id: hid,
             ref,
-            side: choice('side', 'right', LANGUAGE.near.attrs.side),
+            side: choice('side', 'right', ['right', 'left', 'above', 'below'] as const),
             gap: num('gap', 28, 0, 2000),
             offset: num('offset', 0),
-            strength: choice('strength', 'prefer', LANGUAGE.near.attrs.strength),
+            strength: choice('strength', 'prefer', ['prefer', 'required'] as const),
             line,
           });
         } else if (command === 'nudge') {
-          allow(attributesOf('nudge'));
+          allow(['dx', 'dy']);
           m.hints.push({ type: 'nudge', id: hid, dx: num('dx', 0), dy: num('dy', 0), line });
         } else if (command === 'stay') {
-          allow(attributesOf('stay'));
+          allow(['x', 'y', 'weight']);
           m.hints.push({
             type: 'stay',
             id: hid,
@@ -1383,10 +1483,10 @@ export function parseModel(source: string | SourceDoc, files?: CodeFiles): Model
             line,
           });
         } else if (command === 'pin') {
-          allow(attributesOf('pin'));
+          allow(['x', 'y']);
           m.hints.push({ type: 'pin', id: hid, x: num('x', 0, 0), y: num('y', 0, 0), line });
         } else {
-          allow(attributesOf('size'));
+          allow(['width', 'height', 'min-height']);
           const auto = attrs.get('height')?.value === 'auto';
           assert(
             auto || !attrs.has('min-height'),
