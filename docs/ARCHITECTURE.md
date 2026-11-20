@@ -168,10 +168,11 @@ them alone, and `scripts/build-editor.ts` fails when a shell module gets into it
 - **Finish pending work before an edit.** Modules register `onBeforeEdit` handlers to commit an
   inline label, accept a layout preview, close a timeline or finish a drag.
 - **Camera movement is not an edit.** It saves with the document but never creates undo steps.
-- **Every camera change goes through `setCamera`.** It is the one place `SessionOptions.onCamera`
-  is called, with who moved it: `'host'` (the camera part), `'fit'` (the editor's own automatic
-  fits and reveals) or `'user'` (the reader's drag, pinch, wheel, keys and buttons). Never write
-  `setDoc('camera', ...)` from a gesture: the host would not hear it.
+- **Every camera change goes through `setCamera`.** It tells the session's `onCamera` listeners
+  why the camera moved: `'api'` (the host), `'fit'` and `'resize'` (the editor's own automatic fits
+  and reveals), `'restore'` (an undo or a cancelled drag) or `'user'` (the reader's drag, pinch,
+  wheel, keys, buttons and the Fit command). Never write `setDoc('camera', ...)` from a gesture:
+  no listener would hear it.
 
 ## import/ — foreign diagram source
 

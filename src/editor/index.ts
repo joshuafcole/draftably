@@ -4,18 +4,14 @@
  */
 export {
   createDiagramSession,
-  LEGIBLE_ZOOM,
-  type CameraMover,
   type ClearSpotOptions,
   type CrowdedNote,
   type EdgeGeometry,
-  type FitOptions,
   type GeometryCause,
   type GeometryChange,
   type KeepOutOptions,
   type OverlaySpace,
   type PanelSide,
-  type RevealOptions,
   type ConfirmRequest,
   type DiagramSession,
   type DragTranslation,

@@ -11,7 +11,7 @@ import type { PanelSide } from '../../model/panels';
 import { describeLink } from '../links';
 import { createActions } from './actions';
 import { createHostAppearance } from './appearance';
-import { createCamera, type CameraMover } from './camera';
+import { createCamera } from './camera';
 import { createCanvasText } from './canvas-text';
 import { createDocument } from './document';
 import { createEditor } from './editor';
@@ -24,7 +24,6 @@ import { createRouting } from './routing';
 import { createScene } from './scene';
 import { createSculpt } from './sculpt';
 import { createView, type ViewItem } from './view';
-import type { Camera } from '../../model/types';
 import type { DragTranslation, NewIdRequest } from '../../dsl/translate';
 import type { HistoryHandler } from './document';
 import type { SessionEdit } from './file-session';
@@ -35,7 +34,6 @@ export type { SourceOperation } from '../../dsl/operations';
 export type { HistoryHandler } from './document';
 export type { HostArrangement, SessionEdit } from './file-session';
 export type { PanelSide } from '../../model/panels';
-export { LEGIBLE_ZOOM, type CameraMover, type FitOptions, type RevealOptions } from './camera';
 export type {
   ClearSpotOptions,
   CrowdedNote,
@@ -79,17 +77,6 @@ export interface SessionOptions {
   onHover?: (item: ViewItem | null) => void;
   /** In a read-only session, the user opened an object: a double click, or Enter on it. */
   onActivate?: (item: ViewItem) => void;
-  /**
-   * The camera moved, and who moved it: `'host'` for the host (`moveCamera`, `fitTo`, `reveal`),
-   * `'fit'` for the editor's own automatic fits and reveals (the first fit once the canvas has a
-   * size, a fit after a layout or an opened diagram), and `'user'` for the reader: a drag or
-   * pinch pan or zoom, the wheel, keys, the zoom buttons, the Fit command, undo. A drag reports on
-   * every pointer move and the wheel on every wheel event, so a reader's move can cancel a host's
-   * glide. A host that tests `by !== 'host'` for "the reader moved it" now also sees `'fit'`; one
-   * that tests `by === 'user'` no longer sees the editor's fits. A call that leaves the camera
-   * where it was reports nothing.
-   */
-  onCamera?: (camera: Camera, by: CameraMover) => void;
   /**
    * The host's paint over the diagram: canvas, text, lines, default surfaces and color shades,
    * and whether its canvas is dark. Separate from the editor's own light or dark mode, and never

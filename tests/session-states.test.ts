@@ -94,12 +94,11 @@ describe('notes per state on the canvas', () => {
     expect(s.drawnDoc().drawnState).toBe('write');
   });
 
-  it('reveals a note only while it is shown', async () => {
+  it('places a note only while it is shown', async () => {
     const s = await open(NOTED);
     s.setStageSize({ width: 800, height: 600 });
-    expect(s.reveal('s1')).toBe(false);
+    expect(s.rectOf('s1')).toBeUndefined();
     s.showState('step1');
-    s.moveCamera({ x: 5000, y: 5000, k: 1 });
-    expect(s.reveal('s1')).toBe(true);
+    expect(s.rectOf('s1')).toBeDefined();
   });
 });

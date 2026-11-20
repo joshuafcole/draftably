@@ -148,7 +148,7 @@ export function createPointer(
     if (!gesture) return;
     const before = gesture.before;
     end();
-    s.restoreDocument(normalize(JSON.parse(before)), { keepCamera: false, by: 'user' });
+    s.restoreDocument(normalize(JSON.parse(before)), { keepCamera: false });
   }
 
   // A keyboard edit during a drag first commits the drag as its own undo step.

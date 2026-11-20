@@ -13,7 +13,6 @@ import type { CameraReason } from '../../runtime/camera';
 import { toast } from '../toast';
 import type { CanvasTextPart } from './canvas-text';
 import type { SessionOptions } from '.';
-import { moverOf, type CameraMover } from './camera';
 
 const LEGACY_KEYS = ['diagram-studio-v4', 'diagram-studio-v3', 'diagram-studio-v2'];
 const HISTORY_LIMIT = 80;
@@ -207,28 +206,17 @@ export function createDocument(s: CanvasTextPart, options: SessionOptions) {
     persist();
   }
 
-  /**
-   * Replace the document while keeping the current camera. Without `keepCamera` the document's own
-   * camera comes back with it (undo, a cancelled drag); `by` then reports that move to `onCamera`
-   * when the camera changed, and without `by` nobody is told (a first load).
-   */
-  function restoreDocument(
-    next: Diagram,
-    { keepCamera = true, by }: { keepCamera?: boolean; by?: CameraMover } = {},
-  ) {
+  /** Replace the document while keeping the current camera. */
+  function restoreDocument(next: Diagram, { keepCamera = true } = {}) {
     const camera = { ...state.doc.camera };
     batch(() => {
       state.setDoc(reconcile(next));
       if (keepCamera) state.setDoc('camera', camera);
       state.setRevision(r => r + 1);
     });
-    // Undo and restored documents bring their own camera back. Its listeners always hear it;
-    // `SessionOptions.onCamera` hears it only with `by` (not a first load).
+    // Undo and restored documents bring their own camera back.
     const c = state.doc.camera;
-    if (c.x !== camera.x || c.y !== camera.y || c.k !== camera.k) {
-      tellCamera('restore');
-      if (by) options.onCamera?.({ ...c }, by);
-    }
+    if (c.x !== camera.x || c.y !== camera.y || c.k !== camera.k) tellCamera('restore');
   }
 
   const historyHandlers: Array<(entry: HistoryEntry, direction: 'undo' | 'redo') => void> = [];
@@ -251,7 +239,7 @@ export function createDocument(s: CanvasTextPart, options: SessionOptions) {
       }
       for (const handler of historyHandlers) handler(entry, direction);
       // Undo restores the view along with the diagram, so the restored change is on screen.
-      restoreDocument(normalize(JSON.parse(entry.data)), { keepCamera: false, by: 'user' });
+      restoreDocument(normalize(JSON.parse(entry.data)), { keepCamera: false });
       clearSelection();
     });
     persist();
@@ -277,19 +265,13 @@ export function createDocument(s: CanvasTextPart, options: SessionOptions) {
     return () => cameraListeners.delete(listener);
   }
 
-  /**
-   * Every camera write goes through here, so every one is reported: to `onCamera` listeners with
-   * its reason, and to `SessionOptions.onCamera` with who moved it (`moverOf`): the host through
-   * the camera part or a handle (`api`), the editor's own automatic fits (`fit`), and the reader
-   * (a drag, a pinch, the wheel, a key or button) as `user`.
-   */
+  /** Every camera write goes through here. The editor's own moves are `user`. */
   function setCamera(camera: Camera, reason: CameraReason = 'user') {
     const c = state.doc.camera;
     if (c.x === camera.x && c.y === camera.y && c.k === camera.k) return;
     state.setDoc('camera', camera);
     persist();
     tellCamera(reason);
-    options.onCamera?.({ ...camera }, moverOf(reason));
   }
 
   // --- Persistence -----------------------------------------------------------------------------
