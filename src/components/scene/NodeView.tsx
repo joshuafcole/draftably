@@ -234,33 +234,31 @@ export function NodeView(props: NodeViewProps) {
           <SceneGlyph name={style().icon} x={g().x} y={g().y} size={g().size} color={color().ink} />
         )}
       </Show>
+      <Show when={node().code}>
+        {code => (
+          <CodeBody
+            code={code()}
+            caption={node().title}
+            w={props.rect.w}
+            h={props.rect.h}
+            look={look()}
+            swatch={color()}
+            strike={paint().strike}
+            fade={paint().inkFade}
+          />
+        )}
+      </Show>
       <Show
         when={body()}
         fallback={
-          <>
-            <Show when={node().code}>
-              {code => (
-                <CodeBody
-                  code={code()}
-                  caption={node().title}
-                  w={props.rect.w}
-                  h={props.rect.h}
-                  look={look()}
-                  swatch={color()}
-                  strike={paint().strike}
-                  fade={paint().inkFade}
-                />
-              )}
-            </Show>
-            <NodeTitle
-              label={label()}
-              look={look()}
-              fill={inside() ? color().ink : look().text}
-              detailFill={inside() ? detailInk(look(), color()) : look().muted}
-              strike={paint().strike}
-              fade={paint().inkFade}
-            />
-          </>
+          <NodeTitle
+            label={label()}
+            look={look()}
+            fill={inside() ? color().ink : look().text}
+            detailFill={inside() ? detailInk(look(), color()) : look().muted}
+            strike={paint().strike}
+            fade={paint().inkFade}
+          />
         }
       >
         {host => (
